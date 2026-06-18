@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>股票翻譯機 · 投資作業系統</title>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body data-sheet="dashboard">
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">股</div>
+          <div class="brand-text">
+            <h1>投資作業系統</h1>
+            <p id="dataStatus">股票翻譯機 · 本地優先</p>
+          </div>
+        </div>
+
+        <div class="search-shell">
+          <form id="searchForm" class="search-form" role="search">
+            <label class="sr-only" for="searchInput">搜尋股票</label>
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.2-4.2m1.2-5.3a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"/></svg>
+            <input id="searchInput" name="q" autocomplete="off" placeholder="搜尋股票名稱或代號，例如 2330、台積電…">
+            <button class="primary-button search-submit" type="submit" title="搜尋">搜尋</button>
+          </form>
+          <div id="searchSuggestions" class="search-suggestions hidden" role="listbox" aria-label="搜尋建議"></div>
+        </div>
+
+        <div class="topbar-trust" title="持倉與交易紀錄只存在本機，不會上傳">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 3 6.5 7 9 4-2.5 7-5 7-9V6l-7-3Z"/></svg>
+          <span>本地優先 · 不上傳</span>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <nav class="app-rail" aria-label="主要導覽">
+          <div class="rail-nav">
+            <button class="rail-item active" type="button" data-sheet-target="dashboard" data-nav-button>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 12 5l8 7M6 10v9h12v-9"/></svg>
+              <span class="rail-label">首頁</span>
+              <span class="rail-hint">總覽 · 晨報</span>
+            </button>
+            <button class="rail-item" type="button" data-sheet-target="screener" data-nav-button>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+              <span class="rail-label">雷達中心</span>
+              <span class="rail-hint">全市場篩選</span>
+            </button>
+            <button class="rail-item" type="button" data-sheet-target="portfolio" data-nav-button>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM8 7V5h8v2"/></svg>
+              <span class="rail-label">持倉</span>
+              <span class="rail-hint">報酬 · 配息</span>
+            </button>
+            <button class="rail-item" type="button" data-sheet-target="stock" data-nav-button>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 16l3-4 3 2 4-6"/></svg>
+              <span class="rail-label">個股</span>
+              <span class="rail-hint">三層資料</span>
+            </button>
+            <button class="rail-item" type="button" data-sheet-target="data" data-nav-button>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+              <span class="rail-label">本地資料</span>
+              <span class="rail-hint">下載狀況</span>
+            </button>
+          </div>
+
+          <div class="rail-watch">
+            <div class="panel-title">
+              <span>自選股</span>
+              <button id="refreshLocalButton" class="icon-button" type="button" title="重新整理自選股">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>
+              </button>
+            </div>
+            <div id="localStocks" class="stock-list"></div>
+          </div>
+
+          <p class="rail-foot">不下單 · 不報明牌 · 不預測股價</p>
+        </nav>
+
+        <main class="workspace">
+          <div id="message" class="message hidden"></div>
+
+          <!-- ============ 首頁 / 儀表板 ============ -->
+          <section id="dashboardSheet" class="app-sheet sheet-dashboard">
+            <header class="sheet-head">
+              <div>
+                <p class="kicker">作業系統首頁</p>
+                <h2 id="dashboardGreeting">早安，先看今天的重點。</h2>
+                <p class="sheet-sub">每天打開的第一頁：總資產、待辦與持倉摘要。</p>
+              </div>
+              <div class="sheet-head-meta">大盤資料待接入</div>
+            </header>
+
+            <section class="dash-asset-card">
+              <div class="dash-asset-main">
+                <span class="card-label">我的總資產</span>
+                <strong id="dashboardTotalValue">--</strong>
+                <p id="dashboardReturn">尚未建立持倉。</p>
+              </div>
+              <div class="dash-asset-art">
+                <img src="/static/assets/stock-dashboard-hero.png" alt="近 90 天淨值走勢示意圖" loading="lazy" onerror="this.style.display='none'">
+              </div>
+            </section>
+
+            <div class="dash-grid">
+              <section class="surface dash-alert-card">
+                <div class="surface-head compact">
+                  <h3>今日待辦 / 警示</h3>
+                  <button class="text-button" type="button" data-sheet-target="portfolio">看持倉</button>
+                </div>
+                <ul id="dashboardAlerts" class="alert-list"></ul>
+              </section>
+              <section class="surface dash-brief-card">
+                <div class="surface-head compact">
+                  <h3>今日晨報</h3>
+                  <span class="muted-tag">一句話</span>
+                </div>
+                <p id="dashboardBrief">資料同步後，這裡會把持倉和自選股整理成白話摘要。</p>
+                <p class="disclaimer">本內容為資料解讀，非投資建議。</p>
+              </section>
+            </div>
+
+            <div class="dash-grid">
+              <section class="surface dash-list-card">
+                <div class="surface-head compact">
+                  <h3>我的持倉</h3>
+                  <button class="text-button" type="button" data-sheet-target="portfolio">看全部</button>
+                </div>
+                <div id="dashboardHoldings" class="dashboard-list"></div>
+              </section>
+              <section class="surface dash-list-card">
+                <div class="surface-head compact">
+                  <h3>自選股</h3>
+                  <button id="dashboardRefreshButton" class="text-button" type="button">重新整理</button>
+                </div>
+                <div id="dashboardWatchlist" class="dashboard-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <!-- ============ 雷達中心 ============ -->
+          <section id="screenerSheet" class="app-sheet sheet-screener hidden">
+            <header class="sheet-head">
+              <div>
+                <p class="kicker">全市場批次掃描</p>
+                <h2>雷達中心</h2>
+                <p class="sheet-sub screener-declaration">這是資料觀察清單，不是推薦清單。排序只反映數字，每一檔都要自己進個股頁驗證。不報明牌、不預測股價。</p>
+              </div>
+              <div class="sheet-head-actions">
+                <span id="screenerUpdatedAt" class="meta-pill">尚未更新</span>
+                <button id="screenerExportButton" class="secondary-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+                  匯出 Excel
+                </button>
+                <button id="refreshScreenerButton" class="primary-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>
+                  更新雷達
+                </button>
+              </div>
+            </header>
+
+            <div class="screener-board">
+              <div id="screenerIllustration" class="screener-illustration">
+                <img
+                  id="screenerRadarImage"
+                  src="/static/assets/radar-lab-illustration.png"
+                  data-idle-src="/static/assets/radar-lab-illustration.png"
+                  data-scanning-src="/static/assets/radar-scanning.gif"
+                  alt="雷達掃描篩選工作台示意圖"
+                  loading="lazy"
+                  decoding="async"
+                  onerror="this.style.display='none'"
+                >
+              </div>
+              <div class="screener-kpis">
+                <div class="kpi"><span>可估價檔數</span><strong id="screenerAvailable">--</strong></div>
+                <div class="kpi"><span>股利情境差異</span><strong id="screenerBelowCheap">--</strong></div>
+                <div class="kpi"><span>今日上漲家數</span><strong id="screenerNearCheap">--</strong></div>
+                <div class="kpi"><span>高殖利率（已排陷阱）</span><strong id="screenerComplete">--</strong></div>
+              </div>
+            </div>
+
+            <div class="screener-filterbar">
+              <span class="filter-label">目前套用篩選</span>
+              <span class="chip chip-active">只看股利法適用</span>
+              <span class="chip chip-active">排除資料不足</span>
+              <span class="chip chip-active">已排殖利率陷阱</span>
+              <span class="chip chip-off">排除低殖利率</span>
+              <span class="chip chip-off">排除景氣循環</span>
+            </div>
+
+            <p id="screenerStatus" class="screener-status-text">用全市場批次資料整理股利情境與高殖利率候選；已自動排除不適用估價方法的個股。</p>
+
+            <section class="surface bulk-card" id="bulkCard">
+              <div class="surface-head compact">
+                <h3>全市場資料下載</h3>
+                <span class="muted-tag">背景掛網・近一年・含三大法人</span>
+              </div>
+              <p class="bulk-hint">第一次會跑很久（數小時級：逐檔抓日線＋全市場法人）。可暫停／停止；關掉也會記住進度、下次接續；已是最新的會自動跳過。下載後波撐/波壓、體質總評就能覆蓋全市場。</p>
+              <div class="bulk-controls">
+                <button id="bulkStartBtn" type="button" class="primary-button" onclick="bulkStart()">開始下載</button>
+                <button id="bulkPauseBtn" type="button" class="chart-size-btn" onclick="bulkPause()" disabled>暫停</button>
+                <button id="bulkResumeBtn" type="button" class="chart-size-btn" onclick="bulkResume()" disabled>繼續</button>
+                <button id="bulkStopBtn" type="button" class="chart-size-btn" onclick="bulkStop()" disabled>停止</button>
+              </div>
+              <div id="bulkProgressWrap" class="bulk-progress-wrap hidden">
+                <div class="bulk-bar"><div id="bulkBar" class="bulk-bar-fill"></div></div>
+                <p id="bulkStatusText" class="bulk-status">--</p>
+              </div>
+            </section>
+
+            <section class="surface levels-card" id="levelsCard">
+              <div class="surface-head compact">
+                <h3>波段關卡提醒</h3>
+                <span class="muted-tag">本地資料・接近波撐/波壓</span>
+              </div>
+              <div id="levelsRadarList" class="levels-list">
+                <p class="levels-empty">同步個股或完成全市場下載後，這裡會列出目前接近波撐/波壓的股票。</p>
+              </div>
+            </section>
+
+            <div class="screener-cols">
+              <div class="screener-col">
+                <div class="surface screener-card">
+                  <div class="surface-head">
+                    <h3>股利情境參考</h3>
+                    <span class="badge badge-neutral">資料較完整</span>
+                  </div>
+                  <p class="card-note">「相對情境」只是檢查線索，不代表便宜或貴；可能是配息要縮水或基本面變差。</p>
+                  <div id="screenerHighConfList" class="screener-list"></div>
+                  <div id="screenerLowConfToggleRow" class="screener-toggle-row hidden">
+                    <button id="screenerLowConfToggle" class="screener-toggle-btn" type="button">
+                      ▾ 另有 <span id="screenerLowConfCount">0</span> 檔「低信心」已收合　〔顯示〕
+                    </button>
+                  </div>
+                </div>
+                <div id="screenerLowConfCard" class="surface screener-card is-dim hidden">
+                  <div class="surface-head">
+                    <h3 class="dim-title">低信心區（僅供參考，估值不可靠）</h3>
+                  </div>
+                  <div id="screenerLowConfList" class="screener-list"></div>
+                  <p class="card-note">這些股票不會出現在主榜，避免「假訊號」誤導。</p>
+                </div>
+              </div>
+
+              <div class="screener-col">
+                <div class="surface screener-card">
+                  <div class="surface-head">
+                    <h3>高殖利率觀察</h3>
+                    <span class="badge badge-neutral">已排陷阱</span>
+                  </div>
+                  <p class="card-note">殖利率 = 平均現金股利 ÷ 現價，已扣除疑似陷阱者。</p>
+                  <div id="screenerYieldList" class="screener-list"></div>
+                </div>
+                <div id="screenerTrapCard" class="surface screener-card is-trap hidden">
+                  <div class="surface-head">
+                    <h3 class="trap-title">疑似殖利率陷阱（高殖利率 ≠ 好訊號）</h3>
+                  </div>
+                  <div id="screenerTrapList" class="screener-list"></div>
+                  <p class="card-note">這些殖利率高，是因為股價大跌或一次性股利，不是配息變好。</p>
+                </div>
+              </div>
+            </div>
+
+            <section class="surface screener-movers">
+              <div class="surface-head">
+                <h3>今日漲跌榜</h3>
+                <span class="muted-tag">價格事實 · 非推薦</span>
+              </div>
+              <div class="screener-cols">
+                <div class="screener-col">
+                  <p class="movers-subtitle up-text">今日漲最多</p>
+                  <div id="screenerGainersList" class="screener-list"></div>
+                </div>
+                <div class="screener-col">
+                  <p class="movers-subtitle down-text">今日跌最多</p>
+                  <div id="screenerLosersList" class="screener-list"></div>
+                </div>
+              </div>
+              <p class="disclaimer">漲多不代表強、跌多不等於便宜；漲跌只是事實，要進個股頁看體質。</p>
+            </section>
+          </section>
+
+          <!-- ============ 持倉 ============ -->
+          <section id="dataSheet" class="app-sheet sheet-data hidden">
+            <header class="sheet-head">
+              <div>
+                <h2>本地資料狀況</h2>
+                <p>看每檔已下載多少日線、最後資料日、是否過期、有沒有法人，以及波段關卡狀態。</p>
+              </div>
+              <button class="primary-button" type="button" onclick="loadLocalData()">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>
+                重新整理
+              </button>
+            </header>
+            <p id="localDataSummary" class="screener-status-text">尚未載入。</p>
+            <section class="surface">
+              <div class="table-wrap">
+                <table class="local-data-table">
+                  <thead>
+                    <tr><th>代號</th><th>名稱</th><th>日線筆數</th><th>最後資料日</th><th>法人</th><th>波段關卡</th><th></th></tr>
+                  </thead>
+                  <tbody id="localDataRows"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="portfolioPanel" class="app-sheet sheet-portfolio hidden">
+            <header class="sheet-head">
+              <div>
+                <p class="kicker">持倉翻譯機</p>
+                <h2>我的持倉</h2>
+                <p id="portfolioStatus" class="sheet-sub">持倉翻譯機 · 本地交易紀錄</p>
+              </div>
+              <div class="sheet-head-actions">
+                <button class="secondary-button" type="button">帳戶：全部合併</button>
+                <button class="secondary-button" type="button">隱碼</button>
+                <button id="portfolioExportButton" class="primary-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+                  匯出 Excel
+                </button>
+              </div>
+            </header>
+
+            <div class="portfolio-kpis">
+              <div class="kpi"><span>持有檔數</span><strong id="portfolioPositionCount">--</strong></div>
+              <div class="kpi"><span>投入成本</span><strong id="portfolioCostBasis">--</strong></div>
+              <div class="kpi"><span>估算市值</span><strong id="portfolioMarketValue">--</strong></div>
+              <div class="kpi"><span>帳面損益</span><strong id="portfolioUnrealized">--</strong></div>
+              <div class="kpi"><span>已實現損益</span><strong id="portfolioRealized">--</strong></div>
+              <div class="kpi"><span>累計現金股利</span><strong id="portfolioCashDividends">--</strong></div>
+              <div class="kpi kpi-feature"><span>含息總報酬</span><strong id="portfolioTotalReturn">--</strong></div>
+              <div class="kpi kpi-feature"><span>年化 XIRR</span><strong id="portfolioXirr">--</strong></div>
+              <div class="kpi kpi-feature"><span>0050 對比</span><strong id="portfolioBenchmark">--</strong></div>
+            </div>
+
+            <nav class="portfolio-tabs" aria-label="持倉分頁">
+              <button class="active" type="button">持股明細</button>
+              <button type="button">配置健診</button>
+              <button type="button">配息年曆</button>
+              <button type="button">已實現損益</button>
+              <button type="button">稅務</button>
+            </nav>
+
+            <section class="surface portfolio-holdings-card">
+              <div class="table-wrap portfolio-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>代號 / 名稱</th>
+                      <th>股數</th>
+                      <th>均價</th>
+                      <th>現價</th>
+                      <th>帳面損益</th>
+                      <th>報酬率</th>
+                      <th>佔比</th>
+                    </tr>
+                  </thead>
+                  <tbody id="portfolioRows"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="surface portfolio-sentence-card">
+              <div>
+                <p class="kicker">持倉白話解讀（只解讀，不建議）</p>
+                <p id="portfolioSentence" class="portfolio-sentence">尚未新增交易。</p>
+              </div>
+              <button class="secondary-button" type="button">回顧筆記</button>
+            </section>
+
+            <div class="portfolio-operations">
+              <section class="surface portfolio-entry-card">
+                <div class="surface-head compact">
+                  <h3>新增交易</h3>
+                  <span class="muted-tag">先記清楚，報酬才算得準</span>
+                </div>
+                <div class="entry-layout">
+                  <div class="entry-art">
+                    <img src="/static/assets/empty-portfolio.png" alt="記錄交易示意圖" loading="lazy" onerror="this.closest('.entry-art').style.display='none'">
+                    <p>把每一筆買賣記下來，系統就能把成本、損益與含息報酬翻成白話。</p>
+                  </div>
+                  <form id="portfolioForm" class="portfolio-form" autocomplete="off">
+                    <input id="portfolioTransactionId" type="hidden">
+                    <label class="field-with-suggest">
+                      <span>股票代號</span>
+                      <input id="portfolioStockId" name="stock_id" autocomplete="off" placeholder="輸入代號或名稱，例如 2330 / 台積電" required>
+                      <div id="portfolioStockSuggest" class="form-suggest hidden" role="listbox"></div>
+                    </label>
+                    <label>
+                      <span>交易日期</span>
+                      <input id="portfolioTradeDate" name="trade_date" type="date" autocomplete="off" required>
+                    </label>
+                    <label>
+                      <span>買 / 賣</span>
+                      <select id="portfolioSide" name="side">
+                        <option value="buy">買進</option>
+                        <option value="sell">賣出</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>股數</span>
+                      <input id="portfolioShares" name="shares" type="number" min="1" step="1" placeholder="1000" autocomplete="off" required>
+                    </label>
+                    <label>
+                      <span>成交價</span>
+                      <input id="portfolioPrice" name="price" type="number" min="0" step="0.01" placeholder="1000" autocomplete="off" required>
+                      <small id="portfolioPriceHint" class="field-hint"></small>
+                    </label>
+                    <label>
+                      <span>手續費 <em class="field-auto">自動估算 0.1425%，可改</em></span>
+                      <input id="portfolioFee" name="fee" type="number" min="0" step="1" value="0" autocomplete="off">
+                    </label>
+                    <label>
+                      <span>證交稅 <em class="field-auto">賣出自動估算，可改</em></span>
+                      <input id="portfolioTax" name="tax" type="number" min="0" step="1" value="0" autocomplete="off">
+                    </label>
+                    <label class="portfolio-note-field">
+                      <span>交易筆記</span>
+                      <input id="portfolioNote" name="note" autocomplete="off" placeholder="例如：朋友推薦，先記錄原因">
+                    </label>
+                    <div class="portfolio-form-actions">
+                      <button id="portfolioSubmitButton" class="primary-button" type="submit">儲存交易</button>
+                      <button id="portfolioResetButton" class="secondary-button" type="button">清空</button>
+                    </div>
+                  </form>
+                </div>
+              </section>
+
+              <section class="surface portfolio-transactions-card">
+                <div class="surface-head compact">
+                  <h3>交易紀錄</h3>
+                  <span id="portfolioTransactionCount">--</span>
+                </div>
+                <div class="table-wrap portfolio-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th>股票</th>
+                        <th>買賣</th>
+                        <th>股數</th>
+                        <th>成交價</th>
+                        <th>費稅</th>
+                        <th>筆記</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="portfolioTransactionRows"></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div class="portfolio-review">
+              <section class="surface">
+                <strong>第一版限制</strong>
+                <ul id="portfolioLimitations"></ul>
+              </section>
+              <section class="surface">
+                <strong>給股票朋友驗收</strong>
+                <ul id="portfolioExpertChecks"></ul>
+              </section>
+            </div>
+          </section>
+
+          <!-- ============ 個股 · 空狀態 ============ -->
+          <section id="emptyState" class="app-sheet empty-state hidden">
+            <div class="empty-illustration" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m21 21-4.2-4.2m1.2-5.3a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z"/></svg>
+            </div>
+            <h2>搜尋股票代號開始</h2>
+            <p>輸入名稱或代號會出現近似候選；第一次查詢會先同步證交所資料到本地。</p>
+            <button id="quickSyncButton" class="primary-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+              同步 2330 試試
+            </button>
+          </section>
+
+          <!-- ============ 個股 · 三層頁 ============ -->
+          <section id="stockView" class="app-sheet stock-view hidden">
+            <div class="surface stock-header-card">
+              <div class="stock-logo">
+                <img src="/static/assets/company-placeholder.png" alt="公司識別圖（暫用預設）" loading="lazy" onerror="this.style.display='none'">
+              </div>
+              <div class="stock-header-left">
+                <p class="eyebrow" id="stockMarket">TWSE</p>
+                <h2 id="stockTitle">--</h2>
+                <p id="stockSubtitle" class="stock-subtitle">--</p>
+                <div class="stock-header-badges">
+                  <span id="stockCtypeBadge" class="ctype-header-badge hidden"></span>
+                  <span id="stockConfBadge" class="conf-header-badge hidden"></span>
+                </div>
+                <p id="stockDataNote" class="data-note">--</p>
+              </div>
+              <div class="stock-header-price">
+                <strong id="stockHeaderPrice">--</strong>
+                <span id="stockHeaderChange" class="stock-header-change">--</span>
+                <span id="stockHeaderPriceLabel" class="stock-header-price-label">最近收盤</span>
+              </div>
+              <div class="header-actions">
+                <button id="watchlistButton" class="secondary-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 14.7 9l6 .9-4.3 4.2 1 6-5.4-2.9L6.6 20l1-6L3.3 9.9l6-.9L12 3.5Z"/></svg>
+                  加入自選
+                </button>
+                <button id="syncButton" class="secondary-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>
+                  同步
+                </button>
+                <button id="stockExportButton" class="secondary-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+                  匯出 Excel
+                </button>
+                <button id="buyStockButton" class="primary-button brand-button" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  我買了
+                </button>
+              </div>
+            </div>
+
+            <section id="syncProgressPanel" class="sync-progress-panel hidden" aria-live="polite">
+              <div class="sync-progress-head">
+                <div>
+                  <span class="sync-kicker">資料同步</span>
+                  <h3 id="syncProgressTitle">正在建立股票資料</h3>
+                  <p id="syncProgressDetail">第一次同步會依序抓公司資料、股利、日線、估值、營收與財報。</p>
+                </div>
+                <div class="sync-spinner" aria-hidden="true"></div>
+              </div>
+              <ol id="syncProgressSteps" class="sync-steps"></ol>
+            </section>
+
+            <nav class="layer-nav" aria-label="個股頁分層">
+              <a href="#layerOverview">第一層 · 30 秒看懂</a>
+              <a href="#layerHealth">第二層 · 體質與估值情境</a>
+              <a href="#layerData">第三層 · 完整資料</a>
+            </nav>
+
+            <!-- 第一層 -->
+            <section id="layerOverview" class="layer">
+              <div class="layer-tag"><span class="layer-num">1</span><div><h3>30 秒看懂</h3><p>先給白話結論、公司在做什麼、現價與風險，以及這檔適不適合用股利法估價。</p></div></div>
+
+              <section class="surface quote-panel">
+                <div class="surface-head">
+                  <h3>盤中報價與即時計算</h3>
+                  <span id="quoteStatus">--</span>
+                </div>
+                <div class="quote-grid">
+                  <div class="quote-card primary-quote">
+                    <span id="quotePriceLabel">目前價</span>
+                    <strong id="quotePrice">--</strong>
+                    <p id="quoteTime">--</p>
+                  </div>
+                  <div class="quote-card">
+                    <span id="quoteChangeLabel">今日漲跌</span>
+                    <strong id="quoteChange">--</strong>
+                    <p id="quotePreviousClose">--</p>
+                  </div>
+                  <div class="quote-card">
+                    <span>今高 / 今低</span>
+                    <strong id="quoteDayRange">--</strong>
+                    <p id="quoteOpen">--</p>
+                  </div>
+                  <div class="quote-card">
+                    <span>買一 / 賣一</span>
+                    <strong id="quoteBidAsk">--</strong>
+                    <p id="quoteSpread">--</p>
+                  </div>
+                </div>
+                <p id="quoteNote" class="disclaimer"></p>
+              </section>
+
+              <section class="surface company-brief-panel">
+                <div class="brief-body">
+                  <p class="eyebrow">先看這家公司</p>
+                  <h3 id="companyBriefTitle">--</h3>
+                  <p id="companyBriefText" class="brief-text">--</p>
+                  <p id="companyBriefAdvice" class="disclaimer"></p>
+                </div>
+                <div id="companyRiskTags" class="risk-tag-list"></div>
+              </section>
+
+              <section class="surface validation-panel">
+                <div class="surface-head compact">
+                  <h3 id="validationTitle">明牌驗證工作台</h3>
+                  <span class="muted-tag">先給答案，再給佐證</span>
+                </div>
+                <div id="validationItems" class="validation-grid"></div>
+              </section>
+
+              <section class="surface news-summary-card">
+                <div class="news-summary-head">
+                  <span class="news-summary-title">消息面溫度計</span>
+                  <span id="newsChip" class="news-chip news-chip-neutral">開啟後讀取</span>
+                </div>
+                <p id="newsChipText" class="news-chip-text">開啟個股後，這裡用一句話＋傾向標籤讓你 30 秒掌握最近新聞。</p>
+                <div id="newsSummaryRiskRadar" class="risk-radar compact hidden"></div>
+                <div id="newsChipTop" class="news-chip-top"></div>
+                <a class="text-button" href="#newsPanel">看完整消息面 ↓</a>
+              </section>
+            </section>
+
+            <!-- 第二層 -->
+            <section id="layerHealth" class="layer">
+              <div class="layer-tag"><span class="layer-num">2</span><div><h3>體質與估值情境</h3><p>白話健檢六卡、資料卡、營收、財報，以及自適應的估值情境（不適用就明說）。</p></div></div>
+
+              <section class="surface assess-panel">
+                <div class="surface-head">
+                  <h3>體質總評（多因子研究）</h3>
+                  <span class="muted-tag">事實＋傳統解讀</span>
+                </div>
+                <details class="explain">
+                  <summary>這是什麼？怎麼用體質總評？</summary>
+                  <div>
+                    <p>把這檔的<b>趨勢、均線、乖離、RSI／KD、量能、價格位階、籌碼、估值位階、基本面</b>整理成一張表，每項給目前讀數、傳統上偏多／偏空／中性的解讀，以及白話教學。點每一列可展開細節。</p>
+                    <p class="explain-note">這是把各面向的「傳統解讀」做整理，幫你一次看全貌——<b>不是預測漲跌，也不是買賣建議</b>，市場常常不照技術面走。</p>
+                  </div>
+                </details>
+                <div id="assessmentCard" class="assess-card assess-empty">
+                  <p class="assess-empty-text">同步後這裡會出現多因子體質總評；再按法人卡片的「讀取三大法人」，會把籌碼面也納入。</p>
+                </div>
+              </section>
+
+              <section class="surface report-block">
+                <div class="surface-head">
+                  <h3>白話健檢報告</h3>
+                  <span id="reportEngine">規則式解說</span>
+                </div>
+                <div id="healthReport" class="report-grid"></div>
+                <p id="reportDisclaimer" class="disclaimer"></p>
+              </section>
+
+              <div class="metric-grid">
+                <div class="metric">
+                  <span><button class="term-link" type="button" data-glossary-term="收盤價">最近收盤</button></span>
+                  <strong id="latestClose">--</strong>
+                </div>
+                <div class="metric">
+                  <span id="dailyChangeLabel">較前一交易日</span>
+                  <strong id="dailyChange">--</strong>
+                </div>
+                <div class="metric">
+                  <span><button class="term-link" type="button" data-glossary-term="價格位階">一年位置</button></span>
+                  <strong id="pricePosition">--</strong>
+                </div>
+                <div class="metric">
+                  <span>本地筆數</span>
+                  <strong id="rowCount">--</strong>
+                </div>
+              </div>
+
+              <section class="surface revenue-panel">
+                <div class="surface-head">
+                  <h3><button class="term-link" type="button" data-glossary-term="營收">每月營收</button></h3>
+                  <span id="revenueStatus">資料源 TWSE</span>
+                </div>
+                <div class="revenue-layout">
+                  <article class="data-summary-card">
+                    <span id="revenueSummaryTitle">--</span>
+                    <strong id="revenueSummaryValue">--</strong>
+                    <p id="revenueSummaryText">--</p>
+                  </article>
+                  <div class="facts-grid">
+                    <div><span>月增率</span><strong id="revenueMom">--</strong></div>
+                    <div><span>年增率</span><strong id="revenueYoy">--</strong></div>
+                    <div><span>累計年增</span><strong id="revenueCumulativeYoy">--</strong></div>
+                  </div>
+                </div>
+                <details class="data-table-fold">
+                  <summary>展開每月營收明細</summary>
+                  <div class="table-wrap compact-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>月份</th>
+                          <th>當月營收</th>
+                          <th>月增率</th>
+                          <th>年增率</th>
+                          <th>累計營收</th>
+                          <th>累計年增</th>
+                        </tr>
+                      </thead>
+                      <tbody id="revenueRows"></tbody>
+                    </table>
+                  </div>
+                </details>
+              </section>
+
+              <section class="surface financial-panel">
+                <div class="surface-head">
+                  <h3>基本面：獲利能力</h3>
+                  <span id="financialStatus">資料源 TWSE</span>
+                </div>
+                <div class="financial-layout">
+                  <article class="data-summary-card">
+                    <span id="financialSummaryTitle">--</span>
+                    <strong id="financialSummaryValue">--</strong>
+                    <p id="financialSummaryText">--</p>
+                  </article>
+                  <div class="facts-grid">
+                    <div><span>淨利率</span><strong id="netMargin">--</strong></div>
+                    <div><span><button class="term-link" type="button" data-glossary-term="ROE">ROE</button></span><strong id="roeValue">--</strong></div>
+                    <div><span><button class="term-link" type="button" data-glossary-term="ROA">ROA</button></span><strong id="roaValue">--</strong></div>
+                  </div>
+                </div>
+                <details class="data-table-fold">
+                  <summary>展開最近季財報明細</summary>
+                  <div class="table-wrap compact-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>季度</th>
+                          <th>營收</th>
+                          <th>毛利率</th>
+                          <th>營益率</th>
+                          <th>淨利</th>
+                          <th><button class="term-link" type="button" data-glossary-term="EPS">EPS</button></th>
+                          <th>單季 ROE</th>
+                          <th>單季 ROA</th>
+                        </tr>
+                      </thead>
+                      <tbody id="financialRows"></tbody>
+                    </table>
+                  </div>
+                </details>
+                <p class="disclaimer">ROE / ROA 目前以最新季財報與期末權益、資產粗估，適合先看方向，不能直接等同全年績效。</p>
+              </section>
+
+              <section id="newsPanel" class="surface news-panel">
+                <div class="surface-head">
+                  <h3>消息面（近期新聞）</h3>
+                  <span id="newsStatus" class="muted-tag">開啟個股後抓取</span>
+                </div>
+                <div id="newsRiskRadar" class="risk-radar hidden"></div>
+                <details class="explain">
+                  <summary>這是什麼？地雷雷達怎麼用？</summary>
+                  <div>
+                    <p>地雷雷達把近期新聞裡的「風險字眼」（像終止上市、變更交易方法、淨值轉負、暫停交易…）抓出來，再配上法人籌碼與價量，整理成「消息面／籌碼面／價量面」三行提醒。</p>
+                    <p>等級由低到高是 <b>留意 → 注意 → 警戒</b>；出現退場、財務危機這類關鍵風險會直接升到警戒。</p>
+                    <p class="explain-note">它只幫你「快速察覺風險」，不預測股價、不替你決定買或賣；看到警戒請自己再查證。</p>
+                    <div class="guide-links">
+                      <button type="button" class="guide-link" onclick="openIndicatorGuide('risk')">📖 怎麼看地雷雷達</button>
+                    </div>
+                  </div>
+                </details>
+                <p id="newsOverall" class="news-overall">開啟個股頁時，會抓最近幾則新聞並用關鍵字標出利多／利空／中性，並整理「地雷雷達」。</p>
+                <div id="newsList" class="news-list"></div>
+                <p class="disclaimer">新聞由公開來源（Google News）整理、關鍵字粗略歸類，僅供快速了解，非投資建議、不預測股價。</p>
+              </section>
+
+              <section class="surface valuation-panel">
+                <div class="surface-head">
+                  <h3>估值情境與股利試算</h3>
+                  <span class="muted-tag">情境 · 敏感度 · 參考</span>
+                </div>
+                <div id="etfNote" class="etf-note" hidden></div>
+                <div id="valuationSuitability" class="suitability-banner" hidden></div>
+                <div id="valuationBands" class="valuation-bands" hidden></div>
+                <div id="relativeValuation" class="relative-valuation-grid" hidden></div>
+                <div class="valuation-facts">
+                  <div class="valuation-card">
+                    <span>估計年現金股利</span>
+                    <strong id="avgCashDividend">--</strong>
+                    <p id="dividendCoverage">--</p>
+                  </div>
+                  <div class="valuation-card">
+                    <span>目前本益比</span>
+                    <strong id="peRatio">--</strong>
+                    <p id="marketDate">--</p>
+                  </div>
+                  <div class="valuation-card">
+                    <span><button class="term-link" type="button" data-glossary-term="殖利率">殖利率</button></span>
+                    <strong id="marketYield">--</strong>
+                    <p>官方日資料</p>
+                  </div>
+                </div>
+                <div id="valuationDividendBody">
+                  <div id="valuationEstimates" class="estimate-grid"></div>
+                  <p id="dividendAssumptionNote" class="valuation-method-note"></p>
+                  <section class="historical-yield-block">
+                    <div class="surface-head compact">
+                      <h3>近 5 年平均股利法（情境參考）</h3>
+                      <span id="historicalYieldStatus">需要 5 年股利與股價</span>
+                    </div>
+                    <div id="historicalYieldGrid" class="estimate-grid historical-yield-grid"></div>
+                  </section>
+                </div>
+                <p id="valuationWarning" class="disclaimer"></p>
+                <details class="data-table-fold">
+                  <summary>展開歷年股利分派</summary>
+                  <div class="table-wrap compact-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>年度</th>
+                          <th>期間</th>
+                          <th>現金股利</th>
+                          <th>股票股利</th>
+                          <th>狀態</th>
+                        </tr>
+                      </thead>
+                      <tbody id="dividendRows"></tbody>
+                    </table>
+                  </div>
+                </details>
+              </section>
+            </section>
+
+            <!-- 第三層 -->
+            <section id="layerData" class="layer">
+              <div class="layer-tag"><span class="layer-num">3</span><div><h3>完整資料</h3><p>走勢圖、日期事件線、原始日線資料表，以及資料來源與匯出。</p></div></div>
+
+              <section class="surface chart-panel">
+                <div class="surface-head">
+                  <h3 id="priceChartTitle">近一年收盤價（日線）</h3>
+                  <div class="chart-head-right">
+                    <button id="chartResetBtn" type="button" class="chart-size-btn" onclick="resetChartZoom()">重設縮放</button>
+                    <span id="dateRange">--</span>
+                  </div>
+                </div>
+                <div class="chart-legend" aria-label="走勢圖圖例">
+                  <span><i class="legend-candle legend-candle-up"></i>紅K（收漲）</span>
+                  <span><i class="legend-candle legend-candle-down"></i>綠K（收跌）</span>
+                  <button type="button" class="legend-toggle" data-series="ma5" onclick="toggleChartSeries('ma5')"><i class="legend-line legend-ma5"></i>MA5</button>
+                  <button type="button" class="legend-toggle" data-series="ma20" onclick="toggleChartSeries('ma20')"><i class="legend-line legend-ma20"></i>月線 MA20</button>
+                  <button type="button" class="legend-toggle" data-series="ma60" onclick="toggleChartSeries('ma60')"><i class="legend-line legend-ma60"></i>季線 MA60</button>
+                  <button type="button" class="legend-toggle" data-series="vol" onclick="toggleChartSeries('vol')"><i class="legend-vol"></i>成交量</button>
+                  <button type="button" class="legend-toggle" data-series="sr_s" onclick="toggleChartSeries('sr_s')"><i class="legend-sr legend-sr-s"></i>短線支壓</button>
+                  <button type="button" class="legend-toggle" data-series="sr_m" onclick="toggleChartSeries('sr_m')"><i class="legend-sr legend-sr-m"></i>波段支壓</button>
+                  <button type="button" class="legend-toggle" data-series="sr_l" onclick="toggleChartSeries('sr_l')"><i class="legend-sr legend-sr-l"></i>長線支壓</button>
+                  <span class="legend-hint">滾輪縮放・拖曳平移・點圖例開關</span>
+                </div>
+                <details class="explain">
+                  <summary>這是什麼？怎麼看 K 線？</summary>
+                  <div>
+                    <p>每一根「K 棒」是一天：<b>紅色</b>＝當天收盤比開盤高（收漲），<b>綠色</b>＝收盤比開盤低（收跌）。上下細線是當天最高與最低價，中間粗體是開盤到收盤的範圍。</p>
+                    <p>三條線是均線：<b>MA5</b> 週線、<b>MA20</b> 月線、<b>MA60</b> 季線，分別是近 5／20／60 個交易日的平均收盤，用來看趨勢方向。</p>
+                    <p>可<b>滾輪縮放、拖曳左右平移</b>；<b>成交量</b>與<b>支撐／壓力線</b>可從圖例點開關。上緣小三角是<b>事件標記</b>（財報／營收／除息／風險新聞）。滑過任一天，框內會顯示當天價、量與事件（讀取法人後也會帶三大法人）。</p>
+                    <p class="explain-note">支撐／壓力抓波段轉折點（前後數日都更高／更低的明顯高低），取最接近目前股價的上方壓力與下方支撐；可切『短線（近20日）／波段（近60日）／長線（近一年）』三種週期，由圖例個別開關（預設只開波段）；這些只是把資料畫出來幫你看，不是買賣訊號，也不預測之後會怎麼走。</p>
+                    <div class="guide-links">
+                      <button type="button" class="guide-link" onclick="openIndicatorGuide('candle')">📖 K 線</button>
+                      <button type="button" class="guide-link" onclick="openIndicatorGuide('ma')">📖 均線</button>
+                      <button type="button" class="guide-link" onclick="openIndicatorGuide('sr')">📖 支撐壓力</button>
+                    </div>
+                  </div>
+                </details>
+                <canvas id="priceChart" width="960" height="360"></canvas>
+                <div class="date-event-panel" aria-live="polite">
+                  <div class="date-event-main">
+                    <div>
+                      <p class="eyebrow">日期事件線索</p>
+                      <h4 id="eventDate">--</h4>
+                      <p id="eventSummary">指到圖表上的日期，這裡會整理當天價格、成交量與附近已知事件。</p>
+                    </div>
+                    <a id="eventNewsLink" class="event-news-link" href="#" target="_blank" rel="noopener">查附近新聞</a>
+                  </div>
+                  <div class="event-metrics">
+                    <div><span>收盤</span><strong id="eventClose">--</strong></div>
+                    <div><span>較前一交易日</span><strong id="eventDayChange">--</strong></div>
+                    <div><span>成交量</span><strong id="eventVolume">--</strong></div>
+                    <div><span>量能判讀</span><strong id="eventVolumeSignal">--</strong></div>
+                  </div>
+                  <div id="eventItems" class="event-items"></div>
+                  <p class="disclaimer">事件線索只做日期對照，不代表股價因果；新聞入口會另開搜尋結果。</p>
+                </div>
+              </section>
+
+              <section class="surface chips-panel">
+                <div class="surface-head">
+                  <h3>法人籌碼（三大法人）</h3>
+                  <button id="loadChipsButton" type="button" class="chart-size-btn" onclick="loadInstitutional()">讀取三大法人（近一年）</button>
+                </div>
+                <details class="explain">
+                  <summary>這是什麼？三大法人是誰？</summary>
+                  <div>
+                    <p>「三大法人」是外資、投信（國內基金）、自營商（券商自己的部位）。<b>買賣超</b>＝當天買進減賣出的張數：正值是買超、負值是賣超。</p>
+                    <p>連續多天賣超、或三大法人同步賣超，常被當成籌碼轉弱的觀察點之一；數字以 TWSE 每日「三大法人買賣超日報」(T86) 為準。</p>
+                    <p class="explain-note">這只描述法人近期買賣超的事實，不代表股價會怎麼走，也不是買賣建議。</p>
+                    <div class="guide-links">
+                      <button type="button" class="guide-link" onclick="openIndicatorGuide('chips')">📖 怎麼看三大法人</button>
+                    </div>
+                  </div>
+                </details>
+                <div id="chipsCard" class="chips-card chips-empty">
+                  <p class="chips-empty-text">開啟個股並按「同步」後，這裡會顯示近 20 日三大法人買賣超與連續賣超天數。</p>
+                </div>
+              </section>
+
+              <section class="surface table-panel">
+                <div class="surface-head">
+                  <h3>最近資料（新到舊）</h3>
+                  <span id="latestNote"></span>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th><button class="term-link" type="button" data-glossary-term="開盤">開盤</button></th>
+                        <th><button class="term-link" type="button" data-glossary-term="最高">最高</button></th>
+                        <th><button class="term-link" type="button" data-glossary-term="最低">最低</button></th>
+                        <th><button class="term-link" type="button" data-glossary-term="收盤價">收盤</button></th>
+                        <th><button class="term-link" type="button" data-glossary-term="成交量">成交量</button></th>
+                      </tr>
+                    </thead>
+                    <tbody id="priceRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="surface sources-card">
+                <div>
+                  <strong>資料來源與匯出</strong>
+                  <p>所有數字附資料日期與來源（TWSE 等官方公開資料）。本內容為資料解讀，非投資建議，不預測股價。</p>
+                </div>
+                <button class="primary-button" type="button" onclick="document.getElementById('stockExportButton').click()">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+                  匯出這檔 Excel
+                </button>
+              </section>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="glossaryOverlay" class="overlay hidden" aria-hidden="true">
+      <section class="glossary-popover" role="dialog" aria-modal="true" aria-labelledby="glossaryTitle">
+        <button id="glossaryClose" class="icon-button close-button" type="button" title="關閉">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <p class="eyebrow">名詞解釋</p>
+        <h2 id="glossaryTitle">--</h2>
+        <p id="glossaryPlain"></p>
+        <p id="glossaryHow"></p>
+        <div id="glossaryGuide" class="glossary-guide hidden"></div>
+      </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

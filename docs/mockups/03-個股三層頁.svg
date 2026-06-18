@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" font-family="'PingFang TC','Microsoft JhengHei','Noto Sans TC','Heiti TC',sans-serif">
+  <defs>
+    <filter id="s3" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#1C3D5A" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="680" fill="#EDF0F4"/>
+
+  <!-- 頂部列 -->
+  <rect x="0" y="0" width="1200" height="56" fill="#FFFFFF"/>
+  <rect x="0" y="55" width="1200" height="1" fill="#E3E8EF"/>
+  <text x="24" y="35" font-size="18" font-weight="700" fill="#1C3D5A">📈 投資作業系統</text>
+  <rect x="300" y="14" width="420" height="28" rx="14" fill="#F1F4F8" stroke="#E3E8EF"/>
+  <text x="318" y="33" font-size="13" fill="#9AA6B2">🔍  搜尋股票 / 代號…</text>
+  <text x="1132" y="34" font-size="17">🤖</text>
+
+  <!-- 個股標題卡 -->
+  <rect x="24" y="72" width="1152" height="78" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="48" y="110" font-size="24" font-weight="800" fill="#1A1F26">2330 台積電</text>
+  <rect x="232" y="92" width="64" height="22" rx="11" fill="#EEF3F7"/>
+  <text x="264" y="107" font-size="12" fill="#1C3D5A" text-anchor="middle">半導體</text>
+  <text x="48" y="134" font-size="12" fill="#9AA6B2">上市 · 資料更新 6/13 收盤</text>
+  <!-- price -->
+  <text x="360" y="112" font-size="26" font-weight="800" fill="#E03131">1,058</text>
+  <text x="360" y="136" font-size="14" fill="#E03131">▲ +12 (+1.2%)</text>
+  <!-- buttons -->
+  <rect x="824" y="94" width="92" height="34" rx="8" fill="#FFFFFF" stroke="#C7D2DD"/>
+  <text x="870" y="116" font-size="13.5" fill="#1C3D5A" text-anchor="middle">＋ 自選</text>
+  <rect x="928" y="94" width="130" height="34" rx="8" fill="#1C3D5A"/>
+  <text x="993" y="116" font-size="13.5" fill="#FFFFFF" text-anchor="middle" font-weight="700">💰 我買了</text>
+  <rect x="1070" y="94" width="90" height="34" rx="8" fill="#FFFFFF" stroke="#C7D2DD"/>
+  <text x="1115" y="116" font-size="13.5" fill="#33404C" text-anchor="middle">新手 ▾</text>
+
+  <!-- 第一層 -->
+  <text x="24" y="174" font-size="13" font-weight="700" fill="#46535F">【第一層 · 30 秒看懂】</text>
+  <rect x="24" y="184" width="1152" height="86" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <rect x="24" y="184" width="5" height="86" rx="2" fill="#E03131"/>
+  <text x="48" y="214" font-size="14.5" fill="#33404C">📈 <tspan font-weight="700">最近趨勢：</tspan>近一季向上，站上所有均線。</text>
+  <text x="48" y="240" font-size="14.5" fill="#33404C">📍 <tspan font-weight="700">價格位階：</tspan>目前在近一年區間的 96% 高位（相對偏高）。</text>
+  <text x="640" y="214" font-size="14.5" fill="#33404C">🟡 <tspan font-weight="700">還缺什麼：</tspan>本月營收尚未公布，</text>
+  <text x="640" y="240" font-size="14.5" fill="#33404C">　　獲利動能待更新。</text>
+
+  <!-- 第二層 -->
+  <text x="24" y="296" font-size="13" font-weight="700" fill="#46535F">【第二層 · 白話健檢（6 卡）】</text>
+
+  <!-- 卡片產生器：6 張 -->
+  <!-- 趨勢 -->
+  <rect x="24" y="306" width="366" height="102" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="44" y="332" font-size="13" fill="#6B7785">趨勢</text>
+  <text x="356" y="332" font-size="13" fill="#E03131" text-anchor="end" font-weight="700">▲ 偏多</text>
+  <text x="44" y="362" font-size="18" font-weight="800" fill="#1A1F26">近一季向上</text>
+  <text x="44" y="392" font-size="12.5" fill="#1C3D5A">站上 20/60/240 日均線　·　點我看解釋</text>
+  <!-- 價格位階 -->
+  <rect x="414" y="306" width="366" height="102" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="434" y="332" font-size="13" fill="#6B7785">價格位階</text>
+  <text x="434" y="362" font-size="18" font-weight="800" fill="#1A1F26">96% 高位</text>
+  <rect x="600" y="350" width="160" height="8" rx="4" fill="#EEF1F5"/><rect x="600" y="350" width="154" height="8" rx="4" fill="#E8590C"/>
+  <text x="434" y="392" font-size="12.5" fill="#1C3D5A">近一年區間相對偏貴　·　點我看解釋</text>
+  <!-- 獲利能力 -->
+  <rect x="804" y="306" width="366" height="102" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="824" y="332" font-size="13" fill="#6B7785">獲利能力</text>
+  <text x="1150" y="332" font-size="13" fill="#E03131" text-anchor="end" font-weight="700">▲ 強</text>
+  <text x="824" y="362" font-size="18" font-weight="800" fill="#1A1F26">EPS 連 4 季成長</text>
+  <text x="824" y="392" font-size="12.5" fill="#1C3D5A">ROE 28%　·　淨利率 41%　·　點我看解釋</text>
+  <!-- 波動風險 -->
+  <rect x="24" y="418" width="366" height="102" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="44" y="444" font-size="13" fill="#6B7785">波動風險</text>
+  <text x="356" y="444" font-size="13" fill="#F08C00" text-anchor="end" font-weight="700">● 中等</text>
+  <text x="44" y="474" font-size="18" font-weight="800" fill="#1A1F26">中等波動</text>
+  <text x="44" y="504" font-size="12.5" fill="#1C3D5A">β ≈ 1.1　·　近月振幅略大於大盤</text>
+  <!-- 股利穩定 -->
+  <rect x="414" y="418" width="366" height="102" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="434" y="444" font-size="13" fill="#6B7785">股利穩定</text>
+  <text x="764" y="444" font-size="13" fill="#E03131" text-anchor="end" font-weight="700">▲ 穩</text>
+  <text x="434" y="474" font-size="18" font-weight="800" fill="#1A1F26">連 20 年配息</text>
+  <text x="434" y="504" font-size="12.5" fill="#1C3D5A">現金殖利率 1.8%　·　配息率 70%</text>
+  <!-- 估值區間 -->
+  <rect x="804" y="418" width="366" height="102" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s3)"/>
+  <text x="824" y="444" font-size="13" fill="#6B7785">估值區間（殖利率法）</text>
+  <text x="824" y="474" font-size="15" font-weight="700" fill="#2F9E44">便宜 720</text>
+  <text x="944" y="474" font-size="15" font-weight="700" fill="#46535F">合理 900</text>
+  <text x="1064" y="474" font-size="15" font-weight="700" fill="#E03131">昂貴 1100</text>
+  <text x="824" y="504" font-size="11.5" fill="#9AA6B2">ⓘ 估算參考，非買賣點位</text>
+
+  <!-- 第三層 -->
+  <text x="24" y="548" font-size="13" font-weight="700" fill="#46535F">【第三層 · 完整資料（進階模式常駐 / 新手點開）】</text>
+  <g font-size="13">
+    <rect x="24" y="560" width="92" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="70" y="581" fill="#33404C" text-anchor="middle">走勢圖</text>
+    <rect x="126" y="560" width="120" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="186" y="581" fill="#33404C" text-anchor="middle">基本面歷年</text>
+    <rect x="256" y="560" width="106" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="309" y="581" fill="#33404C" text-anchor="middle">每月營收</text>
+    <rect x="372" y="560" width="106" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="425" y="581" fill="#33404C" text-anchor="middle">股利政策</text>
+    <rect x="488" y="560" width="120" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="548" y="581" fill="#33404C" text-anchor="middle">籌碼 · 法人</text>
+    <rect x="618" y="560" width="80" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="658" y="581" fill="#33404C" text-anchor="middle">消息</text>
+    <rect x="708" y="560" width="120" height="32" rx="16" fill="#FFFFFF" stroke="#D6DEE7"/><text x="768" y="581" fill="#33404C" text-anchor="middle">K線 + 指標</text>
+  </g>
+
+  <!-- 免責 -->
+  <text x="24" y="636" font-size="11.5" fill="#9AA6B2">ⓘ 所有數字附資料來源與日期；名詞可點開白話解釋。本內容為資料解讀，不構成投資建議。</text>
+</svg>

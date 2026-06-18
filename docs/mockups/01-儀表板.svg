@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="690" viewBox="0 0 1200 690" font-family="'PingFang TC','Microsoft JhengHei','Noto Sans TC','Heiti TC',sans-serif">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#1C3D5A" flood-opacity="0.08"/>
+    </filter>
+    <linearGradient id="sparkUp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E03131" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#E03131" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1200" height="690" fill="#EDF0F4"/>
+
+  <!-- ===== 頂部列 ===== -->
+  <rect x="0" y="0" width="1200" height="56" fill="#FFFFFF"/>
+  <rect x="0" y="55" width="1200" height="1" fill="#E3E8EF"/>
+  <text x="24" y="35" font-size="18" font-weight="700" fill="#1C3D5A">📈 投資作業系統</text>
+  <rect x="300" y="14" width="420" height="28" rx="14" fill="#F1F4F8" stroke="#E3E8EF"/>
+  <text x="318" y="33" font-size="13" fill="#9AA6B2">🔍  搜尋股票 / 代號…</text>
+  <!-- 模式切換 -->
+  <rect x="876" y="14" width="150" height="28" rx="14" fill="#F1F4F8" stroke="#E3E8EF"/>
+  <text x="892" y="32" font-size="12" fill="#1C3D5A" font-weight="700">新手</text>
+  <circle cx="960" cy="28" r="9" fill="#1C3D5A"/>
+  <rect x="946" y="22" width="28" height="12" rx="6" fill="#C7D2DD"/>
+  <circle cx="952" cy="28" r="8" fill="#FFFFFF" stroke="#1C3D5A" stroke-width="1.5"/>
+  <text x="982" y="32" font-size="12" fill="#9AA6B2">進階</text>
+  <text x="1052" y="34" font-size="17">🙈</text>
+  <text x="1092" y="34" font-size="16">⚙️</text>
+  <text x="1132" y="34" font-size="17">🤖</text>
+
+  <!-- ===== 問候 + 大盤 ===== -->
+  <text x="24" y="86" font-size="15" fill="#46535F">早安,今天是 6/15(一)。開盤前先看這些 👇</text>
+  <text x="1176" y="86" font-size="14" fill="#46535F" text-anchor="end">大盤 加權 <tspan font-weight="700" fill="#E03131">22,140 ▲ 0.8%</tspan></text>
+
+  <!-- ===== 總資產卡 ===== -->
+  <rect x="24" y="100" width="556" height="150" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#shadow)"/>
+  <text x="44" y="130" font-size="13" fill="#6B7785">我的總資產</text>
+  <text x="146" y="131" font-size="13">🙈</text>
+  <text x="44" y="168" font-size="30" font-weight="800" fill="#1A1F26">NT$ 2,640,500</text>
+  <text x="44" y="198" font-size="16" font-weight="700" fill="#E03131">今日 ▲ +12,300 (+0.47%)</text>
+  <text x="44" y="224" font-size="15" fill="#E03131">總報酬 ▲ +18.7%(含息)</text>
+  <!-- sparkline -->
+  <text x="556" y="130" font-size="11" fill="#9AA6B2" text-anchor="end">近 90 天淨值</text>
+  <path d="M376,225 L405,218 L434,222 L463,205 L492,198 L521,182 L550,150 L550,235 L376,235 Z" fill="url(#sparkUp)"/>
+  <polyline points="376,225 405,218 434,222 463,205 492,198 521,182 550,150" fill="none" stroke="#E03131" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- ===== 今日待辦/警示卡 ===== -->
+  <rect x="596" y="100" width="580" height="150" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#shadow)"/>
+  <text x="616" y="130" font-size="13" font-weight="700" fill="#1C3D5A">今日待辦 / 警示</text>
+  <text x="616" y="158" font-size="13.5" fill="#33404C">🔔  2412 中華電 後天除息(每股配 4.7)</text>
+  <text x="616" y="184" font-size="13.5" fill="#33404C">⚠️  3008 大立光 跌破季線(技術轉弱訊號)</text>
+  <text x="616" y="210" font-size="13.5" fill="#33404C">📊  2330 台積電 明日公布月營收</text>
+  <text x="616" y="236" font-size="13.5" fill="#33404C">✅  你有 1 筆交易還沒寫買進筆記</text>
+
+  <!-- ===== 今日晨報 ===== -->
+  <rect x="24" y="266" width="1152" height="92" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#shadow)"/>
+  <text x="44" y="294" font-size="13" font-weight="700" fill="#1C3D5A">📰 今日晨報（AI 一句話）</text>
+  <text x="44" y="320" font-size="14" fill="#33404C">你的持股昨日多數收紅，半導體領漲；台積電 +1.2% 帶動你的組合 +0.47%。需要留意大立光跌破季線，</text>
+  <text x="44" y="342" font-size="14" fill="#33404C">屬技術面轉弱訊號，詳見風險中心。</text>
+  <text x="1156" y="342" font-size="11" fill="#9AA6B2" text-anchor="end">ⓘ 資料解讀，非投資建議</text>
+
+  <!-- ===== 我的持倉 摘要 ===== -->
+  <rect x="24" y="374" width="556" height="246" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#shadow)"/>
+  <text x="44" y="404" font-size="14" font-weight="700" fill="#1C3D5A">💼 我的持倉</text>
+  <text x="556" y="404" font-size="12" fill="#1C3D5A" text-anchor="end">看全部 ›</text>
+  <!-- rows -->
+  <g font-size="14">
+    <text x="44" y="438" fill="#1A1F26">2330 台積電</text>
+    <text x="300" y="438" fill="#E03131" font-weight="700">+16.8% ▲</text>
+    <rect x="410" y="429" width="120" height="9" rx="4" fill="#EEF1F5"/><rect x="410" y="429" width="100" height="9" rx="4" fill="#1C3D5A"/>
+    <text x="540" y="438" fill="#6B7785" font-size="12" text-anchor="end">41%</text>
+
+    <text x="44" y="474" fill="#1A1F26">0056 高股息</text>
+    <text x="300" y="474" fill="#E03131" font-weight="700">+5.2% ▲</text>
+    <rect x="410" y="465" width="120" height="9" rx="4" fill="#EEF1F5"/><rect x="410" y="465" width="54" height="9" rx="4" fill="#2C5475"/>
+    <text x="540" y="474" fill="#6B7785" font-size="12" text-anchor="end">22%</text>
+
+    <text x="44" y="510" fill="#1A1F26">2412 中華電</text>
+    <text x="300" y="510" fill="#E03131" font-weight="700">+3.1% ▲</text>
+    <rect x="410" y="501" width="120" height="9" rx="4" fill="#EEF1F5"/><rect x="410" y="501" width="44" height="9" rx="4" fill="#2C5475"/>
+    <text x="540" y="510" fill="#6B7785" font-size="12" text-anchor="end">18%</text>
+
+    <text x="44" y="546" fill="#1A1F26">3008 大立光</text>
+    <text x="300" y="546" fill="#2F9E44" font-weight="700">-7.6% ▼</text>
+    <rect x="410" y="537" width="120" height="9" rx="4" fill="#EEF1F5"/><rect x="410" y="537" width="29" height="9" rx="4" fill="#7E97AB"/>
+    <text x="540" y="546" fill="#6B7785" font-size="12" text-anchor="end">12%</text>
+  </g>
+  <rect x="44" y="572" width="492" height="32" rx="8" fill="#F1F5F9"/>
+  <text x="290" y="593" font-size="12.5" fill="#46535F" text-anchor="middle">… 再 5 檔　·　含息總報酬 +18.7%　·　年化 12.3%</text>
+
+  <!-- ===== 自選股 摘要 ===== -->
+  <rect x="596" y="374" width="580" height="246" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#shadow)"/>
+  <text x="616" y="404" font-size="14" font-weight="700" fill="#1C3D5A">⭐ 自選股</text>
+  <text x="1156" y="404" font-size="12" fill="#1C3D5A" text-anchor="end">看全部 ›</text>
+  <g font-size="14">
+    <text x="616" y="438" fill="#1A1F26">2454 聯發科</text>
+    <text x="1156" y="438" fill="#E03131" font-weight="700" text-anchor="end">▲ +2.1%</text>
+    <text x="616" y="474" fill="#1A1F26">1216 統一</text>
+    <text x="1156" y="474" fill="#2F9E44" font-weight="700" text-anchor="end">▼ -0.4%</text>
+    <text x="616" y="510" fill="#1A1F26">2603 長榮</text>
+    <rect x="700" y="498" width="56" height="18" rx="9" fill="#FFF0E6"/>
+    <text x="728" y="511" font-size="11" fill="#E8590C" text-anchor="middle">🔥 異動</text>
+    <text x="1156" y="510" fill="#E03131" font-weight="700" text-anchor="end">▲ +3.8%</text>
+    <text x="616" y="546" fill="#1A1F26">2884 玉山金</text>
+    <text x="1156" y="546" fill="#E03131" font-weight="700" text-anchor="end">▲ +0.9%</text>
+  </g>
+  <rect x="616" y="572" width="540" height="32" rx="8" fill="#F1F5F9"/>
+  <text x="886" y="593" font-size="12.5" fill="#46535F" text-anchor="middle">… 再 9 檔　·　分群：觀察中 / 考慮買 / 存股池</text>
+
+  <!-- ===== 底部導航 ===== -->
+  <rect x="0" y="634" width="1200" height="56" fill="#FFFFFF"/>
+  <rect x="0" y="634" width="1200" height="1" fill="#E3E8EF"/>
+  <g text-anchor="middle">
+    <text x="160" y="662" font-size="13" font-weight="700" fill="#1C3D5A">🏠</text>
+    <text x="160" y="680" font-size="11" font-weight="700" fill="#1C3D5A">首頁</text>
+    <text x="400" y="662" font-size="13" fill="#9AA6B2">💼</text>
+    <text x="400" y="680" font-size="11" fill="#9AA6B2">持倉</text>
+    <text x="600" y="662" font-size="13" fill="#9AA6B2">⭐</text>
+    <text x="600" y="680" font-size="11" fill="#9AA6B2">自選</text>
+    <text x="800" y="662" font-size="13" fill="#9AA6B2">🧭</text>
+    <text x="800" y="680" font-size="11" fill="#9AA6B2">探索</text>
+    <text x="1040" y="662" font-size="13" fill="#9AA6B2">🎓</text>
+    <text x="1040" y="680" font-size="11" fill="#9AA6B2">學</text>
+  </g>
+</svg>

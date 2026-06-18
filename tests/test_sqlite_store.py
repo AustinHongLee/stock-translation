@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from datetime import date
+from pathlib import Path
+
+from app.models import (
+    DailyPrice,
+    DividendRecord,
+    FinancialStatement,
+    MarketValuation,
+    MonthlyRevenue,
+    StockProfile,
+)
+from app.portfolio.models import PortfolioTransaction
+from app.store.sqlite_store import SQLiteStore
+
+
+class SQLiteStoreTests(unittest.TestCase):
+    def test_profiles_and_prices_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_profiles(
+                    [
+                        StockProfile(
+                            stock_id="2330",
+                            name="台灣積體電路製造股份有限公司",
+                            short_name="台積電",
+                            industry_code="24",
+                            listed_date=date(1994, 9, 5),
+                        )
+                    ]
+                )
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date(2026, 6, 1),
+                            open=2355.0,
+                            high=2415.0,
+                            low=2350.0,
+                            close=2355.0,
+                            volume=60942792,
+                        )
+                    ]
+                )
+                store.upsert_dividend_records(
+                    [
+                        DividendRecord(
+                            stock_id="2330",
+                            year=115,
+                            period="第1季",
+                            status="董事會決議",
+                            board_date=date(2026, 5, 12),
+                            shareholder_meeting_date=None,
+                            cash_dividend=7.0,
+                            stock_dividend=0.0,
+                        )
+                    ]
+                )
+                store.upsert_market_valuations(
+                    [
+                        MarketValuation(
+                            stock_id="2330",
+                            date=date(2026, 6, 11),
+                            pe_ratio=30.25,
+                            dividend_yield=0.98,
+                            pb_ratio=9.9,
+                        )
+                    ]
+                )
+                store.upsert_monthly_revenues(
+                    [
+                        MonthlyRevenue(
+                            stock_id="2330",
+                            year_month="2026-05",
+                            company_name="台積電",
+                            industry="半導體業",
+                            current_month_revenue=416975163,
+                            previous_month_revenue=410725118,
+                            last_year_month_revenue=320515951,
+                            mom_percent=1.52,
+                            yoy_percent=30.09,
+                            cumulative_revenue=1961803721,
+                            cumulative_last_year_revenue=1509336555,
+                            cumulative_yoy_percent=29.98,
+                            source_updated_at=date(2026, 6, 11),
+                        )
+                    ]
+                )
+                store.upsert_financial_statements(
+                    [
+                        FinancialStatement(
+                            stock_id="2330",
+                            year=2026,
+                            quarter=1,
+                            company_name="台積電",
+                            revenue=1134103440,
+                            gross_profit=751295421,
+                            operating_income=658966142,
+                            non_operating_income_expense=28833545,
+                            pre_tax_income=687799687,
+                            net_income=572801304,
+                            parent_net_income=572479752,
+                            eps=22.08,
+                            total_assets=8660949685,
+                            total_liabilities=2728560764,
+                            parent_equity=5890960252,
+                            total_equity=5932388921,
+                            book_value_per_share=227.17,
+                            source_updated_at=date(2026, 6, 12),
+                        )
+                    ]
+                )
+
+                profile = store.get_profile("2330")
+                prices = store.get_daily_prices("2330")
+                results = store.search_profiles("台積")
+                dividends = store.get_dividend_records("2330")
+                valuation = store.get_latest_market_valuation("2330")
+                revenues = store.get_monthly_revenues("2330")
+                financial = store.get_latest_financial_statement("2330")
+
+            self.assertIsNotNone(profile)
+            self.assertEqual(profile.short_name, "台積電")
+            self.assertEqual(len(prices), 1)
+            self.assertEqual(prices[0].close, 2355.0)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].stock_id, "2330")
+            self.assertEqual(dividends[0].cash_dividend, 7.0)
+            self.assertEqual(valuation.pe_ratio, 30.25)  # type: ignore[union-attr]
+            self.assertEqual(revenues[0].year_month, "2026-05")
+            self.assertEqual(revenues[0].yoy_percent, 30.09)
+            self.assertEqual(financial.eps, 22.08)  # type: ignore[union-attr]
+            self.assertEqual(financial.book_value_per_share, 227.17)  # type: ignore[union-attr]
+
+    def test_watchlist_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                self.assertFalse(store.is_watchlisted("2330"))
+                store.add_to_watchlist("2330")
+                self.assertTrue(store.is_watchlisted("2330"))
+                self.assertEqual(len(store.list_watchlist()), 1)
+                store.remove_from_watchlist("2330")
+                self.assertFalse(store.is_watchlisted("2330"))
+
+    def test_portfolio_transactions_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                transaction_id = store.add_portfolio_transaction(
+                    PortfolioTransaction(
+                        stock_id="2330",
+                        trade_date=date(2026, 6, 1),
+                        side="buy",
+                        shares=1000,
+                        price=900,
+                        fee=100,
+                        note="第一次建倉",
+                    )
+                )
+                rows = store.get_portfolio_transactions()
+
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0].id, transaction_id)
+                self.assertEqual(rows[0].stock_id, "2330")
+                self.assertEqual(rows[0].note, "第一次建倉")
+
+                store.update_portfolio_transaction(
+                    PortfolioTransaction(
+                        id=transaction_id,
+                        stock_id="2330",
+                        trade_date=date(2026, 6, 2),
+                        side="buy",
+                        shares=2000,
+                        price=910,
+                        fee=120,
+                        note="調整後",
+                    )
+                )
+                updated = store.get_portfolio_transactions()[0]
+                self.assertEqual(updated.trade_date, date(2026, 6, 2))
+                self.assertEqual(updated.shares, 2000)
+                self.assertEqual(updated.note, "調整後")
+
+                store.delete_portfolio_transaction(transaction_id)
+                self.assertEqual(store.get_portfolio_transactions(), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

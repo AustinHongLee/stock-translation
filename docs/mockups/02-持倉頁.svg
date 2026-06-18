@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" font-family="'PingFang TC','Microsoft JhengHei','Noto Sans TC','Heiti TC',sans-serif">
+  <defs>
+    <filter id="sh" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#1C3D5A" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="700" fill="#EDF0F4"/>
+
+  <!-- 頂部列 -->
+  <rect x="0" y="0" width="1200" height="56" fill="#FFFFFF"/>
+  <rect x="0" y="55" width="1200" height="1" fill="#E3E8EF"/>
+  <text x="24" y="35" font-size="18" font-weight="700" fill="#1C3D5A">📈 投資作業系統</text>
+  <rect x="300" y="14" width="420" height="28" rx="14" fill="#F1F4F8" stroke="#E3E8EF"/>
+  <text x="318" y="33" font-size="13" fill="#9AA6B2">🔍  搜尋股票 / 代號…</text>
+  <text x="1132" y="34" font-size="17">🤖</text>
+
+  <!-- 標題列 -->
+  <text x="24" y="90" font-size="22" font-weight="800" fill="#1A1F26">💼 我的持倉</text>
+  <rect x="930" y="72" width="150" height="28" rx="8" fill="#FFFFFF" stroke="#D6DEE7"/>
+  <text x="946" y="91" font-size="13" fill="#33404C">帳戶：全部合併 ▾</text>
+  <rect x="1094" y="72" width="82" height="28" rx="8" fill="#FFFFFF" stroke="#D6DEE7"/>
+  <text x="1110" y="91" font-size="13" fill="#33404C">🙈 隱碼</text>
+
+  <!-- KPI 帶 -->
+  <rect x="24" y="106" width="1152" height="116" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#sh)"/>
+  <!-- 分隔線 -->
+  <g stroke="#EDF0F4" stroke-width="1">
+    <line x1="232" y1="128" x2="232" y2="200"/>
+    <line x1="452" y1="128" x2="452" y2="200"/>
+    <line x1="620" y1="128" x2="620" y2="200"/>
+    <line x1="792" y1="128" x2="792" y2="200"/>
+    <line x1="968" y1="128" x2="968" y2="200"/>
+  </g>
+  <!-- col1 -->
+  <text x="48" y="142" font-size="12" fill="#6B7785">總市值</text>
+  <text x="48" y="174" font-size="21" font-weight="800" fill="#1A1F26">2,116,000</text>
+  <!-- col2 -->
+  <text x="252" y="142" font-size="12" fill="#6B7785">未實現損益</text>
+  <text x="252" y="172" font-size="20" font-weight="800" fill="#E03131">+305,000</text>
+  <text x="252" y="192" font-size="13" fill="#E03131">▲ +16.8%</text>
+  <!-- col3 -->
+  <text x="472" y="142" font-size="12" fill="#6B7785">已領股利</text>
+  <text x="472" y="174" font-size="20" font-weight="800" fill="#E03131">+18,400</text>
+  <!-- col4 -->
+  <text x="640" y="142" font-size="12" fill="#6B7785">含息總報酬</text>
+  <text x="640" y="172" font-size="20" font-weight="800" fill="#E03131">▲ +18.7%</text>
+  <!-- col5 -->
+  <text x="812" y="142" font-size="12" fill="#6B7785">年化報酬 XIRR</text>
+  <text x="812" y="172" font-size="20" font-weight="800" fill="#1A1F26">12.3%<tspan font-size="12" fill="#6B7785"> /年</tspan></text>
+  <rect x="812" y="184" width="120" height="18" rx="9" fill="#FDECEC"/>
+  <text x="822" y="197" font-size="11" fill="#E03131">大盤 9.0% · 贏</text>
+  <!-- 迷你對比圖 -->
+  <text x="988" y="138" font-size="10.5" fill="#6B7785">淨值 vs 大盤(近一年)</text>
+  <rect x="988" y="144" width="168" height="56" rx="6" fill="#FAFBFC" stroke="#EEF1F5"/>
+  <polyline points="996,192 1020,186 1044,188 1068,176 1092,170 1116,160 1148,150" fill="none" stroke="#E03131" stroke-width="2.2" stroke-linejoin="round"/>
+  <polyline points="996,193 1020,191 1044,192 1068,186 1092,184 1116,180 1148,172" fill="none" stroke="#9AA6B2" stroke-width="1.8" stroke-dasharray="3 3"/>
+
+  <!-- 分頁 -->
+  <g font-size="14">
+    <text x="44" y="252" fill="#1C3D5A" font-weight="700">● 持股明細</text>
+    <text x="160" y="252" fill="#9AA6B2">配置健診</text>
+    <text x="252" y="252" fill="#9AA6B2">配息年曆</text>
+    <text x="344" y="252" fill="#9AA6B2">已實現損益</text>
+    <text x="452" y="252" fill="#9AA6B2">稅務</text>
+  </g>
+  <rect x="44" y="260" width="86" height="3" rx="2" fill="#1C3D5A"/>
+
+  <!-- 持股表卡 -->
+  <rect x="24" y="276" width="1152" height="236" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#sh)"/>
+  <!-- 表頭 -->
+  <rect x="24" y="276" width="1152" height="40" rx="12" fill="#F6F8FA"/>
+  <rect x="24" y="304" width="1152" height="12" fill="#F6F8FA"/>
+  <g font-size="12.5" fill="#6B7785">
+    <text x="48" y="301">代號 / 名稱</text>
+    <text x="430" y="301" text-anchor="end">股數</text>
+    <text x="560" y="301" text-anchor="end">均價</text>
+    <text x="700" y="301" text-anchor="end">現價</text>
+    <text x="860" y="301" text-anchor="end">未實現損益</text>
+    <text x="1000" y="301" text-anchor="end">報酬率</text>
+    <text x="1156" y="301" text-anchor="end">佔比</text>
+  </g>
+  <!-- rows -->
+  <g font-size="14.5">
+    <!-- 2330 -->
+    <text x="48" y="350" fill="#1A1F26" font-weight="600">2330 台積電</text>
+    <text x="430" y="350" fill="#33404C" text-anchor="end">2,000</text>
+    <text x="560" y="350" fill="#33404C" text-anchor="end">905.5</text>
+    <text x="700" y="350" fill="#E03131" text-anchor="end" font-weight="700">1,058 ▲</text>
+    <text x="860" y="350" fill="#E03131" text-anchor="end">+305,000</text>
+    <text x="1000" y="350" fill="#E03131" text-anchor="end" font-weight="700">+16.8% ▲</text>
+    <rect x="1040" y="341" width="90" height="9" rx="4" fill="#EEF1F5"/><rect x="1040" y="341" width="90" height="9" rx="4" fill="#1C3D5A"/>
+    <text x="1156" y="350" fill="#6B7785" font-size="11" text-anchor="end">41%</text>
+    <line x1="44" y1="368" x2="1156" y2="368" stroke="#F0F2F5"/>
+    <!-- 0056 -->
+    <text x="48" y="394" fill="#1A1F26" font-weight="600">0056 高股息</text>
+    <text x="430" y="394" fill="#33404C" text-anchor="end">8,000</text>
+    <text x="560" y="394" fill="#33404C" text-anchor="end">33.1</text>
+    <text x="700" y="394" fill="#E03131" text-anchor="end" font-weight="700">34.8 ▲</text>
+    <text x="860" y="394" fill="#E03131" text-anchor="end">+13,600</text>
+    <text x="1000" y="394" fill="#E03131" text-anchor="end" font-weight="700">+5.2% ▲</text>
+    <rect x="1040" y="385" width="90" height="9" rx="4" fill="#EEF1F5"/><rect x="1040" y="385" width="48" height="9" rx="4" fill="#2C5475"/>
+    <text x="1156" y="394" fill="#6B7785" font-size="11" text-anchor="end">22%</text>
+    <line x1="44" y1="412" x2="1156" y2="412" stroke="#F0F2F5"/>
+    <!-- 2412 -->
+    <text x="48" y="438" fill="#1A1F26" font-weight="600">2412 中華電</text>
+    <text x="430" y="438" fill="#33404C" text-anchor="end">3,000</text>
+    <text x="560" y="438" fill="#33404C" text-anchor="end">122.0</text>
+    <text x="700" y="438" fill="#E03131" text-anchor="end" font-weight="700">125.8 ▲</text>
+    <text x="860" y="438" fill="#E03131" text-anchor="end">+11,400</text>
+    <text x="1000" y="438" fill="#E03131" text-anchor="end" font-weight="700">+3.1% ▲</text>
+    <rect x="1040" y="429" width="90" height="9" rx="4" fill="#EEF1F5"/><rect x="1040" y="429" width="40" height="9" rx="4" fill="#2C5475"/>
+    <text x="1156" y="438" fill="#6B7785" font-size="11" text-anchor="end">18%</text>
+    <line x1="44" y1="456" x2="1156" y2="456" stroke="#F0F2F5"/>
+    <!-- 3008 -->
+    <text x="48" y="482" fill="#1A1F26" font-weight="600">3008 大立光</text>
+    <text x="430" y="482" fill="#33404C" text-anchor="end">100</text>
+    <text x="560" y="482" fill="#33404C" text-anchor="end">2,680</text>
+    <text x="700" y="482" fill="#2F9E44" text-anchor="end" font-weight="700">2,475 ▼</text>
+    <text x="860" y="482" fill="#2F9E44" text-anchor="end">-20,500</text>
+    <text x="1000" y="482" fill="#2F9E44" text-anchor="end" font-weight="700">-7.6% ▼</text>
+    <rect x="1040" y="473" width="90" height="9" rx="4" fill="#EEF1F5"/><rect x="1040" y="473" width="26" height="9" rx="4" fill="#7E97AB"/>
+    <text x="1156" y="482" fill="#6B7785" font-size="11" text-anchor="end">12%</text>
+  </g>
+  <rect x="980" y="494" width="170" height="0" /> <!-- spacer -->
+
+  <!-- 白話解讀卡 -->
+  <rect x="24" y="528" width="1152" height="150" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#sh)"/>
+  <rect x="24" y="528" width="5" height="150" rx="2" fill="#1C3D5A"/>
+  <text x="48" y="556" font-size="13" font-weight="700" fill="#1C3D5A">💬 持倉白話解讀（AI 只解讀，不建議）</text>
+  <text x="48" y="584" font-size="14" fill="#33404C">你的組合今年含息 +18.7%，跑贏大盤約 9 個百分點，主要貢獻來自台積電。</text>
+  <text x="48" y="608" font-size="14" fill="#33404C">但台積電已佔你 41%、半導體合計 63% —— 集中度偏高，代表整體起伏會比較大。</text>
+  <text x="48" y="632" font-size="14" fill="#33404C">大立光帳面虧 7.6% 且剛跌破季線，你當初的買進理由是？</text>
+  <rect x="470" y="618" width="110" height="22" rx="11" fill="#EEF3F7"/>
+  <text x="525" y="633" font-size="12" fill="#1C3D5A" text-anchor="middle">回顧筆記 ›</text>
+  <text x="1156" y="662" font-size="11" fill="#9AA6B2" text-anchor="end">ⓘ 資料解讀，非投資建議</text>
+</svg>

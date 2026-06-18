@@ -1,0 +1,6415 @@
+{
+  "source": "C:\\Users\\a0976\\Downloads\\股票更新.xlsx",
+  "generated_at": "2026-06-15T06:30:14+00:00",
+  "count": 1068,
+  "items": [
+    {
+      "stock_id": "1101",
+      "market": "TWSE",
+      "name": "台泥",
+      "short_name": "台泥"
+    },
+    {
+      "stock_id": "1102",
+      "market": "TWSE",
+      "name": "亞泥",
+      "short_name": "亞泥"
+    },
+    {
+      "stock_id": "1103",
+      "market": "TWSE",
+      "name": "嘉泥",
+      "short_name": "嘉泥"
+    },
+    {
+      "stock_id": "1104",
+      "market": "TWSE",
+      "name": "環泥",
+      "short_name": "環泥"
+    },
+    {
+      "stock_id": "1108",
+      "market": "TWSE",
+      "name": "幸福",
+      "short_name": "幸福"
+    },
+    {
+      "stock_id": "1109",
+      "market": "TWSE",
+      "name": "信大",
+      "short_name": "信大"
+    },
+    {
+      "stock_id": "1110",
+      "market": "TWSE",
+      "name": "東泥",
+      "short_name": "東泥"
+    },
+    {
+      "stock_id": "1201",
+      "market": "TWSE",
+      "name": "味全",
+      "short_name": "味全"
+    },
+    {
+      "stock_id": "1203",
+      "market": "TWSE",
+      "name": "味王",
+      "short_name": "味王"
+    },
+    {
+      "stock_id": "1210",
+      "market": "TWSE",
+      "name": "大成",
+      "short_name": "大成"
+    },
+    {
+      "stock_id": "1213",
+      "market": "TWSE",
+      "name": "大飲",
+      "short_name": "大飲"
+    },
+    {
+      "stock_id": "1215",
+      "market": "TWSE",
+      "name": "卜蜂",
+      "short_name": "卜蜂"
+    },
+    {
+      "stock_id": "1216",
+      "market": "TWSE",
+      "name": "統一",
+      "short_name": "統一"
+    },
+    {
+      "stock_id": "1217",
+      "market": "TWSE",
+      "name": "愛之味",
+      "short_name": "愛之味"
+    },
+    {
+      "stock_id": "1218",
+      "market": "TWSE",
+      "name": "泰山",
+      "short_name": "泰山"
+    },
+    {
+      "stock_id": "1219",
+      "market": "TWSE",
+      "name": "福壽",
+      "short_name": "福壽"
+    },
+    {
+      "stock_id": "1220",
+      "market": "TWSE",
+      "name": "台榮",
+      "short_name": "台榮"
+    },
+    {
+      "stock_id": "1225",
+      "market": "TWSE",
+      "name": "福懋油",
+      "short_name": "福懋油"
+    },
+    {
+      "stock_id": "1227",
+      "market": "TWSE",
+      "name": "佳格",
+      "short_name": "佳格"
+    },
+    {
+      "stock_id": "1229",
+      "market": "TWSE",
+      "name": "聯華",
+      "short_name": "聯華"
+    },
+    {
+      "stock_id": "1231",
+      "market": "TWSE",
+      "name": "聯華食",
+      "short_name": "聯華食"
+    },
+    {
+      "stock_id": "1232",
+      "market": "TWSE",
+      "name": "大統益",
+      "short_name": "大統益"
+    },
+    {
+      "stock_id": "1233",
+      "market": "TWSE",
+      "name": "天仁",
+      "short_name": "天仁"
+    },
+    {
+      "stock_id": "1234",
+      "market": "TWSE",
+      "name": "黑松",
+      "short_name": "黑松"
+    },
+    {
+      "stock_id": "1235",
+      "market": "TWSE",
+      "name": "興泰",
+      "short_name": "興泰"
+    },
+    {
+      "stock_id": "1236",
+      "market": "TWSE",
+      "name": "宏亞",
+      "short_name": "宏亞"
+    },
+    {
+      "stock_id": "1256",
+      "market": "TWSE",
+      "name": "鮮活果汁-KY",
+      "short_name": "鮮活果汁-KY"
+    },
+    {
+      "stock_id": "1301",
+      "market": "TWSE",
+      "name": "台塑",
+      "short_name": "台塑"
+    },
+    {
+      "stock_id": "1303",
+      "market": "TWSE",
+      "name": "南亞",
+      "short_name": "南亞"
+    },
+    {
+      "stock_id": "1304",
+      "market": "TWSE",
+      "name": "台聚",
+      "short_name": "台聚"
+    },
+    {
+      "stock_id": "1305",
+      "market": "TWSE",
+      "name": "華夏",
+      "short_name": "華夏"
+    },
+    {
+      "stock_id": "1307",
+      "market": "TWSE",
+      "name": "三芳",
+      "short_name": "三芳"
+    },
+    {
+      "stock_id": "1308",
+      "market": "TWSE",
+      "name": "亞聚",
+      "short_name": "亞聚"
+    },
+    {
+      "stock_id": "1309",
+      "market": "TWSE",
+      "name": "台達化",
+      "short_name": "台達化"
+    },
+    {
+      "stock_id": "1310",
+      "market": "TWSE",
+      "name": "台苯",
+      "short_name": "台苯"
+    },
+    {
+      "stock_id": "1312",
+      "market": "TWSE",
+      "name": "國喬",
+      "short_name": "國喬"
+    },
+    {
+      "stock_id": "1313",
+      "market": "TWSE",
+      "name": "聯成",
+      "short_name": "聯成"
+    },
+    {
+      "stock_id": "1314",
+      "market": "TWSE",
+      "name": "中石化",
+      "short_name": "中石化"
+    },
+    {
+      "stock_id": "1315",
+      "market": "TWSE",
+      "name": "達新",
+      "short_name": "達新"
+    },
+    {
+      "stock_id": "1316",
+      "market": "TWSE",
+      "name": "上曜",
+      "short_name": "上曜"
+    },
+    {
+      "stock_id": "1319",
+      "market": "TWSE",
+      "name": "東陽",
+      "short_name": "東陽"
+    },
+    {
+      "stock_id": "1321",
+      "market": "TWSE",
+      "name": "大洋",
+      "short_name": "大洋"
+    },
+    {
+      "stock_id": "1323",
+      "market": "TWSE",
+      "name": "永裕",
+      "short_name": "永裕"
+    },
+    {
+      "stock_id": "1324",
+      "market": "TWSE",
+      "name": "地球",
+      "short_name": "地球"
+    },
+    {
+      "stock_id": "1325",
+      "market": "TWSE",
+      "name": "恆大",
+      "short_name": "恆大"
+    },
+    {
+      "stock_id": "1326",
+      "market": "TWSE",
+      "name": "台化",
+      "short_name": "台化"
+    },
+    {
+      "stock_id": "1337",
+      "market": "TWSE",
+      "name": "再生-KY",
+      "short_name": "再生-KY"
+    },
+    {
+      "stock_id": "1338",
+      "market": "TWSE",
+      "name": "廣華-KY",
+      "short_name": "廣華-KY"
+    },
+    {
+      "stock_id": "1339",
+      "market": "TWSE",
+      "name": "昭輝",
+      "short_name": "昭輝"
+    },
+    {
+      "stock_id": "1340",
+      "market": "TWSE",
+      "name": "勝悅-KY",
+      "short_name": "勝悅-KY"
+    },
+    {
+      "stock_id": "1341",
+      "market": "TWSE",
+      "name": "富林-KY",
+      "short_name": "富林-KY"
+    },
+    {
+      "stock_id": "1342",
+      "market": "TWSE",
+      "name": "八貫",
+      "short_name": "八貫"
+    },
+    {
+      "stock_id": "1402",
+      "market": "TWSE",
+      "name": "遠東新",
+      "short_name": "遠東新"
+    },
+    {
+      "stock_id": "1409",
+      "market": "TWSE",
+      "name": "新纖",
+      "short_name": "新纖"
+    },
+    {
+      "stock_id": "1410",
+      "market": "TWSE",
+      "name": "南染",
+      "short_name": "南染"
+    },
+    {
+      "stock_id": "1413",
+      "market": "TWSE",
+      "name": "宏洲",
+      "short_name": "宏洲"
+    },
+    {
+      "stock_id": "1414",
+      "market": "TWSE",
+      "name": "東和",
+      "short_name": "東和"
+    },
+    {
+      "stock_id": "1416",
+      "market": "TWSE",
+      "name": "廣豐",
+      "short_name": "廣豐"
+    },
+    {
+      "stock_id": "1417",
+      "market": "TWSE",
+      "name": "嘉裕",
+      "short_name": "嘉裕"
+    },
+    {
+      "stock_id": "1418",
+      "market": "TWSE",
+      "name": "東華",
+      "short_name": "東華"
+    },
+    {
+      "stock_id": "1419",
+      "market": "TWSE",
+      "name": "新紡",
+      "short_name": "新紡"
+    },
+    {
+      "stock_id": "1423",
+      "market": "TWSE",
+      "name": "利華",
+      "short_name": "利華"
+    },
+    {
+      "stock_id": "1432",
+      "market": "TWSE",
+      "name": "大魯閣",
+      "short_name": "大魯閣"
+    },
+    {
+      "stock_id": "1434",
+      "market": "TWSE",
+      "name": "福懋",
+      "short_name": "福懋"
+    },
+    {
+      "stock_id": "1435",
+      "market": "TWSE",
+      "name": "中福",
+      "short_name": "中福"
+    },
+    {
+      "stock_id": "1436",
+      "market": "TWSE",
+      "name": "華友聯",
+      "short_name": "華友聯"
+    },
+    {
+      "stock_id": "1437",
+      "market": "TWSE",
+      "name": "勤益控",
+      "short_name": "勤益控"
+    },
+    {
+      "stock_id": "1438",
+      "market": "TWSE",
+      "name": "三地開發",
+      "short_name": "三地開發"
+    },
+    {
+      "stock_id": "1439",
+      "market": "TWSE",
+      "name": "雋揚",
+      "short_name": "雋揚"
+    },
+    {
+      "stock_id": "1440",
+      "market": "TWSE",
+      "name": "南紡",
+      "short_name": "南紡"
+    },
+    {
+      "stock_id": "1441",
+      "market": "TWSE",
+      "name": "大東",
+      "short_name": "大東"
+    },
+    {
+      "stock_id": "1442",
+      "market": "TWSE",
+      "name": "名軒",
+      "short_name": "名軒"
+    },
+    {
+      "stock_id": "1443",
+      "market": "TWSE",
+      "name": "立益物流",
+      "short_name": "立益物流"
+    },
+    {
+      "stock_id": "1444",
+      "market": "TWSE",
+      "name": "力麗",
+      "short_name": "力麗"
+    },
+    {
+      "stock_id": "1445",
+      "market": "TWSE",
+      "name": "大宇",
+      "short_name": "大宇"
+    },
+    {
+      "stock_id": "1446",
+      "market": "TWSE",
+      "name": "宏和",
+      "short_name": "宏和"
+    },
+    {
+      "stock_id": "1447",
+      "market": "TWSE",
+      "name": "力鵬",
+      "short_name": "力鵬"
+    },
+    {
+      "stock_id": "1449",
+      "market": "TWSE",
+      "name": "佳和",
+      "short_name": "佳和"
+    },
+    {
+      "stock_id": "1451",
+      "market": "TWSE",
+      "name": "年興",
+      "short_name": "年興"
+    },
+    {
+      "stock_id": "1452",
+      "market": "TWSE",
+      "name": "宏益",
+      "short_name": "宏益"
+    },
+    {
+      "stock_id": "1453",
+      "market": "TWSE",
+      "name": "大將",
+      "short_name": "大將"
+    },
+    {
+      "stock_id": "1454",
+      "market": "TWSE",
+      "name": "台富",
+      "short_name": "台富"
+    },
+    {
+      "stock_id": "1455",
+      "market": "TWSE",
+      "name": "集盛",
+      "short_name": "集盛"
+    },
+    {
+      "stock_id": "1456",
+      "market": "TWSE",
+      "name": "怡華",
+      "short_name": "怡華"
+    },
+    {
+      "stock_id": "1457",
+      "market": "TWSE",
+      "name": "宜進",
+      "short_name": "宜進"
+    },
+    {
+      "stock_id": "1459",
+      "market": "TWSE",
+      "name": "聯發",
+      "short_name": "聯發"
+    },
+    {
+      "stock_id": "1460",
+      "market": "TWSE",
+      "name": "宏遠",
+      "short_name": "宏遠"
+    },
+    {
+      "stock_id": "1463",
+      "market": "TWSE",
+      "name": "強盛新",
+      "short_name": "強盛新"
+    },
+    {
+      "stock_id": "1464",
+      "market": "TWSE",
+      "name": "得力",
+      "short_name": "得力"
+    },
+    {
+      "stock_id": "1465",
+      "market": "TWSE",
+      "name": "偉全",
+      "short_name": "偉全"
+    },
+    {
+      "stock_id": "1466",
+      "market": "TWSE",
+      "name": "聚隆",
+      "short_name": "聚隆"
+    },
+    {
+      "stock_id": "1467",
+      "market": "TWSE",
+      "name": "南緯",
+      "short_name": "南緯"
+    },
+    {
+      "stock_id": "1468",
+      "market": "TWSE",
+      "name": "昶和",
+      "short_name": "昶和"
+    },
+    {
+      "stock_id": "1470",
+      "market": "TWSE",
+      "name": "大統新創",
+      "short_name": "大統新創"
+    },
+    {
+      "stock_id": "1471",
+      "market": "TWSE",
+      "name": "首利",
+      "short_name": "首利"
+    },
+    {
+      "stock_id": "1472",
+      "market": "TWSE",
+      "name": "三洋實業",
+      "short_name": "三洋實業"
+    },
+    {
+      "stock_id": "1473",
+      "market": "TWSE",
+      "name": "台南",
+      "short_name": "台南"
+    },
+    {
+      "stock_id": "1474",
+      "market": "TWSE",
+      "name": "弘裕",
+      "short_name": "弘裕"
+    },
+    {
+      "stock_id": "1475",
+      "market": "TWSE",
+      "name": "業旺",
+      "short_name": "業旺"
+    },
+    {
+      "stock_id": "1476",
+      "market": "TWSE",
+      "name": "儒鴻",
+      "short_name": "儒鴻"
+    },
+    {
+      "stock_id": "1477",
+      "market": "TWSE",
+      "name": "聚陽",
+      "short_name": "聚陽"
+    },
+    {
+      "stock_id": "1503",
+      "market": "TWSE",
+      "name": "士電",
+      "short_name": "士電"
+    },
+    {
+      "stock_id": "1504",
+      "market": "TWSE",
+      "name": "東元",
+      "short_name": "東元"
+    },
+    {
+      "stock_id": "1506",
+      "market": "TWSE",
+      "name": "正道",
+      "short_name": "正道"
+    },
+    {
+      "stock_id": "1512",
+      "market": "TWSE",
+      "name": "瑞利",
+      "short_name": "瑞利"
+    },
+    {
+      "stock_id": "1513",
+      "market": "TWSE",
+      "name": "中興電",
+      "short_name": "中興電"
+    },
+    {
+      "stock_id": "1514",
+      "market": "TWSE",
+      "name": "亞力",
+      "short_name": "亞力"
+    },
+    {
+      "stock_id": "1515",
+      "market": "TWSE",
+      "name": "力山",
+      "short_name": "力山"
+    },
+    {
+      "stock_id": "1516",
+      "market": "TWSE",
+      "name": "川飛",
+      "short_name": "川飛"
+    },
+    {
+      "stock_id": "1517",
+      "market": "TWSE",
+      "name": "利奇",
+      "short_name": "利奇"
+    },
+    {
+      "stock_id": "1519",
+      "market": "TWSE",
+      "name": "華城",
+      "short_name": "華城"
+    },
+    {
+      "stock_id": "1521",
+      "market": "TWSE",
+      "name": "大億",
+      "short_name": "大億"
+    },
+    {
+      "stock_id": "1522",
+      "market": "TWSE",
+      "name": "堤維西",
+      "short_name": "堤維西"
+    },
+    {
+      "stock_id": "1524",
+      "market": "TWSE",
+      "name": "耿鼎",
+      "short_name": "耿鼎"
+    },
+    {
+      "stock_id": "1525",
+      "market": "TWSE",
+      "name": "江申",
+      "short_name": "江申"
+    },
+    {
+      "stock_id": "1526",
+      "market": "TWSE",
+      "name": "日馳",
+      "short_name": "日馳"
+    },
+    {
+      "stock_id": "1527",
+      "market": "TWSE",
+      "name": "鑽全",
+      "short_name": "鑽全"
+    },
+    {
+      "stock_id": "1528",
+      "market": "TWSE",
+      "name": "恩德",
+      "short_name": "恩德"
+    },
+    {
+      "stock_id": "1529",
+      "market": "TWSE",
+      "name": "樂事綠能",
+      "short_name": "樂事綠能"
+    },
+    {
+      "stock_id": "1530",
+      "market": "TWSE",
+      "name": "亞崴",
+      "short_name": "亞崴"
+    },
+    {
+      "stock_id": "1531",
+      "market": "TWSE",
+      "name": "高林股",
+      "short_name": "高林股"
+    },
+    {
+      "stock_id": "1532",
+      "market": "TWSE",
+      "name": "勤美",
+      "short_name": "勤美"
+    },
+    {
+      "stock_id": "1533",
+      "market": "TWSE",
+      "name": "車王電",
+      "short_name": "車王電"
+    },
+    {
+      "stock_id": "1535",
+      "market": "TWSE",
+      "name": "中宇",
+      "short_name": "中宇"
+    },
+    {
+      "stock_id": "1536",
+      "market": "TWSE",
+      "name": "和大",
+      "short_name": "和大"
+    },
+    {
+      "stock_id": "1537",
+      "market": "TWSE",
+      "name": "廣隆",
+      "short_name": "廣隆"
+    },
+    {
+      "stock_id": "1538",
+      "market": "TWSE",
+      "name": "正峰",
+      "short_name": "正峰"
+    },
+    {
+      "stock_id": "1539",
+      "market": "TWSE",
+      "name": "巨庭",
+      "short_name": "巨庭"
+    },
+    {
+      "stock_id": "1540",
+      "market": "TWSE",
+      "name": "喬福",
+      "short_name": "喬福"
+    },
+    {
+      "stock_id": "1541",
+      "market": "TWSE",
+      "name": "錩泰",
+      "short_name": "錩泰"
+    },
+    {
+      "stock_id": "1558",
+      "market": "TWSE",
+      "name": "伸興",
+      "short_name": "伸興"
+    },
+    {
+      "stock_id": "1560",
+      "market": "TWSE",
+      "name": "中砂",
+      "short_name": "中砂"
+    },
+    {
+      "stock_id": "1563",
+      "market": "TWSE",
+      "name": "巧新",
+      "short_name": "巧新"
+    },
+    {
+      "stock_id": "1568",
+      "market": "TWSE",
+      "name": "倉佑",
+      "short_name": "倉佑"
+    },
+    {
+      "stock_id": "1582",
+      "market": "TWSE",
+      "name": "信錦",
+      "short_name": "信錦"
+    },
+    {
+      "stock_id": "1583",
+      "market": "TWSE",
+      "name": "程泰",
+      "short_name": "程泰"
+    },
+    {
+      "stock_id": "1587",
+      "market": "TWSE",
+      "name": "吉茂",
+      "short_name": "吉茂"
+    },
+    {
+      "stock_id": "1589",
+      "market": "TWSE",
+      "name": "永冠-KY",
+      "short_name": "永冠-KY"
+    },
+    {
+      "stock_id": "1590",
+      "market": "TWSE",
+      "name": "亞德客-KY",
+      "short_name": "亞德客-KY"
+    },
+    {
+      "stock_id": "1597",
+      "market": "TWSE",
+      "name": "直得",
+      "short_name": "直得"
+    },
+    {
+      "stock_id": "1598",
+      "market": "TWSE",
+      "name": "岱宇",
+      "short_name": "岱宇"
+    },
+    {
+      "stock_id": "1603",
+      "market": "TWSE",
+      "name": "華電",
+      "short_name": "華電"
+    },
+    {
+      "stock_id": "1604",
+      "market": "TWSE",
+      "name": "聲寶",
+      "short_name": "聲寶"
+    },
+    {
+      "stock_id": "1605",
+      "market": "TWSE",
+      "name": "華新",
+      "short_name": "華新"
+    },
+    {
+      "stock_id": "1608",
+      "market": "TWSE",
+      "name": "華榮",
+      "short_name": "華榮"
+    },
+    {
+      "stock_id": "1609",
+      "market": "TWSE",
+      "name": "大亞",
+      "short_name": "大亞"
+    },
+    {
+      "stock_id": "1611",
+      "market": "TWSE",
+      "name": "中電",
+      "short_name": "中電"
+    },
+    {
+      "stock_id": "1612",
+      "market": "TWSE",
+      "name": "宏泰",
+      "short_name": "宏泰"
+    },
+    {
+      "stock_id": "1614",
+      "market": "TWSE",
+      "name": "三洋電",
+      "short_name": "三洋電"
+    },
+    {
+      "stock_id": "1615",
+      "market": "TWSE",
+      "name": "大山",
+      "short_name": "大山"
+    },
+    {
+      "stock_id": "1616",
+      "market": "TWSE",
+      "name": "億泰",
+      "short_name": "億泰"
+    },
+    {
+      "stock_id": "1617",
+      "market": "TWSE",
+      "name": "榮星",
+      "short_name": "榮星"
+    },
+    {
+      "stock_id": "1618",
+      "market": "TWSE",
+      "name": "合機",
+      "short_name": "合機"
+    },
+    {
+      "stock_id": "1623",
+      "market": "TWSE",
+      "name": "大東電",
+      "short_name": "大東電"
+    },
+    {
+      "stock_id": "1626",
+      "market": "TWSE",
+      "name": "艾美特-KY",
+      "short_name": "艾美特-KY"
+    },
+    {
+      "stock_id": "1702",
+      "market": "TWSE",
+      "name": "南僑",
+      "short_name": "南僑"
+    },
+    {
+      "stock_id": "1707",
+      "market": "TWSE",
+      "name": "葡萄王",
+      "short_name": "葡萄王"
+    },
+    {
+      "stock_id": "1708",
+      "market": "TWSE",
+      "name": "東鹼",
+      "short_name": "東鹼"
+    },
+    {
+      "stock_id": "1709",
+      "market": "TWSE",
+      "name": "和益",
+      "short_name": "和益"
+    },
+    {
+      "stock_id": "1710",
+      "market": "TWSE",
+      "name": "東聯",
+      "short_name": "東聯"
+    },
+    {
+      "stock_id": "1711",
+      "market": "TWSE",
+      "name": "永光",
+      "short_name": "永光"
+    },
+    {
+      "stock_id": "1712",
+      "market": "TWSE",
+      "name": "興農",
+      "short_name": "興農"
+    },
+    {
+      "stock_id": "1713",
+      "market": "TWSE",
+      "name": "國化",
+      "short_name": "國化"
+    },
+    {
+      "stock_id": "1714",
+      "market": "TWSE",
+      "name": "和桐",
+      "short_name": "和桐"
+    },
+    {
+      "stock_id": "1717",
+      "market": "TWSE",
+      "name": "長興",
+      "short_name": "長興"
+    },
+    {
+      "stock_id": "1718",
+      "market": "TWSE",
+      "name": "中纖",
+      "short_name": "中纖"
+    },
+    {
+      "stock_id": "1720",
+      "market": "TWSE",
+      "name": "生達",
+      "short_name": "生達"
+    },
+    {
+      "stock_id": "1721",
+      "market": "TWSE",
+      "name": "三晃",
+      "short_name": "三晃"
+    },
+    {
+      "stock_id": "1722",
+      "market": "TWSE",
+      "name": "台肥",
+      "short_name": "台肥"
+    },
+    {
+      "stock_id": "1723",
+      "market": "TWSE",
+      "name": "中碳",
+      "short_name": "中碳"
+    },
+    {
+      "stock_id": "1725",
+      "market": "TWSE",
+      "name": "元禎",
+      "short_name": "元禎"
+    },
+    {
+      "stock_id": "1726",
+      "market": "TWSE",
+      "name": "永記",
+      "short_name": "永記"
+    },
+    {
+      "stock_id": "1727",
+      "market": "TWSE",
+      "name": "中華化",
+      "short_name": "中華化"
+    },
+    {
+      "stock_id": "1730",
+      "market": "TWSE",
+      "name": "花仙子",
+      "short_name": "花仙子"
+    },
+    {
+      "stock_id": "1731",
+      "market": "TWSE",
+      "name": "美吾華",
+      "short_name": "美吾華"
+    },
+    {
+      "stock_id": "1732",
+      "market": "TWSE",
+      "name": "毛寶",
+      "short_name": "毛寶"
+    },
+    {
+      "stock_id": "1733",
+      "market": "TWSE",
+      "name": "五鼎",
+      "short_name": "五鼎"
+    },
+    {
+      "stock_id": "1734",
+      "market": "TWSE",
+      "name": "杏輝",
+      "short_name": "杏輝"
+    },
+    {
+      "stock_id": "1735",
+      "market": "TWSE",
+      "name": "日勝化",
+      "short_name": "日勝化"
+    },
+    {
+      "stock_id": "1736",
+      "market": "TWSE",
+      "name": "喬山",
+      "short_name": "喬山"
+    },
+    {
+      "stock_id": "1737",
+      "market": "TWSE",
+      "name": "臺鹽",
+      "short_name": "臺鹽"
+    },
+    {
+      "stock_id": "1752",
+      "market": "TWSE",
+      "name": "南光",
+      "short_name": "南光"
+    },
+    {
+      "stock_id": "1760",
+      "market": "TWSE",
+      "name": "寶齡富錦",
+      "short_name": "寶齡富錦"
+    },
+    {
+      "stock_id": "1762",
+      "market": "TWSE",
+      "name": "中化生",
+      "short_name": "中化生"
+    },
+    {
+      "stock_id": "1773",
+      "market": "TWSE",
+      "name": "勝一",
+      "short_name": "勝一"
+    },
+    {
+      "stock_id": "1776",
+      "market": "TWSE",
+      "name": "展宇",
+      "short_name": "展宇"
+    },
+    {
+      "stock_id": "1783",
+      "market": "TWSE",
+      "name": "和康生",
+      "short_name": "和康生"
+    },
+    {
+      "stock_id": "1786",
+      "market": "TWSE",
+      "name": "科妍",
+      "short_name": "科妍"
+    },
+    {
+      "stock_id": "1789",
+      "market": "TWSE",
+      "name": "神隆",
+      "short_name": "神隆"
+    },
+    {
+      "stock_id": "1795",
+      "market": "TWSE",
+      "name": "美時",
+      "short_name": "美時"
+    },
+    {
+      "stock_id": "1802",
+      "market": "TWSE",
+      "name": "台玻",
+      "short_name": "台玻"
+    },
+    {
+      "stock_id": "1805",
+      "market": "TWSE",
+      "name": "寶徠",
+      "short_name": "寶徠"
+    },
+    {
+      "stock_id": "1806",
+      "market": "TWSE",
+      "name": "冠軍",
+      "short_name": "冠軍"
+    },
+    {
+      "stock_id": "1808",
+      "market": "TWSE",
+      "name": "潤隆",
+      "short_name": "潤隆"
+    },
+    {
+      "stock_id": "1809",
+      "market": "TWSE",
+      "name": "中釉",
+      "short_name": "中釉"
+    },
+    {
+      "stock_id": "1810",
+      "market": "TWSE",
+      "name": "和成",
+      "short_name": "和成"
+    },
+    {
+      "stock_id": "1817",
+      "market": "TWSE",
+      "name": "凱撒衛",
+      "short_name": "凱撒衛"
+    },
+    {
+      "stock_id": "1903",
+      "market": "TWSE",
+      "name": "士紙",
+      "short_name": "士紙"
+    },
+    {
+      "stock_id": "1904",
+      "market": "TWSE",
+      "name": "正隆",
+      "short_name": "正隆"
+    },
+    {
+      "stock_id": "1905",
+      "market": "TWSE",
+      "name": "華紙",
+      "short_name": "華紙"
+    },
+    {
+      "stock_id": "1906",
+      "market": "TWSE",
+      "name": "寶隆",
+      "short_name": "寶隆"
+    },
+    {
+      "stock_id": "1907",
+      "market": "TWSE",
+      "name": "永豐餘",
+      "short_name": "永豐餘"
+    },
+    {
+      "stock_id": "1909",
+      "market": "TWSE",
+      "name": "榮成",
+      "short_name": "榮成"
+    },
+    {
+      "stock_id": "2002",
+      "market": "TWSE",
+      "name": "中鋼",
+      "short_name": "中鋼"
+    },
+    {
+      "stock_id": "2006",
+      "market": "TWSE",
+      "name": "東和鋼鐵",
+      "short_name": "東和鋼鐵"
+    },
+    {
+      "stock_id": "2007",
+      "market": "TWSE",
+      "name": "燁興",
+      "short_name": "燁興"
+    },
+    {
+      "stock_id": "2008",
+      "market": "TWSE",
+      "name": "高興昌",
+      "short_name": "高興昌"
+    },
+    {
+      "stock_id": "2009",
+      "market": "TWSE",
+      "name": "第一銅",
+      "short_name": "第一銅"
+    },
+    {
+      "stock_id": "2010",
+      "market": "TWSE",
+      "name": "春源",
+      "short_name": "春源"
+    },
+    {
+      "stock_id": "2012",
+      "market": "TWSE",
+      "name": "春雨",
+      "short_name": "春雨"
+    },
+    {
+      "stock_id": "2013",
+      "market": "TWSE",
+      "name": "中鋼構",
+      "short_name": "中鋼構"
+    },
+    {
+      "stock_id": "2014",
+      "market": "TWSE",
+      "name": "中鴻",
+      "short_name": "中鴻"
+    },
+    {
+      "stock_id": "2015",
+      "market": "TWSE",
+      "name": "豐興",
+      "short_name": "豐興"
+    },
+    {
+      "stock_id": "2017",
+      "market": "TWSE",
+      "name": "官田鋼",
+      "short_name": "官田鋼"
+    },
+    {
+      "stock_id": "2020",
+      "market": "TWSE",
+      "name": "美亞",
+      "short_name": "美亞"
+    },
+    {
+      "stock_id": "2022",
+      "market": "TWSE",
+      "name": "聚亨",
+      "short_name": "聚亨"
+    },
+    {
+      "stock_id": "2023",
+      "market": "TWSE",
+      "name": "燁輝",
+      "short_name": "燁輝"
+    },
+    {
+      "stock_id": "2024",
+      "market": "TWSE",
+      "name": "志聯",
+      "short_name": "志聯"
+    },
+    {
+      "stock_id": "2025",
+      "market": "TWSE",
+      "name": "千興",
+      "short_name": "千興"
+    },
+    {
+      "stock_id": "2027",
+      "market": "TWSE",
+      "name": "大成鋼",
+      "short_name": "大成鋼"
+    },
+    {
+      "stock_id": "2028",
+      "market": "TWSE",
+      "name": "威致",
+      "short_name": "威致"
+    },
+    {
+      "stock_id": "2029",
+      "market": "TWSE",
+      "name": "盛餘",
+      "short_name": "盛餘"
+    },
+    {
+      "stock_id": "2030",
+      "market": "TWSE",
+      "name": "彰源",
+      "short_name": "彰源"
+    },
+    {
+      "stock_id": "2031",
+      "market": "TWSE",
+      "name": "新光鋼",
+      "short_name": "新光鋼"
+    },
+    {
+      "stock_id": "2032",
+      "market": "TWSE",
+      "name": "新鋼",
+      "short_name": "新鋼"
+    },
+    {
+      "stock_id": "2033",
+      "market": "TWSE",
+      "name": "佳大",
+      "short_name": "佳大"
+    },
+    {
+      "stock_id": "2034",
+      "market": "TWSE",
+      "name": "允強",
+      "short_name": "允強"
+    },
+    {
+      "stock_id": "2038",
+      "market": "TWSE",
+      "name": "海光",
+      "short_name": "海光"
+    },
+    {
+      "stock_id": "2049",
+      "market": "TWSE",
+      "name": "上銀",
+      "short_name": "上銀"
+    },
+    {
+      "stock_id": "2059",
+      "market": "TWSE",
+      "name": "川湖",
+      "short_name": "川湖"
+    },
+    {
+      "stock_id": "2062",
+      "market": "TWSE",
+      "name": "橋椿",
+      "short_name": "橋椿"
+    },
+    {
+      "stock_id": "2069",
+      "market": "TWSE",
+      "name": "運錩",
+      "short_name": "運錩"
+    },
+    {
+      "stock_id": "2101",
+      "market": "TWSE",
+      "name": "南港",
+      "short_name": "南港"
+    },
+    {
+      "stock_id": "2102",
+      "market": "TWSE",
+      "name": "泰豐",
+      "short_name": "泰豐"
+    },
+    {
+      "stock_id": "2103",
+      "market": "TWSE",
+      "name": "台橡",
+      "short_name": "台橡"
+    },
+    {
+      "stock_id": "2104",
+      "market": "TWSE",
+      "name": "國際中橡",
+      "short_name": "國際中橡"
+    },
+    {
+      "stock_id": "2105",
+      "market": "TWSE",
+      "name": "正新",
+      "short_name": "正新"
+    },
+    {
+      "stock_id": "2106",
+      "market": "TWSE",
+      "name": "建大",
+      "short_name": "建大"
+    },
+    {
+      "stock_id": "2107",
+      "market": "TWSE",
+      "name": "厚生",
+      "short_name": "厚生"
+    },
+    {
+      "stock_id": "2108",
+      "market": "TWSE",
+      "name": "南帝",
+      "short_name": "南帝"
+    },
+    {
+      "stock_id": "2109",
+      "market": "TWSE",
+      "name": "華豐",
+      "short_name": "華豐"
+    },
+    {
+      "stock_id": "2114",
+      "market": "TWSE",
+      "name": "鑫永銓",
+      "short_name": "鑫永銓"
+    },
+    {
+      "stock_id": "2115",
+      "market": "TWSE",
+      "name": "六暉-KY",
+      "short_name": "六暉-KY"
+    },
+    {
+      "stock_id": "2201",
+      "market": "TWSE",
+      "name": "裕隆",
+      "short_name": "裕隆"
+    },
+    {
+      "stock_id": "2204",
+      "market": "TWSE",
+      "name": "中華",
+      "short_name": "中華"
+    },
+    {
+      "stock_id": "2206",
+      "market": "TWSE",
+      "name": "三陽工業",
+      "short_name": "三陽工業"
+    },
+    {
+      "stock_id": "2207",
+      "market": "TWSE",
+      "name": "和泰車",
+      "short_name": "和泰車"
+    },
+    {
+      "stock_id": "2208",
+      "market": "TWSE",
+      "name": "台船",
+      "short_name": "台船"
+    },
+    {
+      "stock_id": "2211",
+      "market": "TWSE",
+      "name": "長榮鋼",
+      "short_name": "長榮鋼"
+    },
+    {
+      "stock_id": "2227",
+      "market": "TWSE",
+      "name": "裕日車",
+      "short_name": "裕日車"
+    },
+    {
+      "stock_id": "2228",
+      "market": "TWSE",
+      "name": "劍麟",
+      "short_name": "劍麟"
+    },
+    {
+      "stock_id": "2231",
+      "market": "TWSE",
+      "name": "為升",
+      "short_name": "為升"
+    },
+    {
+      "stock_id": "2233",
+      "market": "TWSE",
+      "name": "宇隆",
+      "short_name": "宇隆"
+    },
+    {
+      "stock_id": "2236",
+      "market": "TWSE",
+      "name": "百達-KY",
+      "short_name": "百達-KY"
+    },
+    {
+      "stock_id": "2239",
+      "market": "TWSE",
+      "name": "英利-KY",
+      "short_name": "英利-KY"
+    },
+    {
+      "stock_id": "2241",
+      "market": "TWSE",
+      "name": "艾姆勒",
+      "short_name": "艾姆勒"
+    },
+    {
+      "stock_id": "2243",
+      "market": "TWSE",
+      "name": "宏旭-KY",
+      "short_name": "宏旭-KY"
+    },
+    {
+      "stock_id": "2247",
+      "market": "TWSE",
+      "name": "汎德永業",
+      "short_name": "汎德永業"
+    },
+    {
+      "stock_id": "2248",
+      "market": "TWSE",
+      "name": "華勝-KY",
+      "short_name": "華勝-KY"
+    },
+    {
+      "stock_id": "2250",
+      "market": "TWSE",
+      "name": "IKKA-KY",
+      "short_name": "IKKA-KY"
+    },
+    {
+      "stock_id": "2254",
+      "market": "TWSE",
+      "name": "巨鎧精密-創",
+      "short_name": "巨鎧精密-創"
+    },
+    {
+      "stock_id": "2258",
+      "market": "TWSE",
+      "name": "鴻華先進-創",
+      "short_name": "鴻華先進-創"
+    },
+    {
+      "stock_id": "2301",
+      "market": "TWSE",
+      "name": "光寶科",
+      "short_name": "光寶科"
+    },
+    {
+      "stock_id": "2302",
+      "market": "TWSE",
+      "name": "麗正",
+      "short_name": "麗正"
+    },
+    {
+      "stock_id": "2303",
+      "market": "TWSE",
+      "name": "聯電",
+      "short_name": "聯電"
+    },
+    {
+      "stock_id": "2305",
+      "market": "TWSE",
+      "name": "全友",
+      "short_name": "全友"
+    },
+    {
+      "stock_id": "2308",
+      "market": "TWSE",
+      "name": "台達電",
+      "short_name": "台達電"
+    },
+    {
+      "stock_id": "2312",
+      "market": "TWSE",
+      "name": "金寶",
+      "short_name": "金寶"
+    },
+    {
+      "stock_id": "2313",
+      "market": "TWSE",
+      "name": "華通",
+      "short_name": "華通"
+    },
+    {
+      "stock_id": "2314",
+      "market": "TWSE",
+      "name": "台揚",
+      "short_name": "台揚"
+    },
+    {
+      "stock_id": "2316",
+      "market": "TWSE",
+      "name": "楠梓電",
+      "short_name": "楠梓電"
+    },
+    {
+      "stock_id": "2317",
+      "market": "TWSE",
+      "name": "鴻海",
+      "short_name": "鴻海"
+    },
+    {
+      "stock_id": "2321",
+      "market": "TWSE",
+      "name": "東訊",
+      "short_name": "東訊"
+    },
+    {
+      "stock_id": "2323",
+      "market": "TWSE",
+      "name": "中環",
+      "short_name": "中環"
+    },
+    {
+      "stock_id": "2324",
+      "market": "TWSE",
+      "name": "仁寶",
+      "short_name": "仁寶"
+    },
+    {
+      "stock_id": "2327",
+      "market": "TWSE",
+      "name": "國巨*",
+      "short_name": "國巨*"
+    },
+    {
+      "stock_id": "2328",
+      "market": "TWSE",
+      "name": "廣宇",
+      "short_name": "廣宇"
+    },
+    {
+      "stock_id": "2329",
+      "market": "TWSE",
+      "name": "華泰",
+      "short_name": "華泰"
+    },
+    {
+      "stock_id": "2330",
+      "market": "TWSE",
+      "name": "台積電",
+      "short_name": "台積電"
+    },
+    {
+      "stock_id": "2331",
+      "market": "TWSE",
+      "name": "精英",
+      "short_name": "精英"
+    },
+    {
+      "stock_id": "2332",
+      "market": "TWSE",
+      "name": "友訊",
+      "short_name": "友訊"
+    },
+    {
+      "stock_id": "2337",
+      "market": "TWSE",
+      "name": "旺宏",
+      "short_name": "旺宏"
+    },
+    {
+      "stock_id": "2338",
+      "market": "TWSE",
+      "name": "光罩",
+      "short_name": "光罩"
+    },
+    {
+      "stock_id": "2340",
+      "market": "TWSE",
+      "name": "台亞",
+      "short_name": "台亞"
+    },
+    {
+      "stock_id": "2342",
+      "market": "TWSE",
+      "name": "茂矽",
+      "short_name": "茂矽"
+    },
+    {
+      "stock_id": "2344",
+      "market": "TWSE",
+      "name": "華邦電",
+      "short_name": "華邦電"
+    },
+    {
+      "stock_id": "2345",
+      "market": "TWSE",
+      "name": "智邦",
+      "short_name": "智邦"
+    },
+    {
+      "stock_id": "2347",
+      "market": "TWSE",
+      "name": "聯強",
+      "short_name": "聯強"
+    },
+    {
+      "stock_id": "2348",
+      "market": "TWSE",
+      "name": "海悅",
+      "short_name": "海悅"
+    },
+    {
+      "stock_id": "2349",
+      "market": "TWSE",
+      "name": "錸德",
+      "short_name": "錸德"
+    },
+    {
+      "stock_id": "2351",
+      "market": "TWSE",
+      "name": "順德",
+      "short_name": "順德"
+    },
+    {
+      "stock_id": "2352",
+      "market": "TWSE",
+      "name": "佳世達",
+      "short_name": "佳世達"
+    },
+    {
+      "stock_id": "2353",
+      "market": "TWSE",
+      "name": "宏碁",
+      "short_name": "宏碁"
+    },
+    {
+      "stock_id": "2354",
+      "market": "TWSE",
+      "name": "鴻準",
+      "short_name": "鴻準"
+    },
+    {
+      "stock_id": "2355",
+      "market": "TWSE",
+      "name": "敬鵬",
+      "short_name": "敬鵬"
+    },
+    {
+      "stock_id": "2356",
+      "market": "TWSE",
+      "name": "英業達",
+      "short_name": "英業達"
+    },
+    {
+      "stock_id": "2357",
+      "market": "TWSE",
+      "name": "華碩",
+      "short_name": "華碩"
+    },
+    {
+      "stock_id": "2359",
+      "market": "TWSE",
+      "name": "所羅門",
+      "short_name": "所羅門"
+    },
+    {
+      "stock_id": "2360",
+      "market": "TWSE",
+      "name": "致茂",
+      "short_name": "致茂"
+    },
+    {
+      "stock_id": "2362",
+      "market": "TWSE",
+      "name": "藍天",
+      "short_name": "藍天"
+    },
+    {
+      "stock_id": "2363",
+      "market": "TWSE",
+      "name": "矽統",
+      "short_name": "矽統"
+    },
+    {
+      "stock_id": "2364",
+      "market": "TWSE",
+      "name": "倫飛",
+      "short_name": "倫飛"
+    },
+    {
+      "stock_id": "2365",
+      "market": "TWSE",
+      "name": "昆盈",
+      "short_name": "昆盈"
+    },
+    {
+      "stock_id": "2367",
+      "market": "TWSE",
+      "name": "燿華",
+      "short_name": "燿華"
+    },
+    {
+      "stock_id": "2368",
+      "market": "TWSE",
+      "name": "金像電",
+      "short_name": "金像電"
+    },
+    {
+      "stock_id": "2369",
+      "market": "TWSE",
+      "name": "菱生",
+      "short_name": "菱生"
+    },
+    {
+      "stock_id": "2371",
+      "market": "TWSE",
+      "name": "大同",
+      "short_name": "大同"
+    },
+    {
+      "stock_id": "2373",
+      "market": "TWSE",
+      "name": "震旦行",
+      "short_name": "震旦行"
+    },
+    {
+      "stock_id": "2374",
+      "market": "TWSE",
+      "name": "佳能",
+      "short_name": "佳能"
+    },
+    {
+      "stock_id": "2375",
+      "market": "TWSE",
+      "name": "凱美",
+      "short_name": "凱美"
+    },
+    {
+      "stock_id": "2376",
+      "market": "TWSE",
+      "name": "技嘉",
+      "short_name": "技嘉"
+    },
+    {
+      "stock_id": "2377",
+      "market": "TWSE",
+      "name": "微星",
+      "short_name": "微星"
+    },
+    {
+      "stock_id": "2379",
+      "market": "TWSE",
+      "name": "瑞昱",
+      "short_name": "瑞昱"
+    },
+    {
+      "stock_id": "2380",
+      "market": "TWSE",
+      "name": "虹光",
+      "short_name": "虹光"
+    },
+    {
+      "stock_id": "2382",
+      "market": "TWSE",
+      "name": "廣達",
+      "short_name": "廣達"
+    },
+    {
+      "stock_id": "2383",
+      "market": "TWSE",
+      "name": "台光電",
+      "short_name": "台光電"
+    },
+    {
+      "stock_id": "2385",
+      "market": "TWSE",
+      "name": "群光",
+      "short_name": "群光"
+    },
+    {
+      "stock_id": "2387",
+      "market": "TWSE",
+      "name": "精元",
+      "short_name": "精元"
+    },
+    {
+      "stock_id": "2388",
+      "market": "TWSE",
+      "name": "威盛",
+      "short_name": "威盛"
+    },
+    {
+      "stock_id": "2390",
+      "market": "TWSE",
+      "name": "云辰",
+      "short_name": "云辰"
+    },
+    {
+      "stock_id": "2392",
+      "market": "TWSE",
+      "name": "正崴",
+      "short_name": "正崴"
+    },
+    {
+      "stock_id": "2393",
+      "market": "TWSE",
+      "name": "億光",
+      "short_name": "億光"
+    },
+    {
+      "stock_id": "2395",
+      "market": "TWSE",
+      "name": "研華",
+      "short_name": "研華"
+    },
+    {
+      "stock_id": "2397",
+      "market": "TWSE",
+      "name": "友通",
+      "short_name": "友通"
+    },
+    {
+      "stock_id": "2399",
+      "market": "TWSE",
+      "name": "映泰",
+      "short_name": "映泰"
+    },
+    {
+      "stock_id": "2401",
+      "market": "TWSE",
+      "name": "凌陽",
+      "short_name": "凌陽"
+    },
+    {
+      "stock_id": "2402",
+      "market": "TWSE",
+      "name": "毅嘉",
+      "short_name": "毅嘉"
+    },
+    {
+      "stock_id": "2404",
+      "market": "TWSE",
+      "name": "漢唐",
+      "short_name": "漢唐"
+    },
+    {
+      "stock_id": "2405",
+      "market": "TWSE",
+      "name": "輔信",
+      "short_name": "輔信"
+    },
+    {
+      "stock_id": "2406",
+      "market": "TWSE",
+      "name": "國碩",
+      "short_name": "國碩"
+    },
+    {
+      "stock_id": "2408",
+      "market": "TWSE",
+      "name": "南亞科",
+      "short_name": "南亞科"
+    },
+    {
+      "stock_id": "2409",
+      "market": "TWSE",
+      "name": "友達",
+      "short_name": "友達"
+    },
+    {
+      "stock_id": "2412",
+      "market": "TWSE",
+      "name": "中華電",
+      "short_name": "中華電"
+    },
+    {
+      "stock_id": "2413",
+      "market": "TWSE",
+      "name": "環科",
+      "short_name": "環科"
+    },
+    {
+      "stock_id": "2414",
+      "market": "TWSE",
+      "name": "精技",
+      "short_name": "精技"
+    },
+    {
+      "stock_id": "2415",
+      "market": "TWSE",
+      "name": "錩新",
+      "short_name": "錩新"
+    },
+    {
+      "stock_id": "2417",
+      "market": "TWSE",
+      "name": "圓剛",
+      "short_name": "圓剛"
+    },
+    {
+      "stock_id": "2419",
+      "market": "TWSE",
+      "name": "仲琦",
+      "short_name": "仲琦"
+    },
+    {
+      "stock_id": "2420",
+      "market": "TWSE",
+      "name": "新巨",
+      "short_name": "新巨"
+    },
+    {
+      "stock_id": "2421",
+      "market": "TWSE",
+      "name": "建準",
+      "short_name": "建準"
+    },
+    {
+      "stock_id": "2423",
+      "market": "TWSE",
+      "name": "固緯",
+      "short_name": "固緯"
+    },
+    {
+      "stock_id": "2424",
+      "market": "TWSE",
+      "name": "隴華",
+      "short_name": "隴華"
+    },
+    {
+      "stock_id": "2425",
+      "market": "TWSE",
+      "name": "承啟",
+      "short_name": "承啟"
+    },
+    {
+      "stock_id": "2426",
+      "market": "TWSE",
+      "name": "鼎元",
+      "short_name": "鼎元"
+    },
+    {
+      "stock_id": "2427",
+      "market": "TWSE",
+      "name": "三商電",
+      "short_name": "三商電"
+    },
+    {
+      "stock_id": "2428",
+      "market": "TWSE",
+      "name": "興勤",
+      "short_name": "興勤"
+    },
+    {
+      "stock_id": "2429",
+      "market": "TWSE",
+      "name": "銘旺科",
+      "short_name": "銘旺科"
+    },
+    {
+      "stock_id": "2430",
+      "market": "TWSE",
+      "name": "燦坤",
+      "short_name": "燦坤"
+    },
+    {
+      "stock_id": "2431",
+      "market": "TWSE",
+      "name": "聯昌",
+      "short_name": "聯昌"
+    },
+    {
+      "stock_id": "2432",
+      "market": "TWSE",
+      "name": "倚天酷碁-創",
+      "short_name": "倚天酷碁-創"
+    },
+    {
+      "stock_id": "2433",
+      "market": "TWSE",
+      "name": "互盛電",
+      "short_name": "互盛電"
+    },
+    {
+      "stock_id": "2434",
+      "market": "TWSE",
+      "name": "統懋",
+      "short_name": "統懋"
+    },
+    {
+      "stock_id": "2436",
+      "market": "TWSE",
+      "name": "偉詮電",
+      "short_name": "偉詮電"
+    },
+    {
+      "stock_id": "2438",
+      "market": "TWSE",
+      "name": "翔耀",
+      "short_name": "翔耀"
+    },
+    {
+      "stock_id": "2439",
+      "market": "TWSE",
+      "name": "美律",
+      "short_name": "美律"
+    },
+    {
+      "stock_id": "2440",
+      "market": "TWSE",
+      "name": "太空梭",
+      "short_name": "太空梭"
+    },
+    {
+      "stock_id": "2441",
+      "market": "TWSE",
+      "name": "超豐",
+      "short_name": "超豐"
+    },
+    {
+      "stock_id": "2442",
+      "market": "TWSE",
+      "name": "新美齊",
+      "short_name": "新美齊"
+    },
+    {
+      "stock_id": "2444",
+      "market": "TWSE",
+      "name": "兆勁",
+      "short_name": "兆勁"
+    },
+    {
+      "stock_id": "2449",
+      "market": "TWSE",
+      "name": "京元電子",
+      "short_name": "京元電子"
+    },
+    {
+      "stock_id": "2450",
+      "market": "TWSE",
+      "name": "神腦",
+      "short_name": "神腦"
+    },
+    {
+      "stock_id": "2451",
+      "market": "TWSE",
+      "name": "創見",
+      "short_name": "創見"
+    },
+    {
+      "stock_id": "2453",
+      "market": "TWSE",
+      "name": "凌群",
+      "short_name": "凌群"
+    },
+    {
+      "stock_id": "2454",
+      "market": "TWSE",
+      "name": "聯發科",
+      "short_name": "聯發科"
+    },
+    {
+      "stock_id": "2455",
+      "market": "TWSE",
+      "name": "全新",
+      "short_name": "全新"
+    },
+    {
+      "stock_id": "2457",
+      "market": "TWSE",
+      "name": "飛宏",
+      "short_name": "飛宏"
+    },
+    {
+      "stock_id": "2458",
+      "market": "TWSE",
+      "name": "義隆",
+      "short_name": "義隆"
+    },
+    {
+      "stock_id": "2459",
+      "market": "TWSE",
+      "name": "敦吉",
+      "short_name": "敦吉"
+    },
+    {
+      "stock_id": "2460",
+      "market": "TWSE",
+      "name": "建通",
+      "short_name": "建通"
+    },
+    {
+      "stock_id": "2461",
+      "market": "TWSE",
+      "name": "光群雷",
+      "short_name": "光群雷"
+    },
+    {
+      "stock_id": "2462",
+      "market": "TWSE",
+      "name": "良得電",
+      "short_name": "良得電"
+    },
+    {
+      "stock_id": "2464",
+      "market": "TWSE",
+      "name": "盟立",
+      "short_name": "盟立"
+    },
+    {
+      "stock_id": "2465",
+      "market": "TWSE",
+      "name": "麗臺",
+      "short_name": "麗臺"
+    },
+    {
+      "stock_id": "2466",
+      "market": "TWSE",
+      "name": "冠西電",
+      "short_name": "冠西電"
+    },
+    {
+      "stock_id": "2467",
+      "market": "TWSE",
+      "name": "志聖",
+      "short_name": "志聖"
+    },
+    {
+      "stock_id": "2468",
+      "market": "TWSE",
+      "name": "華經",
+      "short_name": "華經"
+    },
+    {
+      "stock_id": "2471",
+      "market": "TWSE",
+      "name": "資通",
+      "short_name": "資通"
+    },
+    {
+      "stock_id": "2472",
+      "market": "TWSE",
+      "name": "立隆電",
+      "short_name": "立隆電"
+    },
+    {
+      "stock_id": "2474",
+      "market": "TWSE",
+      "name": "可成",
+      "short_name": "可成"
+    },
+    {
+      "stock_id": "2476",
+      "market": "TWSE",
+      "name": "鉅祥",
+      "short_name": "鉅祥"
+    },
+    {
+      "stock_id": "2477",
+      "market": "TWSE",
+      "name": "美隆電",
+      "short_name": "美隆電"
+    },
+    {
+      "stock_id": "2478",
+      "market": "TWSE",
+      "name": "大毅",
+      "short_name": "大毅"
+    },
+    {
+      "stock_id": "2480",
+      "market": "TWSE",
+      "name": "敦陽科",
+      "short_name": "敦陽科"
+    },
+    {
+      "stock_id": "2481",
+      "market": "TWSE",
+      "name": "強茂",
+      "short_name": "強茂"
+    },
+    {
+      "stock_id": "2482",
+      "market": "TWSE",
+      "name": "連宇",
+      "short_name": "連宇"
+    },
+    {
+      "stock_id": "2483",
+      "market": "TWSE",
+      "name": "百容",
+      "short_name": "百容"
+    },
+    {
+      "stock_id": "2484",
+      "market": "TWSE",
+      "name": "希華",
+      "short_name": "希華"
+    },
+    {
+      "stock_id": "2485",
+      "market": "TWSE",
+      "name": "兆赫",
+      "short_name": "兆赫"
+    },
+    {
+      "stock_id": "2486",
+      "market": "TWSE",
+      "name": "一詮",
+      "short_name": "一詮"
+    },
+    {
+      "stock_id": "2488",
+      "market": "TWSE",
+      "name": "漢平",
+      "short_name": "漢平"
+    },
+    {
+      "stock_id": "2489",
+      "market": "TWSE",
+      "name": "瑞軒",
+      "short_name": "瑞軒"
+    },
+    {
+      "stock_id": "2491",
+      "market": "TWSE",
+      "name": "吉祥全",
+      "short_name": "吉祥全"
+    },
+    {
+      "stock_id": "2492",
+      "market": "TWSE",
+      "name": "華新科",
+      "short_name": "華新科"
+    },
+    {
+      "stock_id": "2493",
+      "market": "TWSE",
+      "name": "揚博",
+      "short_name": "揚博"
+    },
+    {
+      "stock_id": "2495",
+      "market": "TWSE",
+      "name": "普安",
+      "short_name": "普安"
+    },
+    {
+      "stock_id": "2496",
+      "market": "TWSE",
+      "name": "卓越",
+      "short_name": "卓越"
+    },
+    {
+      "stock_id": "2497",
+      "market": "TWSE",
+      "name": "怡利電",
+      "short_name": "怡利電"
+    },
+    {
+      "stock_id": "2498",
+      "market": "TWSE",
+      "name": "宏達電",
+      "short_name": "宏達電"
+    },
+    {
+      "stock_id": "2501",
+      "market": "TWSE",
+      "name": "國建",
+      "short_name": "國建"
+    },
+    {
+      "stock_id": "2504",
+      "market": "TWSE",
+      "name": "國產",
+      "short_name": "國產"
+    },
+    {
+      "stock_id": "2505",
+      "market": "TWSE",
+      "name": "國揚",
+      "short_name": "國揚"
+    },
+    {
+      "stock_id": "2506",
+      "market": "TWSE",
+      "name": "太設",
+      "short_name": "太設"
+    },
+    {
+      "stock_id": "2509",
+      "market": "TWSE",
+      "name": "全坤建",
+      "short_name": "全坤建"
+    },
+    {
+      "stock_id": "2511",
+      "market": "TWSE",
+      "name": "太子",
+      "short_name": "太子"
+    },
+    {
+      "stock_id": "2514",
+      "market": "TWSE",
+      "name": "龍邦",
+      "short_name": "龍邦"
+    },
+    {
+      "stock_id": "2515",
+      "market": "TWSE",
+      "name": "中工",
+      "short_name": "中工"
+    },
+    {
+      "stock_id": "2516",
+      "market": "TWSE",
+      "name": "新建",
+      "short_name": "新建"
+    },
+    {
+      "stock_id": "2520",
+      "market": "TWSE",
+      "name": "冠德",
+      "short_name": "冠德"
+    },
+    {
+      "stock_id": "2524",
+      "market": "TWSE",
+      "name": "京城",
+      "short_name": "京城"
+    },
+    {
+      "stock_id": "2527",
+      "market": "TWSE",
+      "name": "宏璟",
+      "short_name": "宏璟"
+    },
+    {
+      "stock_id": "2528",
+      "market": "TWSE",
+      "name": "皇普",
+      "short_name": "皇普"
+    },
+    {
+      "stock_id": "2530",
+      "market": "TWSE",
+      "name": "華建",
+      "short_name": "華建"
+    },
+    {
+      "stock_id": "2534",
+      "market": "TWSE",
+      "name": "宏盛",
+      "short_name": "宏盛"
+    },
+    {
+      "stock_id": "2535",
+      "market": "TWSE",
+      "name": "達欣工",
+      "short_name": "達欣工"
+    },
+    {
+      "stock_id": "2536",
+      "market": "TWSE",
+      "name": "宏普",
+      "short_name": "宏普"
+    },
+    {
+      "stock_id": "2537",
+      "market": "TWSE",
+      "name": "聯上發",
+      "short_name": "聯上發"
+    },
+    {
+      "stock_id": "2538",
+      "market": "TWSE",
+      "name": "基泰",
+      "short_name": "基泰"
+    },
+    {
+      "stock_id": "2539",
+      "market": "TWSE",
+      "name": "櫻花建",
+      "short_name": "櫻花建"
+    },
+    {
+      "stock_id": "2540",
+      "market": "TWSE",
+      "name": "愛山林",
+      "short_name": "愛山林"
+    },
+    {
+      "stock_id": "2542",
+      "market": "TWSE",
+      "name": "興富發",
+      "short_name": "興富發"
+    },
+    {
+      "stock_id": "2543",
+      "market": "TWSE",
+      "name": "皇昌",
+      "short_name": "皇昌"
+    },
+    {
+      "stock_id": "2545",
+      "market": "TWSE",
+      "name": "皇翔",
+      "short_name": "皇翔"
+    },
+    {
+      "stock_id": "2546",
+      "market": "TWSE",
+      "name": "根基",
+      "short_name": "根基"
+    },
+    {
+      "stock_id": "2547",
+      "market": "TWSE",
+      "name": "日勝生",
+      "short_name": "日勝生"
+    },
+    {
+      "stock_id": "2548",
+      "market": "TWSE",
+      "name": "華固",
+      "short_name": "華固"
+    },
+    {
+      "stock_id": "2597",
+      "market": "TWSE",
+      "name": "潤弘",
+      "short_name": "潤弘"
+    },
+    {
+      "stock_id": "2601",
+      "market": "TWSE",
+      "name": "益航",
+      "short_name": "益航"
+    },
+    {
+      "stock_id": "2603",
+      "market": "TWSE",
+      "name": "長榮",
+      "short_name": "長榮"
+    },
+    {
+      "stock_id": "2605",
+      "market": "TWSE",
+      "name": "新興",
+      "short_name": "新興"
+    },
+    {
+      "stock_id": "2606",
+      "market": "TWSE",
+      "name": "裕民",
+      "short_name": "裕民"
+    },
+    {
+      "stock_id": "2607",
+      "market": "TWSE",
+      "name": "榮運",
+      "short_name": "榮運"
+    },
+    {
+      "stock_id": "2608",
+      "market": "TWSE",
+      "name": "嘉里大榮",
+      "short_name": "嘉里大榮"
+    },
+    {
+      "stock_id": "2609",
+      "market": "TWSE",
+      "name": "陽明",
+      "short_name": "陽明"
+    },
+    {
+      "stock_id": "2610",
+      "market": "TWSE",
+      "name": "華航",
+      "short_name": "華航"
+    },
+    {
+      "stock_id": "2611",
+      "market": "TWSE",
+      "name": "志信",
+      "short_name": "志信"
+    },
+    {
+      "stock_id": "2612",
+      "market": "TWSE",
+      "name": "中航",
+      "short_name": "中航"
+    },
+    {
+      "stock_id": "2613",
+      "market": "TWSE",
+      "name": "中櫃",
+      "short_name": "中櫃"
+    },
+    {
+      "stock_id": "2614",
+      "market": "TWSE",
+      "name": "東森",
+      "short_name": "東森"
+    },
+    {
+      "stock_id": "2615",
+      "market": "TWSE",
+      "name": "萬海",
+      "short_name": "萬海"
+    },
+    {
+      "stock_id": "2616",
+      "market": "TWSE",
+      "name": "山隆",
+      "short_name": "山隆"
+    },
+    {
+      "stock_id": "2617",
+      "market": "TWSE",
+      "name": "台航",
+      "short_name": "台航"
+    },
+    {
+      "stock_id": "2618",
+      "market": "TWSE",
+      "name": "長榮航",
+      "short_name": "長榮航"
+    },
+    {
+      "stock_id": "2630",
+      "market": "TWSE",
+      "name": "亞航",
+      "short_name": "亞航"
+    },
+    {
+      "stock_id": "2633",
+      "market": "TWSE",
+      "name": "台灣高鐵",
+      "short_name": "台灣高鐵"
+    },
+    {
+      "stock_id": "2634",
+      "market": "TWSE",
+      "name": "漢翔",
+      "short_name": "漢翔"
+    },
+    {
+      "stock_id": "2636",
+      "market": "TWSE",
+      "name": "台驊控股",
+      "short_name": "台驊控股"
+    },
+    {
+      "stock_id": "2637",
+      "market": "TWSE",
+      "name": "慧洋-KY",
+      "short_name": "慧洋-KY"
+    },
+    {
+      "stock_id": "2642",
+      "market": "TWSE",
+      "name": "宅配通",
+      "short_name": "宅配通"
+    },
+    {
+      "stock_id": "2645",
+      "market": "TWSE",
+      "name": "長榮航太",
+      "short_name": "長榮航太"
+    },
+    {
+      "stock_id": "2646",
+      "market": "TWSE",
+      "name": "星宇航空",
+      "short_name": "星宇航空"
+    },
+    {
+      "stock_id": "2701",
+      "market": "TWSE",
+      "name": "萬企",
+      "short_name": "萬企"
+    },
+    {
+      "stock_id": "2702",
+      "market": "TWSE",
+      "name": "華園",
+      "short_name": "華園"
+    },
+    {
+      "stock_id": "2704",
+      "market": "TWSE",
+      "name": "國賓",
+      "short_name": "國賓"
+    },
+    {
+      "stock_id": "2705",
+      "market": "TWSE",
+      "name": "六福",
+      "short_name": "六福"
+    },
+    {
+      "stock_id": "2706",
+      "market": "TWSE",
+      "name": "第一店",
+      "short_name": "第一店"
+    },
+    {
+      "stock_id": "2707",
+      "market": "TWSE",
+      "name": "晶華",
+      "short_name": "晶華"
+    },
+    {
+      "stock_id": "2712",
+      "market": "TWSE",
+      "name": "遠雄來",
+      "short_name": "遠雄來"
+    },
+    {
+      "stock_id": "2722",
+      "market": "TWSE",
+      "name": "夏都",
+      "short_name": "夏都"
+    },
+    {
+      "stock_id": "2723",
+      "market": "TWSE",
+      "name": "美食-KY",
+      "short_name": "美食-KY"
+    },
+    {
+      "stock_id": "2727",
+      "market": "TWSE",
+      "name": "王品",
+      "short_name": "王品"
+    },
+    {
+      "stock_id": "2731",
+      "market": "TWSE",
+      "name": "雄獅",
+      "short_name": "雄獅"
+    },
+    {
+      "stock_id": "2739",
+      "market": "TWSE",
+      "name": "寒舍",
+      "short_name": "寒舍"
+    },
+    {
+      "stock_id": "2748",
+      "market": "TWSE",
+      "name": "雲品",
+      "short_name": "雲品"
+    },
+    {
+      "stock_id": "2753",
+      "market": "TWSE",
+      "name": "八方雲集",
+      "short_name": "八方雲集"
+    },
+    {
+      "stock_id": "2762",
+      "market": "TWSE",
+      "name": "世界健身-KY",
+      "short_name": "世界健身-KY"
+    },
+    {
+      "stock_id": "2801",
+      "market": "TWSE",
+      "name": "彰銀",
+      "short_name": "彰銀"
+    },
+    {
+      "stock_id": "2812",
+      "market": "TWSE",
+      "name": "台中銀",
+      "short_name": "台中銀"
+    },
+    {
+      "stock_id": "2816",
+      "market": "TWSE",
+      "name": "旺旺保",
+      "short_name": "旺旺保"
+    },
+    {
+      "stock_id": "2820",
+      "market": "TWSE",
+      "name": "華票",
+      "short_name": "華票"
+    },
+    {
+      "stock_id": "2832",
+      "market": "TWSE",
+      "name": "台產",
+      "short_name": "台產"
+    },
+    {
+      "stock_id": "2834",
+      "market": "TWSE",
+      "name": "臺企銀",
+      "short_name": "臺企銀"
+    },
+    {
+      "stock_id": "2836",
+      "market": "TWSE",
+      "name": "高雄銀",
+      "short_name": "高雄銀"
+    },
+    {
+      "stock_id": "2838",
+      "market": "TWSE",
+      "name": "聯邦銀",
+      "short_name": "聯邦銀"
+    },
+    {
+      "stock_id": "2845",
+      "market": "TWSE",
+      "name": "遠東銀",
+      "short_name": "遠東銀"
+    },
+    {
+      "stock_id": "2849",
+      "market": "TWSE",
+      "name": "安泰銀",
+      "short_name": "安泰銀"
+    },
+    {
+      "stock_id": "2850",
+      "market": "TWSE",
+      "name": "新產",
+      "short_name": "新產"
+    },
+    {
+      "stock_id": "2851",
+      "market": "TWSE",
+      "name": "中再保",
+      "short_name": "中再保"
+    },
+    {
+      "stock_id": "2852",
+      "market": "TWSE",
+      "name": "第一保",
+      "short_name": "第一保"
+    },
+    {
+      "stock_id": "2855",
+      "market": "TWSE",
+      "name": "統一證",
+      "short_name": "統一證"
+    },
+    {
+      "stock_id": "2867",
+      "market": "TWSE",
+      "name": "三商壽",
+      "short_name": "三商壽"
+    },
+    {
+      "stock_id": "2880",
+      "market": "TWSE",
+      "name": "華南金",
+      "short_name": "華南金"
+    },
+    {
+      "stock_id": "2881",
+      "market": "TWSE",
+      "name": "富邦金",
+      "short_name": "富邦金"
+    },
+    {
+      "stock_id": "2882",
+      "market": "TWSE",
+      "name": "國泰金",
+      "short_name": "國泰金"
+    },
+    {
+      "stock_id": "2883",
+      "market": "TWSE",
+      "name": "凱基金",
+      "short_name": "凱基金"
+    },
+    {
+      "stock_id": "2884",
+      "market": "TWSE",
+      "name": "玉山金",
+      "short_name": "玉山金"
+    },
+    {
+      "stock_id": "2885",
+      "market": "TWSE",
+      "name": "元大金",
+      "short_name": "元大金"
+    },
+    {
+      "stock_id": "2886",
+      "market": "TWSE",
+      "name": "兆豐金",
+      "short_name": "兆豐金"
+    },
+    {
+      "stock_id": "2887",
+      "market": "TWSE",
+      "name": "台新新光金",
+      "short_name": "台新新光金"
+    },
+    {
+      "stock_id": "2889",
+      "market": "TWSE",
+      "name": "國票金",
+      "short_name": "國票金"
+    },
+    {
+      "stock_id": "2890",
+      "market": "TWSE",
+      "name": "永豐金",
+      "short_name": "永豐金"
+    },
+    {
+      "stock_id": "2891",
+      "market": "TWSE",
+      "name": "中信金",
+      "short_name": "中信金"
+    },
+    {
+      "stock_id": "2892",
+      "market": "TWSE",
+      "name": "第一金",
+      "short_name": "第一金"
+    },
+    {
+      "stock_id": "2897",
+      "market": "TWSE",
+      "name": "王道銀行",
+      "short_name": "王道銀行"
+    },
+    {
+      "stock_id": "2901",
+      "market": "TWSE",
+      "name": "欣欣",
+      "short_name": "欣欣"
+    },
+    {
+      "stock_id": "2903",
+      "market": "TWSE",
+      "name": "遠百",
+      "short_name": "遠百"
+    },
+    {
+      "stock_id": "2904",
+      "market": "TWSE",
+      "name": "匯僑",
+      "short_name": "匯僑"
+    },
+    {
+      "stock_id": "2905",
+      "market": "TWSE",
+      "name": "三商",
+      "short_name": "三商"
+    },
+    {
+      "stock_id": "2906",
+      "market": "TWSE",
+      "name": "高林",
+      "short_name": "高林"
+    },
+    {
+      "stock_id": "2908",
+      "market": "TWSE",
+      "name": "特力",
+      "short_name": "特力"
+    },
+    {
+      "stock_id": "2910",
+      "market": "TWSE",
+      "name": "統領",
+      "short_name": "統領"
+    },
+    {
+      "stock_id": "2911",
+      "market": "TWSE",
+      "name": "麗嬰房",
+      "short_name": "麗嬰房"
+    },
+    {
+      "stock_id": "2912",
+      "market": "TWSE",
+      "name": "統一超",
+      "short_name": "統一超"
+    },
+    {
+      "stock_id": "2913",
+      "market": "TWSE",
+      "name": "農林",
+      "short_name": "農林"
+    },
+    {
+      "stock_id": "2915",
+      "market": "TWSE",
+      "name": "潤泰全",
+      "short_name": "潤泰全"
+    },
+    {
+      "stock_id": "2923",
+      "market": "TWSE",
+      "name": "鼎固-KY",
+      "short_name": "鼎固-KY"
+    },
+    {
+      "stock_id": "2929",
+      "market": "TWSE",
+      "name": "淘帝-KY",
+      "short_name": "淘帝-KY"
+    },
+    {
+      "stock_id": "2939",
+      "market": "TWSE",
+      "name": "永邑-KY",
+      "short_name": "永邑-KY"
+    },
+    {
+      "stock_id": "2945",
+      "market": "TWSE",
+      "name": "三商家購",
+      "short_name": "三商家購"
+    },
+    {
+      "stock_id": "3002",
+      "market": "TWSE",
+      "name": "歐格",
+      "short_name": "歐格"
+    },
+    {
+      "stock_id": "3003",
+      "market": "TWSE",
+      "name": "健和興",
+      "short_name": "健和興"
+    },
+    {
+      "stock_id": "3004",
+      "market": "TWSE",
+      "name": "豐達科",
+      "short_name": "豐達科"
+    },
+    {
+      "stock_id": "3005",
+      "market": "TWSE",
+      "name": "神基",
+      "short_name": "神基"
+    },
+    {
+      "stock_id": "3006",
+      "market": "TWSE",
+      "name": "晶豪科",
+      "short_name": "晶豪科"
+    },
+    {
+      "stock_id": "3008",
+      "market": "TWSE",
+      "name": "大立光",
+      "short_name": "大立光"
+    },
+    {
+      "stock_id": "3010",
+      "market": "TWSE",
+      "name": "華立",
+      "short_name": "華立"
+    },
+    {
+      "stock_id": "3011",
+      "market": "TWSE",
+      "name": "今皓",
+      "short_name": "今皓"
+    },
+    {
+      "stock_id": "3013",
+      "market": "TWSE",
+      "name": "晟銘電",
+      "short_name": "晟銘電"
+    },
+    {
+      "stock_id": "3014",
+      "market": "TWSE",
+      "name": "聯陽",
+      "short_name": "聯陽"
+    },
+    {
+      "stock_id": "3015",
+      "market": "TWSE",
+      "name": "全漢",
+      "short_name": "全漢"
+    },
+    {
+      "stock_id": "3016",
+      "market": "TWSE",
+      "name": "嘉晶",
+      "short_name": "嘉晶"
+    },
+    {
+      "stock_id": "3017",
+      "market": "TWSE",
+      "name": "奇鋐",
+      "short_name": "奇鋐"
+    },
+    {
+      "stock_id": "3018",
+      "market": "TWSE",
+      "name": "隆銘綠能",
+      "short_name": "隆銘綠能"
+    },
+    {
+      "stock_id": "3019",
+      "market": "TWSE",
+      "name": "亞光",
+      "short_name": "亞光"
+    },
+    {
+      "stock_id": "3021",
+      "market": "TWSE",
+      "name": "鴻名",
+      "short_name": "鴻名"
+    },
+    {
+      "stock_id": "3022",
+      "market": "TWSE",
+      "name": "威強電",
+      "short_name": "威強電"
+    },
+    {
+      "stock_id": "3023",
+      "market": "TWSE",
+      "name": "信邦",
+      "short_name": "信邦"
+    },
+    {
+      "stock_id": "3024",
+      "market": "TWSE",
+      "name": "憶聲",
+      "short_name": "憶聲"
+    },
+    {
+      "stock_id": "3025",
+      "market": "TWSE",
+      "name": "星通",
+      "short_name": "星通"
+    },
+    {
+      "stock_id": "3026",
+      "market": "TWSE",
+      "name": "禾伸堂",
+      "short_name": "禾伸堂"
+    },
+    {
+      "stock_id": "3027",
+      "market": "TWSE",
+      "name": "盛達",
+      "short_name": "盛達"
+    },
+    {
+      "stock_id": "3028",
+      "market": "TWSE",
+      "name": "增你強",
+      "short_name": "增你強"
+    },
+    {
+      "stock_id": "3029",
+      "market": "TWSE",
+      "name": "零壹",
+      "short_name": "零壹"
+    },
+    {
+      "stock_id": "3030",
+      "market": "TWSE",
+      "name": "德律",
+      "short_name": "德律"
+    },
+    {
+      "stock_id": "3031",
+      "market": "TWSE",
+      "name": "佰鴻",
+      "short_name": "佰鴻"
+    },
+    {
+      "stock_id": "3032",
+      "market": "TWSE",
+      "name": "偉訓",
+      "short_name": "偉訓"
+    },
+    {
+      "stock_id": "3033",
+      "market": "TWSE",
+      "name": "威健",
+      "short_name": "威健"
+    },
+    {
+      "stock_id": "3034",
+      "market": "TWSE",
+      "name": "聯詠",
+      "short_name": "聯詠"
+    },
+    {
+      "stock_id": "3035",
+      "market": "TWSE",
+      "name": "智原",
+      "short_name": "智原"
+    },
+    {
+      "stock_id": "3036",
+      "market": "TWSE",
+      "name": "文曄",
+      "short_name": "文曄"
+    },
+    {
+      "stock_id": "3037",
+      "market": "TWSE",
+      "name": "欣興",
+      "short_name": "欣興"
+    },
+    {
+      "stock_id": "3038",
+      "market": "TWSE",
+      "name": "全台",
+      "short_name": "全台"
+    },
+    {
+      "stock_id": "3040",
+      "market": "TWSE",
+      "name": "遠見",
+      "short_name": "遠見"
+    },
+    {
+      "stock_id": "3041",
+      "market": "TWSE",
+      "name": "揚智",
+      "short_name": "揚智"
+    },
+    {
+      "stock_id": "3042",
+      "market": "TWSE",
+      "name": "晶技",
+      "short_name": "晶技"
+    },
+    {
+      "stock_id": "3043",
+      "market": "TWSE",
+      "name": "科風",
+      "short_name": "科風"
+    },
+    {
+      "stock_id": "3044",
+      "market": "TWSE",
+      "name": "健鼎",
+      "short_name": "健鼎"
+    },
+    {
+      "stock_id": "3045",
+      "market": "TWSE",
+      "name": "台灣大",
+      "short_name": "台灣大"
+    },
+    {
+      "stock_id": "3046",
+      "market": "TWSE",
+      "name": "建碁",
+      "short_name": "建碁"
+    },
+    {
+      "stock_id": "3047",
+      "market": "TWSE",
+      "name": "訊舟",
+      "short_name": "訊舟"
+    },
+    {
+      "stock_id": "3048",
+      "market": "TWSE",
+      "name": "益登",
+      "short_name": "益登"
+    },
+    {
+      "stock_id": "3049",
+      "market": "TWSE",
+      "name": "精金",
+      "short_name": "精金"
+    },
+    {
+      "stock_id": "3050",
+      "market": "TWSE",
+      "name": "鈺德",
+      "short_name": "鈺德"
+    },
+    {
+      "stock_id": "3051",
+      "market": "TWSE",
+      "name": "力特",
+      "short_name": "力特"
+    },
+    {
+      "stock_id": "3052",
+      "market": "TWSE",
+      "name": "夆典",
+      "short_name": "夆典"
+    },
+    {
+      "stock_id": "3054",
+      "market": "TWSE",
+      "name": "立萬利",
+      "short_name": "立萬利"
+    },
+    {
+      "stock_id": "3055",
+      "market": "TWSE",
+      "name": "蔚華科",
+      "short_name": "蔚華科"
+    },
+    {
+      "stock_id": "3056",
+      "market": "TWSE",
+      "name": "富華新",
+      "short_name": "富華新"
+    },
+    {
+      "stock_id": "3057",
+      "market": "TWSE",
+      "name": "喬鼎",
+      "short_name": "喬鼎"
+    },
+    {
+      "stock_id": "3058",
+      "market": "TWSE",
+      "name": "立德",
+      "short_name": "立德"
+    },
+    {
+      "stock_id": "3059",
+      "market": "TWSE",
+      "name": "華晶科",
+      "short_name": "華晶科"
+    },
+    {
+      "stock_id": "3060",
+      "market": "TWSE",
+      "name": "銘異",
+      "short_name": "銘異"
+    },
+    {
+      "stock_id": "3062",
+      "market": "TWSE",
+      "name": "建漢",
+      "short_name": "建漢"
+    },
+    {
+      "stock_id": "3090",
+      "market": "TWSE",
+      "name": "日電貿",
+      "short_name": "日電貿"
+    },
+    {
+      "stock_id": "3092",
+      "market": "TWSE",
+      "name": "鴻碩",
+      "short_name": "鴻碩"
+    },
+    {
+      "stock_id": "3094",
+      "market": "TWSE",
+      "name": "聯傑",
+      "short_name": "聯傑"
+    },
+    {
+      "stock_id": "3130",
+      "market": "TWSE",
+      "name": "一零四",
+      "short_name": "一零四"
+    },
+    {
+      "stock_id": "3135",
+      "market": "TWSE",
+      "name": "凌航",
+      "short_name": "凌航"
+    },
+    {
+      "stock_id": "3138",
+      "market": "TWSE",
+      "name": "耀登",
+      "short_name": "耀登"
+    },
+    {
+      "stock_id": "3149",
+      "market": "TWSE",
+      "name": "正達",
+      "short_name": "正達"
+    },
+    {
+      "stock_id": "3150",
+      "market": "TWSE",
+      "name": "鈺寶-創",
+      "short_name": "鈺寶-創"
+    },
+    {
+      "stock_id": "3164",
+      "market": "TWSE",
+      "name": "景岳",
+      "short_name": "景岳"
+    },
+    {
+      "stock_id": "3167",
+      "market": "TWSE",
+      "name": "大量",
+      "short_name": "大量"
+    },
+    {
+      "stock_id": "3168",
+      "market": "TWSE",
+      "name": "眾福科",
+      "short_name": "眾福科"
+    },
+    {
+      "stock_id": "3189",
+      "market": "TWSE",
+      "name": "景碩",
+      "short_name": "景碩"
+    },
+    {
+      "stock_id": "3209",
+      "market": "TWSE",
+      "name": "全科",
+      "short_name": "全科"
+    },
+    {
+      "stock_id": "3229",
+      "market": "TWSE",
+      "name": "晟鈦",
+      "short_name": "晟鈦"
+    },
+    {
+      "stock_id": "3231",
+      "market": "TWSE",
+      "name": "緯創",
+      "short_name": "緯創"
+    },
+    {
+      "stock_id": "3257",
+      "market": "TWSE",
+      "name": "虹冠電",
+      "short_name": "虹冠電"
+    },
+    {
+      "stock_id": "3266",
+      "market": "TWSE",
+      "name": "昇陽",
+      "short_name": "昇陽"
+    },
+    {
+      "stock_id": "3296",
+      "market": "TWSE",
+      "name": "勝德",
+      "short_name": "勝德"
+    },
+    {
+      "stock_id": "3305",
+      "market": "TWSE",
+      "name": "昇貿",
+      "short_name": "昇貿"
+    },
+    {
+      "stock_id": "3308",
+      "market": "TWSE",
+      "name": "聯德",
+      "short_name": "聯德"
+    },
+    {
+      "stock_id": "3311",
+      "market": "TWSE",
+      "name": "閎暉",
+      "short_name": "閎暉"
+    },
+    {
+      "stock_id": "3312",
+      "market": "TWSE",
+      "name": "弘憶股",
+      "short_name": "弘憶股"
+    },
+    {
+      "stock_id": "3321",
+      "market": "TWSE",
+      "name": "同泰",
+      "short_name": "同泰"
+    },
+    {
+      "stock_id": "3338",
+      "market": "TWSE",
+      "name": "泰碩",
+      "short_name": "泰碩"
+    },
+    {
+      "stock_id": "3346",
+      "market": "TWSE",
+      "name": "麗清",
+      "short_name": "麗清"
+    },
+    {
+      "stock_id": "3356",
+      "market": "TWSE",
+      "name": "奇偶",
+      "short_name": "奇偶"
+    },
+    {
+      "stock_id": "3376",
+      "market": "TWSE",
+      "name": "新日興",
+      "short_name": "新日興"
+    },
+    {
+      "stock_id": "3380",
+      "market": "TWSE",
+      "name": "明泰",
+      "short_name": "明泰"
+    },
+    {
+      "stock_id": "3406",
+      "market": "TWSE",
+      "name": "玉晶光",
+      "short_name": "玉晶光"
+    },
+    {
+      "stock_id": "3413",
+      "market": "TWSE",
+      "name": "京鼎",
+      "short_name": "京鼎"
+    },
+    {
+      "stock_id": "3416",
+      "market": "TWSE",
+      "name": "融程電",
+      "short_name": "融程電"
+    },
+    {
+      "stock_id": "3419",
+      "market": "TWSE",
+      "name": "譁裕",
+      "short_name": "譁裕"
+    },
+    {
+      "stock_id": "3432",
+      "market": "TWSE",
+      "name": "台端",
+      "short_name": "台端"
+    },
+    {
+      "stock_id": "3437",
+      "market": "TWSE",
+      "name": "榮創",
+      "short_name": "榮創"
+    },
+    {
+      "stock_id": "3443",
+      "market": "TWSE",
+      "name": "創意",
+      "short_name": "創意"
+    },
+    {
+      "stock_id": "3447",
+      "market": "TWSE",
+      "name": "展達",
+      "short_name": "展達"
+    },
+    {
+      "stock_id": "3450",
+      "market": "TWSE",
+      "name": "聯鈞",
+      "short_name": "聯鈞"
+    },
+    {
+      "stock_id": "3454",
+      "market": "TWSE",
+      "name": "晶睿",
+      "short_name": "晶睿"
+    },
+    {
+      "stock_id": "3481",
+      "market": "TWSE",
+      "name": "群創",
+      "short_name": "群創"
+    },
+    {
+      "stock_id": "3494",
+      "market": "TWSE",
+      "name": "誠研",
+      "short_name": "誠研"
+    },
+    {
+      "stock_id": "3501",
+      "market": "TWSE",
+      "name": "維熹",
+      "short_name": "維熹"
+    },
+    {
+      "stock_id": "3504",
+      "market": "TWSE",
+      "name": "揚明光",
+      "short_name": "揚明光"
+    },
+    {
+      "stock_id": "3515",
+      "market": "TWSE",
+      "name": "華擎",
+      "short_name": "華擎"
+    },
+    {
+      "stock_id": "3518",
+      "market": "TWSE",
+      "name": "柏騰",
+      "short_name": "柏騰"
+    },
+    {
+      "stock_id": "3528",
+      "market": "TWSE",
+      "name": "安馳",
+      "short_name": "安馳"
+    },
+    {
+      "stock_id": "3530",
+      "market": "TWSE",
+      "name": "晶相光",
+      "short_name": "晶相光"
+    },
+    {
+      "stock_id": "3532",
+      "market": "TWSE",
+      "name": "台勝科",
+      "short_name": "台勝科"
+    },
+    {
+      "stock_id": "3533",
+      "market": "TWSE",
+      "name": "嘉澤",
+      "short_name": "嘉澤"
+    },
+    {
+      "stock_id": "3535",
+      "market": "TWSE",
+      "name": "晶彩科",
+      "short_name": "晶彩科"
+    },
+    {
+      "stock_id": "3543",
+      "market": "TWSE",
+      "name": "州巧",
+      "short_name": "州巧"
+    },
+    {
+      "stock_id": "3545",
+      "market": "TWSE",
+      "name": "敦泰",
+      "short_name": "敦泰"
+    },
+    {
+      "stock_id": "3550",
+      "market": "TWSE",
+      "name": "聯穎",
+      "short_name": "聯穎"
+    },
+    {
+      "stock_id": "3557",
+      "market": "TWSE",
+      "name": "嘉威",
+      "short_name": "嘉威"
+    },
+    {
+      "stock_id": "3563",
+      "market": "TWSE",
+      "name": "牧德",
+      "short_name": "牧德"
+    },
+    {
+      "stock_id": "3576",
+      "market": "TWSE",
+      "name": "聯合再生",
+      "short_name": "聯合再生"
+    },
+    {
+      "stock_id": "3583",
+      "market": "TWSE",
+      "name": "辛耘",
+      "short_name": "辛耘"
+    },
+    {
+      "stock_id": "3588",
+      "market": "TWSE",
+      "name": "通嘉",
+      "short_name": "通嘉"
+    },
+    {
+      "stock_id": "3591",
+      "market": "TWSE",
+      "name": "艾笛森",
+      "short_name": "艾笛森"
+    },
+    {
+      "stock_id": "3592",
+      "market": "TWSE",
+      "name": "瑞鼎",
+      "short_name": "瑞鼎"
+    },
+    {
+      "stock_id": "3593",
+      "market": "TWSE",
+      "name": "力銘",
+      "short_name": "力銘"
+    },
+    {
+      "stock_id": "3596",
+      "market": "TWSE",
+      "name": "智易",
+      "short_name": "智易"
+    },
+    {
+      "stock_id": "3605",
+      "market": "TWSE",
+      "name": "宏致",
+      "short_name": "宏致"
+    },
+    {
+      "stock_id": "3607",
+      "market": "TWSE",
+      "name": "谷崧",
+      "short_name": "谷崧"
+    },
+    {
+      "stock_id": "3617",
+      "market": "TWSE",
+      "name": "碩天",
+      "short_name": "碩天"
+    },
+    {
+      "stock_id": "3622",
+      "market": "TWSE",
+      "name": "洋華",
+      "short_name": "洋華"
+    },
+    {
+      "stock_id": "3645",
+      "market": "TWSE",
+      "name": "達邁",
+      "short_name": "達邁"
+    },
+    {
+      "stock_id": "3652",
+      "market": "TWSE",
+      "name": "精聯",
+      "short_name": "精聯"
+    },
+    {
+      "stock_id": "3653",
+      "market": "TWSE",
+      "name": "健策",
+      "short_name": "健策"
+    },
+    {
+      "stock_id": "3661",
+      "market": "TWSE",
+      "name": "世芯-KY",
+      "short_name": "世芯-KY"
+    },
+    {
+      "stock_id": "3665",
+      "market": "TWSE",
+      "name": "貿聯-KY",
+      "short_name": "貿聯-KY"
+    },
+    {
+      "stock_id": "3669",
+      "market": "TWSE",
+      "name": "圓展",
+      "short_name": "圓展"
+    },
+    {
+      "stock_id": "3673",
+      "market": "TWSE",
+      "name": "TPK-KY",
+      "short_name": "TPK-KY"
+    },
+    {
+      "stock_id": "3679",
+      "market": "TWSE",
+      "name": "新至陞",
+      "short_name": "新至陞"
+    },
+    {
+      "stock_id": "3686",
+      "market": "TWSE",
+      "name": "達能",
+      "short_name": "達能"
+    },
+    {
+      "stock_id": "3694",
+      "market": "TWSE",
+      "name": "海華",
+      "short_name": "海華"
+    },
+    {
+      "stock_id": "3701",
+      "market": "TWSE",
+      "name": "大眾控",
+      "short_name": "大眾控"
+    },
+    {
+      "stock_id": "3702",
+      "market": "TWSE",
+      "name": "大聯大",
+      "short_name": "大聯大"
+    },
+    {
+      "stock_id": "3703",
+      "market": "TWSE",
+      "name": "欣陸",
+      "short_name": "欣陸"
+    },
+    {
+      "stock_id": "3704",
+      "market": "TWSE",
+      "name": "合勤控",
+      "short_name": "合勤控"
+    },
+    {
+      "stock_id": "3705",
+      "market": "TWSE",
+      "name": "永信",
+      "short_name": "永信"
+    },
+    {
+      "stock_id": "3706",
+      "market": "TWSE",
+      "name": "神達",
+      "short_name": "神達"
+    },
+    {
+      "stock_id": "3708",
+      "market": "TWSE",
+      "name": "上緯投控",
+      "short_name": "上緯投控"
+    },
+    {
+      "stock_id": "3711",
+      "market": "TWSE",
+      "name": "日月光投控",
+      "short_name": "日月光投控"
+    },
+    {
+      "stock_id": "3712",
+      "market": "TWSE",
+      "name": "永崴投控",
+      "short_name": "永崴投控"
+    },
+    {
+      "stock_id": "3714",
+      "market": "TWSE",
+      "name": "富采",
+      "short_name": "富采"
+    },
+    {
+      "stock_id": "3715",
+      "market": "TWSE",
+      "name": "定穎投控",
+      "short_name": "定穎投控"
+    },
+    {
+      "stock_id": "3716",
+      "market": "TWSE",
+      "name": "中化控股",
+      "short_name": "中化控股"
+    },
+    {
+      "stock_id": "3717",
+      "market": "TWSE",
+      "name": "聯嘉投控",
+      "short_name": "聯嘉投控"
+    },
+    {
+      "stock_id": "4104",
+      "market": "TWSE",
+      "name": "佳醫",
+      "short_name": "佳醫"
+    },
+    {
+      "stock_id": "4106",
+      "market": "TWSE",
+      "name": "雃博",
+      "short_name": "雃博"
+    },
+    {
+      "stock_id": "4108",
+      "market": "TWSE",
+      "name": "懷特",
+      "short_name": "懷特"
+    },
+    {
+      "stock_id": "4119",
+      "market": "TWSE",
+      "name": "旭富",
+      "short_name": "旭富"
+    },
+    {
+      "stock_id": "4133",
+      "market": "TWSE",
+      "name": "亞諾法",
+      "short_name": "亞諾法"
+    },
+    {
+      "stock_id": "4137",
+      "market": "TWSE",
+      "name": "麗豐-KY",
+      "short_name": "麗豐-KY"
+    },
+    {
+      "stock_id": "4142",
+      "market": "TWSE",
+      "name": "國光生",
+      "short_name": "國光生"
+    },
+    {
+      "stock_id": "4148",
+      "market": "TWSE",
+      "name": "全宇生技-KY",
+      "short_name": "全宇生技-KY"
+    },
+    {
+      "stock_id": "4155",
+      "market": "TWSE",
+      "name": "訊映",
+      "short_name": "訊映"
+    },
+    {
+      "stock_id": "4164",
+      "market": "TWSE",
+      "name": "承業醫",
+      "short_name": "承業醫"
+    },
+    {
+      "stock_id": "4190",
+      "market": "TWSE",
+      "name": "佐登-KY",
+      "short_name": "佐登-KY"
+    },
+    {
+      "stock_id": "4306",
+      "market": "TWSE",
+      "name": "炎洲",
+      "short_name": "炎洲"
+    },
+    {
+      "stock_id": "4414",
+      "market": "TWSE",
+      "name": "如興",
+      "short_name": "如興"
+    },
+    {
+      "stock_id": "4426",
+      "market": "TWSE",
+      "name": "利勤",
+      "short_name": "利勤"
+    },
+    {
+      "stock_id": "4438",
+      "market": "TWSE",
+      "name": "廣越",
+      "short_name": "廣越"
+    },
+    {
+      "stock_id": "4439",
+      "market": "TWSE",
+      "name": "冠星-KY",
+      "short_name": "冠星-KY"
+    },
+    {
+      "stock_id": "4440",
+      "market": "TWSE",
+      "name": "宜新實業",
+      "short_name": "宜新實業"
+    },
+    {
+      "stock_id": "4441",
+      "market": "TWSE",
+      "name": "振大環球",
+      "short_name": "振大環球"
+    },
+    {
+      "stock_id": "4526",
+      "market": "TWSE",
+      "name": "東台",
+      "short_name": "東台"
+    },
+    {
+      "stock_id": "4532",
+      "market": "TWSE",
+      "name": "瑞智",
+      "short_name": "瑞智"
+    },
+    {
+      "stock_id": "4536",
+      "market": "TWSE",
+      "name": "拓凱",
+      "short_name": "拓凱"
+    },
+    {
+      "stock_id": "4540",
+      "market": "TWSE",
+      "name": "全球傳動",
+      "short_name": "全球傳動"
+    },
+    {
+      "stock_id": "4545",
+      "market": "TWSE",
+      "name": "銘鈺",
+      "short_name": "銘鈺"
+    },
+    {
+      "stock_id": "4551",
+      "market": "TWSE",
+      "name": "智伸科",
+      "short_name": "智伸科"
+    },
+    {
+      "stock_id": "4552",
+      "market": "TWSE",
+      "name": "力達-KY",
+      "short_name": "力達-KY"
+    },
+    {
+      "stock_id": "4555",
+      "market": "TWSE",
+      "name": "氣立",
+      "short_name": "氣立"
+    },
+    {
+      "stock_id": "4557",
+      "market": "TWSE",
+      "name": "永新-KY",
+      "short_name": "永新-KY"
+    },
+    {
+      "stock_id": "4560",
+      "market": "TWSE",
+      "name": "強信-KY",
+      "short_name": "強信-KY"
+    },
+    {
+      "stock_id": "4562",
+      "market": "TWSE",
+      "name": "穎漢",
+      "short_name": "穎漢"
+    },
+    {
+      "stock_id": "4564",
+      "market": "TWSE",
+      "name": "元翎",
+      "short_name": "元翎"
+    },
+    {
+      "stock_id": "4566",
+      "market": "TWSE",
+      "name": "時碩工業",
+      "short_name": "時碩工業"
+    },
+    {
+      "stock_id": "4569",
+      "market": "TWSE",
+      "name": "六方科-KY",
+      "short_name": "六方科-KY"
+    },
+    {
+      "stock_id": "4571",
+      "market": "TWSE",
+      "name": "鈞興-KY",
+      "short_name": "鈞興-KY"
+    },
+    {
+      "stock_id": "4572",
+      "market": "TWSE",
+      "name": "駐龍",
+      "short_name": "駐龍"
+    },
+    {
+      "stock_id": "4576",
+      "market": "TWSE",
+      "name": "大銀微系統",
+      "short_name": "大銀微系統"
+    },
+    {
+      "stock_id": "4581",
+      "market": "TWSE",
+      "name": "光隆精密-KY",
+      "short_name": "光隆精密-KY"
+    },
+    {
+      "stock_id": "4583",
+      "market": "TWSE",
+      "name": "台灣精銳",
+      "short_name": "台灣精銳"
+    },
+    {
+      "stock_id": "4585",
+      "market": "TWSE",
+      "name": "達明",
+      "short_name": "達明"
+    },
+    {
+      "stock_id": "4588",
+      "market": "TWSE",
+      "name": "玖鼎電力",
+      "short_name": "玖鼎電力"
+    },
+    {
+      "stock_id": "4590",
+      "market": "TWSE",
+      "name": "富田-創",
+      "short_name": "富田-創"
+    },
+    {
+      "stock_id": "4720",
+      "market": "TWSE",
+      "name": "德淵",
+      "short_name": "德淵"
+    },
+    {
+      "stock_id": "4722",
+      "market": "TWSE",
+      "name": "國精化",
+      "short_name": "國精化"
+    },
+    {
+      "stock_id": "4736",
+      "market": "TWSE",
+      "name": "泰博",
+      "short_name": "泰博"
+    },
+    {
+      "stock_id": "4737",
+      "market": "TWSE",
+      "name": "華廣",
+      "short_name": "華廣"
+    },
+    {
+      "stock_id": "4739",
+      "market": "TWSE",
+      "name": "康普",
+      "short_name": "康普"
+    },
+    {
+      "stock_id": "4746",
+      "market": "TWSE",
+      "name": "台耀",
+      "short_name": "台耀"
+    },
+    {
+      "stock_id": "4755",
+      "market": "TWSE",
+      "name": "三福化",
+      "short_name": "三福化"
+    },
+    {
+      "stock_id": "4763",
+      "market": "TWSE",
+      "name": "材料*-KY",
+      "short_name": "材料*-KY"
+    },
+    {
+      "stock_id": "4764",
+      "market": "TWSE",
+      "name": "雙鍵",
+      "short_name": "雙鍵"
+    },
+    {
+      "stock_id": "4766",
+      "market": "TWSE",
+      "name": "南寶",
+      "short_name": "南寶"
+    },
+    {
+      "stock_id": "4770",
+      "market": "TWSE",
+      "name": "上品",
+      "short_name": "上品"
+    },
+    {
+      "stock_id": "4771",
+      "market": "TWSE",
+      "name": "望隼",
+      "short_name": "望隼"
+    },
+    {
+      "stock_id": "4807",
+      "market": "TWSE",
+      "name": "日成-KY",
+      "short_name": "日成-KY"
+    },
+    {
+      "stock_id": "4904",
+      "market": "TWSE",
+      "name": "遠傳",
+      "short_name": "遠傳"
+    },
+    {
+      "stock_id": "4906",
+      "market": "TWSE",
+      "name": "正文",
+      "short_name": "正文"
+    },
+    {
+      "stock_id": "4912",
+      "market": "TWSE",
+      "name": "聯德控股-KY",
+      "short_name": "聯德控股-KY"
+    },
+    {
+      "stock_id": "4915",
+      "market": "TWSE",
+      "name": "致伸",
+      "short_name": "致伸"
+    },
+    {
+      "stock_id": "4916",
+      "market": "TWSE",
+      "name": "事欣科",
+      "short_name": "事欣科"
+    },
+    {
+      "stock_id": "4919",
+      "market": "TWSE",
+      "name": "新唐",
+      "short_name": "新唐"
+    },
+    {
+      "stock_id": "4927",
+      "market": "TWSE",
+      "name": "泰鼎-KY",
+      "short_name": "泰鼎-KY"
+    },
+    {
+      "stock_id": "4930",
+      "market": "TWSE",
+      "name": "燦星網",
+      "short_name": "燦星網"
+    },
+    {
+      "stock_id": "4934",
+      "market": "TWSE",
+      "name": "太極",
+      "short_name": "太極"
+    },
+    {
+      "stock_id": "4935",
+      "market": "TWSE",
+      "name": "茂林-KY",
+      "short_name": "茂林-KY"
+    },
+    {
+      "stock_id": "4938",
+      "market": "TWSE",
+      "name": "和碩",
+      "short_name": "和碩"
+    },
+    {
+      "stock_id": "4942",
+      "market": "TWSE",
+      "name": "嘉彰",
+      "short_name": "嘉彰"
+    },
+    {
+      "stock_id": "4943",
+      "market": "TWSE",
+      "name": "康控-KY",
+      "short_name": "康控-KY"
+    },
+    {
+      "stock_id": "4949",
+      "market": "TWSE",
+      "name": "有成精密",
+      "short_name": "有成精密"
+    },
+    {
+      "stock_id": "4952",
+      "market": "TWSE",
+      "name": "凌通",
+      "short_name": "凌通"
+    },
+    {
+      "stock_id": "4956",
+      "market": "TWSE",
+      "name": "光鋐",
+      "short_name": "光鋐"
+    },
+    {
+      "stock_id": "4958",
+      "market": "TWSE",
+      "name": "臻鼎-KY",
+      "short_name": "臻鼎-KY"
+    },
+    {
+      "stock_id": "4960",
+      "market": "TWSE",
+      "name": "誠美材",
+      "short_name": "誠美材"
+    },
+    {
+      "stock_id": "4961",
+      "market": "TWSE",
+      "name": "天鈺",
+      "short_name": "天鈺"
+    },
+    {
+      "stock_id": "4967",
+      "market": "TWSE",
+      "name": "十銓",
+      "short_name": "十銓"
+    },
+    {
+      "stock_id": "4968",
+      "market": "TWSE",
+      "name": "立積",
+      "short_name": "立積"
+    },
+    {
+      "stock_id": "4976",
+      "market": "TWSE",
+      "name": "佳凌",
+      "short_name": "佳凌"
+    },
+    {
+      "stock_id": "4977",
+      "market": "TWSE",
+      "name": "眾達-KY",
+      "short_name": "眾達-KY"
+    },
+    {
+      "stock_id": "4989",
+      "market": "TWSE",
+      "name": "榮科",
+      "short_name": "榮科"
+    },
+    {
+      "stock_id": "4994",
+      "market": "TWSE",
+      "name": "傳奇",
+      "short_name": "傳奇"
+    },
+    {
+      "stock_id": "4999",
+      "market": "TWSE",
+      "name": "鑫禾",
+      "short_name": "鑫禾"
+    },
+    {
+      "stock_id": "5007",
+      "market": "TWSE",
+      "name": "三星",
+      "short_name": "三星"
+    },
+    {
+      "stock_id": "5203",
+      "market": "TWSE",
+      "name": "訊連",
+      "short_name": "訊連"
+    },
+    {
+      "stock_id": "5215",
+      "market": "TWSE",
+      "name": "科嘉-KY",
+      "short_name": "科嘉-KY"
+    },
+    {
+      "stock_id": "5222",
+      "market": "TWSE",
+      "name": "全訊",
+      "short_name": "全訊"
+    },
+    {
+      "stock_id": "5225",
+      "market": "TWSE",
+      "name": "東科-KY",
+      "short_name": "東科-KY"
+    },
+    {
+      "stock_id": "5234",
+      "market": "TWSE",
+      "name": "達興材料",
+      "short_name": "達興材料"
+    },
+    {
+      "stock_id": "5243",
+      "market": "TWSE",
+      "name": "乙盛-KY",
+      "short_name": "乙盛-KY"
+    },
+    {
+      "stock_id": "5244",
+      "market": "TWSE",
+      "name": "弘凱",
+      "short_name": "弘凱"
+    },
+    {
+      "stock_id": "5258",
+      "market": "TWSE",
+      "name": "虹堡",
+      "short_name": "虹堡"
+    },
+    {
+      "stock_id": "5269",
+      "market": "TWSE",
+      "name": "祥碩",
+      "short_name": "祥碩"
+    },
+    {
+      "stock_id": "5283",
+      "market": "TWSE",
+      "name": "禾聯碩",
+      "short_name": "禾聯碩"
+    },
+    {
+      "stock_id": "5284",
+      "market": "TWSE",
+      "name": "jpp-KY",
+      "short_name": "jpp-KY"
+    },
+    {
+      "stock_id": "5285",
+      "market": "TWSE",
+      "name": "界霖",
+      "short_name": "界霖"
+    },
+    {
+      "stock_id": "5288",
+      "market": "TWSE",
+      "name": "豐祥-KY",
+      "short_name": "豐祥-KY"
+    },
+    {
+      "stock_id": "5292",
+      "market": "TWSE",
+      "name": "華懋",
+      "short_name": "華懋"
+    },
+    {
+      "stock_id": "5306",
+      "market": "TWSE",
+      "name": "桂盟",
+      "short_name": "桂盟"
+    },
+    {
+      "stock_id": "5388",
+      "market": "TWSE",
+      "name": "中磊",
+      "short_name": "中磊"
+    },
+    {
+      "stock_id": "5434",
+      "market": "TWSE",
+      "name": "崇越",
+      "short_name": "崇越"
+    },
+    {
+      "stock_id": "5469",
+      "market": "TWSE",
+      "name": "瀚宇博",
+      "short_name": "瀚宇博"
+    },
+    {
+      "stock_id": "5471",
+      "market": "TWSE",
+      "name": "松翰",
+      "short_name": "松翰"
+    },
+    {
+      "stock_id": "5484",
+      "market": "TWSE",
+      "name": "慧友",
+      "short_name": "慧友"
+    },
+    {
+      "stock_id": "5515",
+      "market": "TWSE",
+      "name": "建國",
+      "short_name": "建國"
+    },
+    {
+      "stock_id": "5519",
+      "market": "TWSE",
+      "name": "隆大",
+      "short_name": "隆大"
+    },
+    {
+      "stock_id": "5521",
+      "market": "TWSE",
+      "name": "工信",
+      "short_name": "工信"
+    },
+    {
+      "stock_id": "5522",
+      "market": "TWSE",
+      "name": "遠雄",
+      "short_name": "遠雄"
+    },
+    {
+      "stock_id": "5525",
+      "market": "TWSE",
+      "name": "順天",
+      "short_name": "順天"
+    },
+    {
+      "stock_id": "5531",
+      "market": "TWSE",
+      "name": "鄉林",
+      "short_name": "鄉林"
+    },
+    {
+      "stock_id": "5533",
+      "market": "TWSE",
+      "name": "皇鼎",
+      "short_name": "皇鼎"
+    },
+    {
+      "stock_id": "5534",
+      "market": "TWSE",
+      "name": "長虹",
+      "short_name": "長虹"
+    },
+    {
+      "stock_id": "5538",
+      "market": "TWSE",
+      "name": "東明-KY",
+      "short_name": "東明-KY"
+    },
+    {
+      "stock_id": "5546",
+      "market": "TWSE",
+      "name": "永固-KY",
+      "short_name": "永固-KY"
+    },
+    {
+      "stock_id": "5607",
+      "market": "TWSE",
+      "name": "遠雄港",
+      "short_name": "遠雄港"
+    },
+    {
+      "stock_id": "5608",
+      "market": "TWSE",
+      "name": "四維航",
+      "short_name": "四維航"
+    },
+    {
+      "stock_id": "5706",
+      "market": "TWSE",
+      "name": "鳳凰",
+      "short_name": "鳳凰"
+    },
+    {
+      "stock_id": "5871",
+      "market": "TWSE",
+      "name": "中租-KY",
+      "short_name": "中租-KY"
+    },
+    {
+      "stock_id": "5876",
+      "market": "TWSE",
+      "name": "上海商銀",
+      "short_name": "上海商銀"
+    },
+    {
+      "stock_id": "5880",
+      "market": "TWSE",
+      "name": "合庫金",
+      "short_name": "合庫金"
+    },
+    {
+      "stock_id": "5906",
+      "market": "TWSE",
+      "name": "台南-KY",
+      "short_name": "台南-KY"
+    },
+    {
+      "stock_id": "5907",
+      "market": "TWSE",
+      "name": "大洋-KY",
+      "short_name": "大洋-KY"
+    },
+    {
+      "stock_id": "6005",
+      "market": "TWSE",
+      "name": "群益證",
+      "short_name": "群益證"
+    },
+    {
+      "stock_id": "6024",
+      "market": "TWSE",
+      "name": "群益期",
+      "short_name": "群益期"
+    },
+    {
+      "stock_id": "6108",
+      "market": "TWSE",
+      "name": "競國",
+      "short_name": "競國"
+    },
+    {
+      "stock_id": "6112",
+      "market": "TWSE",
+      "name": "邁達特",
+      "short_name": "邁達特"
+    },
+    {
+      "stock_id": "6115",
+      "market": "TWSE",
+      "name": "鎰勝",
+      "short_name": "鎰勝"
+    },
+    {
+      "stock_id": "6116",
+      "market": "TWSE",
+      "name": "彩晶",
+      "short_name": "彩晶"
+    },
+    {
+      "stock_id": "6117",
+      "market": "TWSE",
+      "name": "迎廣",
+      "short_name": "迎廣"
+    },
+    {
+      "stock_id": "6120",
+      "market": "TWSE",
+      "name": "達運",
+      "short_name": "達運"
+    },
+    {
+      "stock_id": "6128",
+      "market": "TWSE",
+      "name": "上福",
+      "short_name": "上福"
+    },
+    {
+      "stock_id": "6133",
+      "market": "TWSE",
+      "name": "金橋",
+      "short_name": "金橋"
+    },
+    {
+      "stock_id": "6136",
+      "market": "TWSE",
+      "name": "富爾特",
+      "short_name": "富爾特"
+    },
+    {
+      "stock_id": "6139",
+      "market": "TWSE",
+      "name": "亞翔",
+      "short_name": "亞翔"
+    },
+    {
+      "stock_id": "6141",
+      "market": "TWSE",
+      "name": "柏承",
+      "short_name": "柏承"
+    },
+    {
+      "stock_id": "6142",
+      "market": "TWSE",
+      "name": "友勁",
+      "short_name": "友勁"
+    },
+    {
+      "stock_id": "6152",
+      "market": "TWSE",
+      "name": "百一",
+      "short_name": "百一"
+    },
+    {
+      "stock_id": "6153",
+      "market": "TWSE",
+      "name": "嘉聯益",
+      "short_name": "嘉聯益"
+    },
+    {
+      "stock_id": "6155",
+      "market": "TWSE",
+      "name": "鈞寶",
+      "short_name": "鈞寶"
+    },
+    {
+      "stock_id": "6164",
+      "market": "TWSE",
+      "name": "華興",
+      "short_name": "華興"
+    },
+    {
+      "stock_id": "6165",
+      "market": "TWSE",
+      "name": "浪凡",
+      "short_name": "浪凡"
+    },
+    {
+      "stock_id": "6166",
+      "market": "TWSE",
+      "name": "凌華",
+      "short_name": "凌華"
+    },
+    {
+      "stock_id": "6168",
+      "market": "TWSE",
+      "name": "宏齊",
+      "short_name": "宏齊"
+    },
+    {
+      "stock_id": "6176",
+      "market": "TWSE",
+      "name": "瑞儀",
+      "short_name": "瑞儀"
+    },
+    {
+      "stock_id": "6177",
+      "market": "TWSE",
+      "name": "達麗",
+      "short_name": "達麗"
+    },
+    {
+      "stock_id": "6183",
+      "market": "TWSE",
+      "name": "關貿",
+      "short_name": "關貿"
+    },
+    {
+      "stock_id": "6184",
+      "market": "TWSE",
+      "name": "大豐電",
+      "short_name": "大豐電"
+    },
+    {
+      "stock_id": "6189",
+      "market": "TWSE",
+      "name": "豐藝",
+      "short_name": "豐藝"
+    },
+    {
+      "stock_id": "6191",
+      "market": "TWSE",
+      "name": "精成科",
+      "short_name": "精成科"
+    },
+    {
+      "stock_id": "6192",
+      "market": "TWSE",
+      "name": "巨路",
+      "short_name": "巨路"
+    },
+    {
+      "stock_id": "6196",
+      "market": "TWSE",
+      "name": "帆宣",
+      "short_name": "帆宣"
+    },
+    {
+      "stock_id": "6197",
+      "market": "TWSE",
+      "name": "佳必琪",
+      "short_name": "佳必琪"
+    },
+    {
+      "stock_id": "6201",
+      "market": "TWSE",
+      "name": "亞弘電",
+      "short_name": "亞弘電"
+    },
+    {
+      "stock_id": "6202",
+      "market": "TWSE",
+      "name": "盛群",
+      "short_name": "盛群"
+    },
+    {
+      "stock_id": "6205",
+      "market": "TWSE",
+      "name": "詮欣",
+      "short_name": "詮欣"
+    },
+    {
+      "stock_id": "6206",
+      "market": "TWSE",
+      "name": "飛捷",
+      "short_name": "飛捷"
+    },
+    {
+      "stock_id": "6209",
+      "market": "TWSE",
+      "name": "今國光",
+      "short_name": "今國光"
+    },
+    {
+      "stock_id": "6213",
+      "market": "TWSE",
+      "name": "聯茂",
+      "short_name": "聯茂"
+    },
+    {
+      "stock_id": "6214",
+      "market": "TWSE",
+      "name": "精誠",
+      "short_name": "精誠"
+    },
+    {
+      "stock_id": "6215",
+      "market": "TWSE",
+      "name": "和椿",
+      "short_name": "和椿"
+    },
+    {
+      "stock_id": "6216",
+      "market": "TWSE",
+      "name": "居易",
+      "short_name": "居易"
+    },
+    {
+      "stock_id": "6224",
+      "market": "TWSE",
+      "name": "聚鼎",
+      "short_name": "聚鼎"
+    },
+    {
+      "stock_id": "6225",
+      "market": "TWSE",
+      "name": "天瀚",
+      "short_name": "天瀚"
+    },
+    {
+      "stock_id": "6226",
+      "market": "TWSE",
+      "name": "光鼎",
+      "short_name": "光鼎"
+    },
+    {
+      "stock_id": "6230",
+      "market": "TWSE",
+      "name": "尼得科超眾",
+      "short_name": "尼得科超眾"
+    },
+    {
+      "stock_id": "6235",
+      "market": "TWSE",
+      "name": "華孚",
+      "short_name": "華孚"
+    },
+    {
+      "stock_id": "6239",
+      "market": "TWSE",
+      "name": "力成",
+      "short_name": "力成"
+    },
+    {
+      "stock_id": "6243",
+      "market": "TWSE",
+      "name": "迅杰",
+      "short_name": "迅杰"
+    },
+    {
+      "stock_id": "6257",
+      "market": "TWSE",
+      "name": "矽格",
+      "short_name": "矽格"
+    },
+    {
+      "stock_id": "6269",
+      "market": "TWSE",
+      "name": "台郡",
+      "short_name": "台郡"
+    },
+    {
+      "stock_id": "6271",
+      "market": "TWSE",
+      "name": "同欣電",
+      "short_name": "同欣電"
+    },
+    {
+      "stock_id": "6272",
+      "market": "TWSE",
+      "name": "驊陞",
+      "short_name": "驊陞"
+    },
+    {
+      "stock_id": "6277",
+      "market": "TWSE",
+      "name": "宏正",
+      "short_name": "宏正"
+    },
+    {
+      "stock_id": "6278",
+      "market": "TWSE",
+      "name": "台表科",
+      "short_name": "台表科"
+    },
+    {
+      "stock_id": "6281",
+      "market": "TWSE",
+      "name": "全國電",
+      "short_name": "全國電"
+    },
+    {
+      "stock_id": "6282",
+      "market": "TWSE",
+      "name": "康舒",
+      "short_name": "康舒"
+    },
+    {
+      "stock_id": "6283",
+      "market": "TWSE",
+      "name": "淳安",
+      "short_name": "淳安"
+    },
+    {
+      "stock_id": "6285",
+      "market": "TWSE",
+      "name": "啟碁",
+      "short_name": "啟碁"
+    },
+    {
+      "stock_id": "6405",
+      "market": "TWSE",
+      "name": "悅城",
+      "short_name": "悅城"
+    },
+    {
+      "stock_id": "6409",
+      "market": "TWSE",
+      "name": "旭隼",
+      "short_name": "旭隼"
+    },
+    {
+      "stock_id": "6412",
+      "market": "TWSE",
+      "name": "群電",
+      "short_name": "群電"
+    },
+    {
+      "stock_id": "6414",
+      "market": "TWSE",
+      "name": "樺漢",
+      "short_name": "樺漢"
+    },
+    {
+      "stock_id": "6415",
+      "market": "TWSE",
+      "name": "矽力*-KY",
+      "short_name": "矽力*-KY"
+    },
+    {
+      "stock_id": "6416",
+      "market": "TWSE",
+      "name": "瑞祺電通",
+      "short_name": "瑞祺電通"
+    },
+    {
+      "stock_id": "6426",
+      "market": "TWSE",
+      "name": "統新",
+      "short_name": "統新"
+    },
+    {
+      "stock_id": "6431",
+      "market": "TWSE",
+      "name": "光麗-KY",
+      "short_name": "光麗-KY"
+    },
+    {
+      "stock_id": "6438",
+      "market": "TWSE",
+      "name": "迅得",
+      "short_name": "迅得"
+    },
+    {
+      "stock_id": "6442",
+      "market": "TWSE",
+      "name": "光聖",
+      "short_name": "光聖"
+    },
+    {
+      "stock_id": "6443",
+      "market": "TWSE",
+      "name": "元晶",
+      "short_name": "元晶"
+    },
+    {
+      "stock_id": "6446",
+      "market": "TWSE",
+      "name": "藥華藥",
+      "short_name": "藥華藥"
+    },
+    {
+      "stock_id": "6449",
+      "market": "TWSE",
+      "name": "鈺邦",
+      "short_name": "鈺邦"
+    },
+    {
+      "stock_id": "6451",
+      "market": "TWSE",
+      "name": "訊芯-KY",
+      "short_name": "訊芯-KY"
+    },
+    {
+      "stock_id": "6456",
+      "market": "TWSE",
+      "name": "GIS-KY",
+      "short_name": "GIS-KY"
+    },
+    {
+      "stock_id": "6464",
+      "market": "TWSE",
+      "name": "台數科",
+      "short_name": "台數科"
+    },
+    {
+      "stock_id": "6472",
+      "market": "TWSE",
+      "name": "保瑞",
+      "short_name": "保瑞"
+    },
+    {
+      "stock_id": "6477",
+      "market": "TWSE",
+      "name": "安集",
+      "short_name": "安集"
+    },
+    {
+      "stock_id": "6491",
+      "market": "TWSE",
+      "name": "晶碩",
+      "short_name": "晶碩"
+    },
+    {
+      "stock_id": "6504",
+      "market": "TWSE",
+      "name": "南六",
+      "short_name": "南六"
+    },
+    {
+      "stock_id": "6505",
+      "market": "TWSE",
+      "name": "台塑化",
+      "short_name": "台塑化"
+    },
+    {
+      "stock_id": "6515",
+      "market": "TWSE",
+      "name": "穎崴",
+      "short_name": "穎崴"
+    },
+    {
+      "stock_id": "6525",
+      "market": "TWSE",
+      "name": "捷敏-KY",
+      "short_name": "捷敏-KY"
+    },
+    {
+      "stock_id": "6526",
+      "market": "TWSE",
+      "name": "達發",
+      "short_name": "達發"
+    },
+    {
+      "stock_id": "6531",
+      "market": "TWSE",
+      "name": "愛普*",
+      "short_name": "愛普*"
+    },
+    {
+      "stock_id": "6533",
+      "market": "TWSE",
+      "name": "晶心科",
+      "short_name": "晶心科"
+    },
+    {
+      "stock_id": "6534",
+      "market": "TWSE",
+      "name": "正瀚-創",
+      "short_name": "正瀚-創"
+    },
+    {
+      "stock_id": "6541",
+      "market": "TWSE",
+      "name": "泰福-KY",
+      "short_name": "泰福-KY"
+    },
+    {
+      "stock_id": "6550",
+      "market": "TWSE",
+      "name": "北極星藥業-KY",
+      "short_name": "北極星藥業-KY"
+    },
+    {
+      "stock_id": "6552",
+      "market": "TWSE",
+      "name": "易華電",
+      "short_name": "易華電"
+    },
+    {
+      "stock_id": "6558",
+      "market": "TWSE",
+      "name": "興能高",
+      "short_name": "興能高"
+    },
+    {
+      "stock_id": "6573",
+      "market": "TWSE",
+      "name": "虹揚-KY",
+      "short_name": "虹揚-KY"
+    },
+    {
+      "stock_id": "6579",
+      "market": "TWSE",
+      "name": "研揚",
+      "short_name": "研揚"
+    },
+    {
+      "stock_id": "6581",
+      "market": "TWSE",
+      "name": "鋼聯",
+      "short_name": "鋼聯"
+    },
+    {
+      "stock_id": "6582",
+      "market": "TWSE",
+      "name": "申豐",
+      "short_name": "申豐"
+    },
+    {
+      "stock_id": "6585",
+      "market": "TWSE",
+      "name": "鼎基",
+      "short_name": "鼎基"
+    },
+    {
+      "stock_id": "6589",
+      "market": "TWSE",
+      "name": "台康生技",
+      "short_name": "台康生技"
+    },
+    {
+      "stock_id": "6591",
+      "market": "TWSE",
+      "name": "動力-KY",
+      "short_name": "動力-KY"
+    },
+    {
+      "stock_id": "6592",
+      "market": "TWSE",
+      "name": "和潤企業",
+      "short_name": "和潤企業"
+    },
+    {
+      "stock_id": "6598",
+      "market": "TWSE",
+      "name": "ABC-KY",
+      "short_name": "ABC-KY"
+    },
+    {
+      "stock_id": "6605",
+      "market": "TWSE",
+      "name": "帝寶",
+      "short_name": "帝寶"
+    },
+    {
+      "stock_id": "6606",
+      "market": "TWSE",
+      "name": "建德工業",
+      "short_name": "建德工業"
+    },
+    {
+      "stock_id": "6614",
+      "market": "TWSE",
+      "name": "資拓宏宇",
+      "short_name": "資拓宏宇"
+    },
+    {
+      "stock_id": "6625",
+      "market": "TWSE",
+      "name": "必應",
+      "short_name": "必應"
+    },
+    {
+      "stock_id": "6641",
+      "market": "TWSE",
+      "name": "基士德-KY",
+      "short_name": "基士德-KY"
+    },
+    {
+      "stock_id": "6645",
+      "market": "TWSE",
+      "name": "金萬林-創",
+      "short_name": "金萬林-創"
+    },
+    {
+      "stock_id": "6655",
+      "market": "TWSE",
+      "name": "科定",
+      "short_name": "科定"
+    },
+    {
+      "stock_id": "6657",
+      "market": "TWSE",
+      "name": "華安",
+      "short_name": "華安"
+    },
+    {
+      "stock_id": "6658",
+      "market": "TWSE",
+      "name": "聯策",
+      "short_name": "聯策"
+    },
+    {
+      "stock_id": "6666",
+      "market": "TWSE",
+      "name": "羅麗芬-KY",
+      "short_name": "羅麗芬-KY"
+    },
+    {
+      "stock_id": "6668",
+      "market": "TWSE",
+      "name": "中揚光",
+      "short_name": "中揚光"
+    },
+    {
+      "stock_id": "6669",
+      "market": "TWSE",
+      "name": "緯穎",
+      "short_name": "緯穎"
+    },
+    {
+      "stock_id": "6670",
+      "market": "TWSE",
+      "name": "復盛應用",
+      "short_name": "復盛應用"
+    },
+    {
+      "stock_id": "6671",
+      "market": "TWSE",
+      "name": "三能-KY",
+      "short_name": "三能-KY"
+    },
+    {
+      "stock_id": "6672",
+      "market": "TWSE",
+      "name": "騰輝電子-KY",
+      "short_name": "騰輝電子-KY"
+    },
+    {
+      "stock_id": "6674",
+      "market": "TWSE",
+      "name": "鋐寶科技",
+      "short_name": "鋐寶科技"
+    },
+    {
+      "stock_id": "6689",
+      "market": "TWSE",
+      "name": "伊雲谷",
+      "short_name": "伊雲谷"
+    },
+    {
+      "stock_id": "6691",
+      "market": "TWSE",
+      "name": "洋基工程",
+      "short_name": "洋基工程"
+    },
+    {
+      "stock_id": "6695",
+      "market": "TWSE",
+      "name": "芯鼎",
+      "short_name": "芯鼎"
+    },
+    {
+      "stock_id": "6698",
+      "market": "TWSE",
+      "name": "旭暉應材",
+      "short_name": "旭暉應材"
+    },
+    {
+      "stock_id": "6706",
+      "market": "TWSE",
+      "name": "惠特",
+      "short_name": "惠特"
+    },
+    {
+      "stock_id": "6715",
+      "market": "TWSE",
+      "name": "嘉基",
+      "short_name": "嘉基"
+    },
+    {
+      "stock_id": "6719",
+      "market": "TWSE",
+      "name": "力智",
+      "short_name": "力智"
+    },
+    {
+      "stock_id": "6722",
+      "market": "TWSE",
+      "name": "輝創",
+      "short_name": "輝創"
+    },
+    {
+      "stock_id": "6742",
+      "market": "TWSE",
+      "name": "澤米",
+      "short_name": "澤米"
+    },
+    {
+      "stock_id": "6743",
+      "market": "TWSE",
+      "name": "安普新",
+      "short_name": "安普新"
+    },
+    {
+      "stock_id": "6753",
+      "market": "TWSE",
+      "name": "龍德造船",
+      "short_name": "龍德造船"
+    },
+    {
+      "stock_id": "6754",
+      "market": "TWSE",
+      "name": "匯僑設計",
+      "short_name": "匯僑設計"
+    },
+    {
+      "stock_id": "6756",
+      "market": "TWSE",
+      "name": "威鋒電子",
+      "short_name": "威鋒電子"
+    },
+    {
+      "stock_id": "6757",
+      "market": "TWSE",
+      "name": "台灣虎航",
+      "short_name": "台灣虎航"
+    },
+    {
+      "stock_id": "6768",
+      "market": "TWSE",
+      "name": "志強-KY",
+      "short_name": "志強-KY"
+    },
+    {
+      "stock_id": "6770",
+      "market": "TWSE",
+      "name": "力積電",
+      "short_name": "力積電"
+    },
+    {
+      "stock_id": "6771",
+      "market": "TWSE",
+      "name": "平和環保-創",
+      "short_name": "平和環保-創"
+    },
+    {
+      "stock_id": "6776",
+      "market": "TWSE",
+      "name": "展碁國際",
+      "short_name": "展碁國際"
+    },
+    {
+      "stock_id": "6781",
+      "market": "TWSE",
+      "name": "AES-KY",
+      "short_name": "AES-KY"
+    },
+    {
+      "stock_id": "6782",
+      "market": "TWSE",
+      "name": "視陽",
+      "short_name": "視陽"
+    },
+    {
+      "stock_id": "6789",
+      "market": "TWSE",
+      "name": "采鈺",
+      "short_name": "采鈺"
+    },
+    {
+      "stock_id": "6790",
+      "market": "TWSE",
+      "name": "永豐實",
+      "short_name": "永豐實"
+    },
+    {
+      "stock_id": "6792",
+      "market": "TWSE",
+      "name": "詠業",
+      "short_name": "詠業"
+    },
+    {
+      "stock_id": "6794",
+      "market": "TWSE",
+      "name": "向榮生技",
+      "short_name": "向榮生技"
+    },
+    {
+      "stock_id": "6796",
+      "market": "TWSE",
+      "name": "晉弘",
+      "short_name": "晉弘"
+    },
+    {
+      "stock_id": "6799",
+      "market": "TWSE",
+      "name": "來頡",
+      "short_name": "來頡"
+    },
+    {
+      "stock_id": "6805",
+      "market": "TWSE",
+      "name": "富世達",
+      "short_name": "富世達"
+    },
+    {
+      "stock_id": "6806",
+      "market": "TWSE",
+      "name": "森崴能源",
+      "short_name": "森崴能源"
+    },
+    {
+      "stock_id": "6807",
+      "market": "TWSE",
+      "name": "峰源-KY",
+      "short_name": "峰源-KY"
+    },
+    {
+      "stock_id": "6830",
+      "market": "TWSE",
+      "name": "汎銓",
+      "short_name": "汎銓"
+    },
+    {
+      "stock_id": "6831",
+      "market": "TWSE",
+      "name": "邁科",
+      "short_name": "邁科"
+    },
+    {
+      "stock_id": "6834",
+      "market": "TWSE",
+      "name": "天二科技",
+      "short_name": "天二科技"
+    },
+    {
+      "stock_id": "6835",
+      "market": "TWSE",
+      "name": "圓裕",
+      "short_name": "圓裕"
+    },
+    {
+      "stock_id": "6838",
+      "market": "TWSE",
+      "name": "台新藥",
+      "short_name": "台新藥"
+    },
+    {
+      "stock_id": "6854",
+      "market": "TWSE",
+      "name": "錼創科技-KY創",
+      "short_name": "錼創科技-KY創"
+    },
+    {
+      "stock_id": "6861",
+      "market": "TWSE",
+      "name": "睿生光電",
+      "short_name": "睿生光電"
+    },
+    {
+      "stock_id": "6862",
+      "market": "TWSE",
+      "name": "三集瑞-KY",
+      "short_name": "三集瑞-KY"
+    },
+    {
+      "stock_id": "6863",
+      "market": "TWSE",
+      "name": "永道-KY",
+      "short_name": "永道-KY"
+    },
+    {
+      "stock_id": "6869",
+      "market": "TWSE",
+      "name": "雲豹能源",
+      "short_name": "雲豹能源"
+    },
+    {
+      "stock_id": "6873",
+      "market": "TWSE",
+      "name": "泓德能源",
+      "short_name": "泓德能源"
+    },
+    {
+      "stock_id": "6885",
+      "market": "TWSE",
+      "name": "全福生技",
+      "short_name": "全福生技"
+    },
+    {
+      "stock_id": "6887",
+      "market": "TWSE",
+      "name": "寶綠特-KY",
+      "short_name": "寶綠特-KY"
+    },
+    {
+      "stock_id": "6890",
+      "market": "TWSE",
+      "name": "來億-KY",
+      "short_name": "來億-KY"
+    },
+    {
+      "stock_id": "6901",
+      "market": "TWSE",
+      "name": "鑽石投資",
+      "short_name": "鑽石投資"
+    },
+    {
+      "stock_id": "6902",
+      "market": "TWSE",
+      "name": "GOGOLOOK",
+      "short_name": "GOGOLOOK"
+    },
+    {
+      "stock_id": "6906",
+      "market": "TWSE",
+      "name": "現觀科",
+      "short_name": "現觀科"
+    },
+    {
+      "stock_id": "6909",
+      "market": "TWSE",
+      "name": "創控",
+      "short_name": "創控"
+    },
+    {
+      "stock_id": "6914",
+      "market": "TWSE",
+      "name": "阜爾運通",
+      "short_name": "阜爾運通"
+    },
+    {
+      "stock_id": "6916",
+      "market": "TWSE",
+      "name": "華凌",
+      "short_name": "華凌"
+    },
+    {
+      "stock_id": "6918",
+      "market": "TWSE",
+      "name": "愛派司",
+      "short_name": "愛派司"
+    },
+    {
+      "stock_id": "6919",
+      "market": "TWSE",
+      "name": "康霈*",
+      "short_name": "康霈*"
+    },
+    {
+      "stock_id": "6921",
+      "market": "TWSE",
+      "name": "嘉雨思-創",
+      "short_name": "嘉雨思-創"
+    },
+    {
+      "stock_id": "6923",
+      "market": "TWSE",
+      "name": "中台",
+      "short_name": "中台"
+    },
+    {
+      "stock_id": "6924",
+      "market": "TWSE",
+      "name": "榮惠-KY創",
+      "short_name": "榮惠-KY創"
+    },
+    {
+      "stock_id": "6928",
+      "market": "TWSE",
+      "name": "攸泰科技",
+      "short_name": "攸泰科技"
+    },
+    {
+      "stock_id": "6931",
+      "market": "TWSE",
+      "name": "青松健康",
+      "short_name": "青松健康"
+    },
+    {
+      "stock_id": "6933",
+      "market": "TWSE",
+      "name": "AMAX-KY",
+      "short_name": "AMAX-KY"
+    },
+    {
+      "stock_id": "6934",
+      "market": "TWSE",
+      "name": "心誠鎂",
+      "short_name": "心誠鎂"
+    },
+    {
+      "stock_id": "6936",
+      "market": "TWSE",
+      "name": "永鴻生技",
+      "short_name": "永鴻生技"
+    },
+    {
+      "stock_id": "6937",
+      "market": "TWSE",
+      "name": "天虹",
+      "short_name": "天虹"
+    },
+    {
+      "stock_id": "6944",
+      "market": "TWSE",
+      "name": "兆聯實業",
+      "short_name": "兆聯實業"
+    },
+    {
+      "stock_id": "6949",
+      "market": "TWSE",
+      "name": "沛爾生醫-創",
+      "short_name": "沛爾生醫-創"
+    },
+    {
+      "stock_id": "6951",
+      "market": "TWSE",
+      "name": "青新-創",
+      "short_name": "青新-創"
+    },
+    {
+      "stock_id": "6952",
+      "market": "TWSE",
+      "name": "大武山",
+      "short_name": "大武山"
+    },
+    {
+      "stock_id": "6955",
+      "market": "TWSE",
+      "name": "邦睿生技-創",
+      "short_name": "邦睿生技-創"
+    },
+    {
+      "stock_id": "6957",
+      "market": "TWSE",
+      "name": "裕慶-KY",
+      "short_name": "裕慶-KY"
+    },
+    {
+      "stock_id": "6958",
+      "market": "TWSE",
+      "name": "日盛台駿",
+      "short_name": "日盛台駿"
+    },
+    {
+      "stock_id": "6962",
+      "market": "TWSE",
+      "name": "奕力-KY",
+      "short_name": "奕力-KY"
+    },
+    {
+      "stock_id": "6965",
+      "market": "TWSE",
+      "name": "中傑-KY",
+      "short_name": "中傑-KY"
+    },
+    {
+      "stock_id": "6969",
+      "market": "TWSE",
+      "name": "成信實業*-創",
+      "short_name": "成信實業*-創"
+    },
+    {
+      "stock_id": "6988",
+      "market": "TWSE",
+      "name": "威力暘-創",
+      "short_name": "威力暘-創"
+    },
+    {
+      "stock_id": "6994",
+      "market": "TWSE",
+      "name": "富威電力",
+      "short_name": "富威電力"
+    },
+    {
+      "stock_id": "7610",
+      "market": "TWSE",
+      "name": "聯友金屬-創",
+      "short_name": "聯友金屬-創"
+    },
+    {
+      "stock_id": "7631",
+      "market": "TWSE",
+      "name": "聚賢研發-創",
+      "short_name": "聚賢研發-創"
+    },
+    {
+      "stock_id": "7705",
+      "market": "TWSE",
+      "name": "三商餐飲",
+      "short_name": "三商餐飲"
+    },
+    {
+      "stock_id": "7711",
+      "market": "TWSE",
+      "name": "永擎",
+      "short_name": "永擎"
+    },
+    {
+      "stock_id": "7721",
+      "market": "TWSE",
+      "name": "微程式",
+      "short_name": "微程式"
+    },
+    {
+      "stock_id": "7722",
+      "market": "TWSE",
+      "name": "LINEPAY",
+      "short_name": "LINEPAY"
+    },
+    {
+      "stock_id": "7730",
+      "market": "TWSE",
+      "name": "暉盛-創",
+      "short_name": "暉盛-創"
+    },
+    {
+      "stock_id": "7732",
+      "market": "TWSE",
+      "name": "金興精密",
+      "short_name": "金興精密"
+    },
+    {
+      "stock_id": "7736",
+      "market": "TWSE",
+      "name": "虎山",
+      "short_name": "虎山"
+    },
+    {
+      "stock_id": "7740",
+      "market": "TWSE",
+      "name": "熙特爾-創",
+      "short_name": "熙特爾-創"
+    },
+    {
+      "stock_id": "7749",
+      "market": "TWSE",
+      "name": "意騰-KY",
+      "short_name": "意騰-KY"
+    },
+    {
+      "stock_id": "7750",
+      "market": "TWSE",
+      "name": "新代",
+      "short_name": "新代"
+    },
+    {
+      "stock_id": "7765",
+      "market": "TWSE",
+      "name": "中華資安",
+      "short_name": "中華資安"
+    },
+    {
+      "stock_id": "7769",
+      "market": "TWSE",
+      "name": "鴻勁",
+      "short_name": "鴻勁"
+    },
+    {
+      "stock_id": "7780",
+      "market": "TWSE",
+      "name": "大研生醫*",
+      "short_name": "大研生醫*"
+    },
+    {
+      "stock_id": "7786",
+      "market": "TWSE",
+      "name": "東方風能",
+      "short_name": "東方風能"
+    },
+    {
+      "stock_id": "7788",
+      "market": "TWSE",
+      "name": "松川精密",
+      "short_name": "松川精密"
+    },
+    {
+      "stock_id": "7791",
+      "market": "TWSE",
+      "name": "皇家可口",
+      "short_name": "皇家可口"
+    },
+    {
+      "stock_id": "7795",
+      "market": "TWSE",
+      "name": "長廣",
+      "short_name": "長廣"
+    },
+    {
+      "stock_id": "7799",
+      "market": "TWSE",
+      "name": "禾榮科",
+      "short_name": "禾榮科"
+    },
+    {
+      "stock_id": "7823",
+      "market": "TWSE",
+      "name": "奧義賽博-KY創",
+      "short_name": "奧義賽博-KY創"
+    },
+    {
+      "stock_id": "8011",
+      "market": "TWSE",
+      "name": "台通",
+      "short_name": "台通"
+    },
+    {
+      "stock_id": "8016",
+      "market": "TWSE",
+      "name": "矽創",
+      "short_name": "矽創"
+    },
+    {
+      "stock_id": "8021",
+      "market": "TWSE",
+      "name": "尖點",
+      "short_name": "尖點"
+    },
+    {
+      "stock_id": "8028",
+      "market": "TWSE",
+      "name": "昇陽半導體",
+      "short_name": "昇陽半導體"
+    },
+    {
+      "stock_id": "8033",
+      "market": "TWSE",
+      "name": "雷虎",
+      "short_name": "雷虎"
+    },
+    {
+      "stock_id": "8039",
+      "market": "TWSE",
+      "name": "台虹",
+      "short_name": "台虹"
+    },
+    {
+      "stock_id": "8045",
+      "market": "TWSE",
+      "name": "達運光電",
+      "short_name": "達運光電"
+    },
+    {
+      "stock_id": "8046",
+      "market": "TWSE",
+      "name": "南電",
+      "short_name": "南電"
+    },
+    {
+      "stock_id": "8070",
+      "market": "TWSE",
+      "name": "長華*",
+      "short_name": "長華*"
+    },
+    {
+      "stock_id": "8072",
+      "market": "TWSE",
+      "name": "陞泰",
+      "short_name": "陞泰"
+    },
+    {
+      "stock_id": "8081",
+      "market": "TWSE",
+      "name": "致新",
+      "short_name": "致新"
+    },
+    {
+      "stock_id": "8101",
+      "market": "TWSE",
+      "name": "華冠",
+      "short_name": "華冠"
+    },
+    {
+      "stock_id": "8103",
+      "market": "TWSE",
+      "name": "瀚荃",
+      "short_name": "瀚荃"
+    },
+    {
+      "stock_id": "8104",
+      "market": "TWSE",
+      "name": "錸寶",
+      "short_name": "錸寶"
+    },
+    {
+      "stock_id": "8105",
+      "market": "TWSE",
+      "name": "凌巨",
+      "short_name": "凌巨"
+    },
+    {
+      "stock_id": "8110",
+      "market": "TWSE",
+      "name": "華東",
+      "short_name": "華東"
+    },
+    {
+      "stock_id": "8112",
+      "market": "TWSE",
+      "name": "至上",
+      "short_name": "至上"
+    },
+    {
+      "stock_id": "8114",
+      "market": "TWSE",
+      "name": "振樺電",
+      "short_name": "振樺電"
+    },
+    {
+      "stock_id": "8131",
+      "market": "TWSE",
+      "name": "福懋科",
+      "short_name": "福懋科"
+    },
+    {
+      "stock_id": "8150",
+      "market": "TWSE",
+      "name": "南茂",
+      "short_name": "南茂"
+    },
+    {
+      "stock_id": "8162",
+      "market": "TWSE",
+      "name": "微矽電子-創",
+      "short_name": "微矽電子-創"
+    },
+    {
+      "stock_id": "8163",
+      "market": "TWSE",
+      "name": "達方",
+      "short_name": "達方"
+    },
+    {
+      "stock_id": "8201",
+      "market": "TWSE",
+      "name": "無敵",
+      "short_name": "無敵"
+    },
+    {
+      "stock_id": "8210",
+      "market": "TWSE",
+      "name": "勤誠",
+      "short_name": "勤誠"
+    },
+    {
+      "stock_id": "8213",
+      "market": "TWSE",
+      "name": "志超",
+      "short_name": "志超"
+    },
+    {
+      "stock_id": "8215",
+      "market": "TWSE",
+      "name": "明基材",
+      "short_name": "明基材"
+    },
+    {
+      "stock_id": "8222",
+      "market": "TWSE",
+      "name": "寶一",
+      "short_name": "寶一"
+    },
+    {
+      "stock_id": "8249",
+      "market": "TWSE",
+      "name": "菱光",
+      "short_name": "菱光"
+    },
+    {
+      "stock_id": "8261",
+      "market": "TWSE",
+      "name": "富鼎",
+      "short_name": "富鼎"
+    },
+    {
+      "stock_id": "8271",
+      "market": "TWSE",
+      "name": "宇瞻",
+      "short_name": "宇瞻"
+    },
+    {
+      "stock_id": "8341",
+      "market": "TWSE",
+      "name": "日友",
+      "short_name": "日友"
+    },
+    {
+      "stock_id": "8367",
+      "market": "TWSE",
+      "name": "建新國際",
+      "short_name": "建新國際"
+    },
+    {
+      "stock_id": "8374",
+      "market": "TWSE",
+      "name": "羅昇",
+      "short_name": "羅昇"
+    },
+    {
+      "stock_id": "8404",
+      "market": "TWSE",
+      "name": "百和興業-KY",
+      "short_name": "百和興業-KY"
+    },
+    {
+      "stock_id": "8411",
+      "market": "TWSE",
+      "name": "福貞-KY",
+      "short_name": "福貞-KY"
+    },
+    {
+      "stock_id": "8422",
+      "market": "TWSE",
+      "name": "可寧衛*",
+      "short_name": "可寧衛*"
+    },
+    {
+      "stock_id": "8429",
+      "market": "TWSE",
+      "name": "金麗-KY",
+      "short_name": "金麗-KY"
+    },
+    {
+      "stock_id": "8438",
+      "market": "TWSE",
+      "name": "昶昕",
+      "short_name": "昶昕"
+    },
+    {
+      "stock_id": "8442",
+      "market": "TWSE",
+      "name": "威宏-KY",
+      "short_name": "威宏-KY"
+    },
+    {
+      "stock_id": "8443",
+      "market": "TWSE",
+      "name": "阿瘦",
+      "short_name": "阿瘦"
+    },
+    {
+      "stock_id": "8454",
+      "market": "TWSE",
+      "name": "富邦媒",
+      "short_name": "富邦媒"
+    },
+    {
+      "stock_id": "8462",
+      "market": "TWSE",
+      "name": "柏文",
+      "short_name": "柏文"
+    },
+    {
+      "stock_id": "8463",
+      "market": "TWSE",
+      "name": "潤泰材",
+      "short_name": "潤泰材"
+    },
+    {
+      "stock_id": "8464",
+      "market": "TWSE",
+      "name": "億豐",
+      "short_name": "億豐"
+    },
+    {
+      "stock_id": "8466",
+      "market": "TWSE",
+      "name": "美吉吉-KY",
+      "short_name": "美吉吉-KY"
+    },
+    {
+      "stock_id": "8467",
+      "market": "TWSE",
+      "name": "波力-KY",
+      "short_name": "波力-KY"
+    },
+    {
+      "stock_id": "8473",
+      "market": "TWSE",
+      "name": "山林水",
+      "short_name": "山林水"
+    },
+    {
+      "stock_id": "8476",
+      "market": "TWSE",
+      "name": "台境*",
+      "short_name": "台境*"
+    },
+    {
+      "stock_id": "8478",
+      "market": "TWSE",
+      "name": "東哥遊艇",
+      "short_name": "東哥遊艇"
+    },
+    {
+      "stock_id": "8481",
+      "market": "TWSE",
+      "name": "政伸",
+      "short_name": "政伸"
+    },
+    {
+      "stock_id": "8482",
+      "market": "TWSE",
+      "name": "商億-KY",
+      "short_name": "商億-KY"
+    },
+    {
+      "stock_id": "8487",
+      "market": "TWSE",
+      "name": "愛爾達-創",
+      "short_name": "愛爾達-創"
+    },
+    {
+      "stock_id": "8488",
+      "market": "TWSE",
+      "name": "吉源-KY",
+      "short_name": "吉源-KY"
+    },
+    {
+      "stock_id": "8499",
+      "market": "TWSE",
+      "name": "鼎炫-KY",
+      "short_name": "鼎炫-KY"
+    },
+    {
+      "stock_id": "8926",
+      "market": "TWSE",
+      "name": "台汽電",
+      "short_name": "台汽電"
+    },
+    {
+      "stock_id": "8940",
+      "market": "TWSE",
+      "name": "新天地",
+      "short_name": "新天地"
+    },
+    {
+      "stock_id": "8996",
+      "market": "TWSE",
+      "name": "高力",
+      "short_name": "高力"
+    },
+    {
+      "stock_id": "9802",
+      "market": "TWSE",
+      "name": "鈺齊-KY",
+      "short_name": "鈺齊-KY"
+    },
+    {
+      "stock_id": "9902",
+      "market": "TWSE",
+      "name": "台火",
+      "short_name": "台火"
+    },
+    {
+      "stock_id": "9904",
+      "market": "TWSE",
+      "name": "寶成",
+      "short_name": "寶成"
+    },
+    {
+      "stock_id": "9905",
+      "market": "TWSE",
+      "name": "大華",
+      "short_name": "大華"
+    },
+    {
+      "stock_id": "9906",
+      "market": "TWSE",
+      "name": "欣巴巴",
+      "short_name": "欣巴巴"
+    },
+    {
+      "stock_id": "9907",
+      "market": "TWSE",
+      "name": "統一實",
+      "short_name": "統一實"
+    },
+    {
+      "stock_id": "9908",
+      "market": "TWSE",
+      "name": "大台北",
+      "short_name": "大台北"
+    },
+    {
+      "stock_id": "9910",
+      "market": "TWSE",
+      "name": "豐泰",
+      "short_name": "豐泰"
+    },
+    {
+      "stock_id": "9911",
+      "market": "TWSE",
+      "name": "櫻花",
+      "short_name": "櫻花"
+    },
+    {
+      "stock_id": "9912",
+      "market": "TWSE",
+      "name": "偉聯",
+      "short_name": "偉聯"
+    },
+    {
+      "stock_id": "9914",
+      "market": "TWSE",
+      "name": "美利達",
+      "short_name": "美利達"
+    },
+    {
+      "stock_id": "9917",
+      "market": "TWSE",
+      "name": "中保科",
+      "short_name": "中保科"
+    },
+    {
+      "stock_id": "9918",
+      "market": "TWSE",
+      "name": "欣天然",
+      "short_name": "欣天然"
+    },
+    {
+      "stock_id": "9919",
+      "market": "TWSE",
+      "name": "康那香",
+      "short_name": "康那香"
+    },
+    {
+      "stock_id": "9921",
+      "market": "TWSE",
+      "name": "巨大",
+      "short_name": "巨大"
+    },
+    {
+      "stock_id": "9924",
+      "market": "TWSE",
+      "name": "福興",
+      "short_name": "福興"
+    },
+    {
+      "stock_id": "9925",
+      "market": "TWSE",
+      "name": "新保",
+      "short_name": "新保"
+    },
+    {
+      "stock_id": "9926",
+      "market": "TWSE",
+      "name": "新海",
+      "short_name": "新海"
+    },
+    {
+      "stock_id": "9927",
+      "market": "TWSE",
+      "name": "泰銘",
+      "short_name": "泰銘"
+    },
+    {
+      "stock_id": "9928",
+      "market": "TWSE",
+      "name": "中視",
+      "short_name": "中視"
+    },
+    {
+      "stock_id": "9929",
+      "market": "TWSE",
+      "name": "秋雨",
+      "short_name": "秋雨"
+    },
+    {
+      "stock_id": "9930",
+      "market": "TWSE",
+      "name": "中聯資源",
+      "short_name": "中聯資源"
+    },
+    {
+      "stock_id": "9931",
+      "market": "TWSE",
+      "name": "欣高",
+      "short_name": "欣高"
+    },
+    {
+      "stock_id": "9933",
+      "market": "TWSE",
+      "name": "中鼎",
+      "short_name": "中鼎"
+    },
+    {
+      "stock_id": "9934",
+      "market": "TWSE",
+      "name": "成霖",
+      "short_name": "成霖"
+    },
+    {
+      "stock_id": "9935",
+      "market": "TWSE",
+      "name": "慶豐富",
+      "short_name": "慶豐富"
+    },
+    {
+      "stock_id": "9937",
+      "market": "TWSE",
+      "name": "全國",
+      "short_name": "全國"
+    },
+    {
+      "stock_id": "9938",
+      "market": "TWSE",
+      "name": "百和",
+      "short_name": "百和"
+    },
+    {
+      "stock_id": "9939",
+      "market": "TWSE",
+      "name": "宏全",
+      "short_name": "宏全"
+    },
+    {
+      "stock_id": "9940",
+      "market": "TWSE",
+      "name": "信義",
+      "short_name": "信義"
+    },
+    {
+      "stock_id": "9941",
+      "market": "TWSE",
+      "name": "裕融",
+      "short_name": "裕融"
+    },
+    {
+      "stock_id": "9942",
+      "market": "TWSE",
+      "name": "茂順",
+      "short_name": "茂順"
+    },
+    {
+      "stock_id": "9943",
+      "market": "TWSE",
+      "name": "好樂迪",
+      "short_name": "好樂迪"
+    },
+    {
+      "stock_id": "9944",
+      "market": "TWSE",
+      "name": "新麗",
+      "short_name": "新麗"
+    },
+    {
+      "stock_id": "9945",
+      "market": "TWSE",
+      "name": "潤泰新",
+      "short_name": "潤泰新"
+    },
+    {
+      "stock_id": "9946",
+      "market": "TWSE",
+      "name": "三發地產",
+      "short_name": "三發地產"
+    },
+    {
+      "stock_id": "9955",
+      "market": "TWSE",
+      "name": "佳龍",
+      "short_name": "佳龍"
+    },
+    {
+      "stock_id": "9958",
+      "market": "TWSE",
+      "name": "世紀鋼",
+      "short_name": "世紀鋼"
+    }
+  ]
+}

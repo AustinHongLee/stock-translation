@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+data/*.sqlite3
+data/*.sqlite3-*
+data/*.log
+
+# 建置產物（PyInstaller）
+build/
+dist/
+*.exe
+
+# 產生的快取（可由程式重新整理，不需版控）
+data/value_screener.json

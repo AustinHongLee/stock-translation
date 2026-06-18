@@ -1,0 +1,3818 @@
+const state = {
+  activeSheet: "dashboard",
+  activeStockId: null,
+  activeSummary: null,
+  activePayload: null,
+  portfolio: null,
+  watchlist: [],
+  screener: null,
+  screenerFilter: "value",
+  syncing: false,
+  syncStepTimer: null,
+  searchTimer: null,
+  searchRequestSeq: 0,
+  quoteTimer: null,
+  chartPrices: [],
+  chartHoverIndex: null,
+  glossary: {
+    entries: new Map(),
+    aliases: new Map(),
+    patterns: [],
+  },
+};
+
+const STOCK_SYNC_LOOKBACK_DAYS = 365 * 5;
+const SYNC_STEPS = [
+  ["公司資料", "確認股票代號、名稱與市場。"],
+  ["股利資料", "抓最近股利與歷史除息紀錄。"],
+  ["日線價格", "抓近 5 年日成交資料。"],
+  ["估值資料", "抓本益比、殖利率與股價淨值比。"],
+  ["營收財報", "補每月營收與最近財報。"],
+  ["等待資料源", "如果停在這裡，通常是後端還在等證交所回應或重試。"],
+  ["整理畫面", "資料回來後才會產生白話摘要，這一步本身很快。"],
+];
+
+const elements = {
+  dataStatus: document.querySelector("#dataStatus"),
+  navButtons: document.querySelectorAll("[data-nav-button]"),
+  sheetTriggers: document.querySelectorAll("[data-sheet-target]"),
+  searchForm: document.querySelector("#searchForm"),
+  searchInput: document.querySelector("#searchInput"),
+  searchSuggestions: document.querySelector("#searchSuggestions"),
+  localStocks: document.querySelector("#localStocks"),
+  refreshLocalButton: document.querySelector("#refreshLocalButton"),
+  dashboardSheet: document.querySelector("#dashboardSheet"),
+  dashboardGreeting: document.querySelector("#dashboardGreeting"),
+  dashboardTotalValue: document.querySelector("#dashboardTotalValue"),
+  dashboardReturn: document.querySelector("#dashboardReturn"),
+  dashboardAlerts: document.querySelector("#dashboardAlerts"),
+  dashboardBrief: document.querySelector("#dashboardBrief"),
+  dashboardHoldings: document.querySelector("#dashboardHoldings"),
+  dashboardWatchlist: document.querySelector("#dashboardWatchlist"),
+  dashboardRefreshButton: document.querySelector("#dashboardRefreshButton"),
+  quickSyncButton: document.querySelector("#quickSyncButton"),
+  screenerSheet: document.querySelector("#screenerSheet"),
+  dataSheet: document.querySelector("#dataSheet"),
+  localDataRows: document.querySelector("#localDataRows"),
+  localDataSummary: document.querySelector("#localDataSummary"),
+  levelsRadarList: document.querySelector("#levelsRadarList"),
+  screenerIllustration: document.querySelector("#screenerIllustration"),
+  screenerRadarImage: document.querySelector("#screenerRadarImage"),
+  screenerStatus: document.querySelector("#screenerStatus"),
+  refreshScreenerButton: document.querySelector("#refreshScreenerButton"),
+  screenerExportButton: document.querySelector("#screenerExportButton"),
+  newsStatus: document.querySelector("#newsStatus"),
+  newsOverall: document.querySelector("#newsOverall"),
+  newsList: document.querySelector("#newsList"),
+  newsChip: document.querySelector("#newsChip"),
+  newsChipText: document.querySelector("#newsChipText"),
+  newsChipTop: document.querySelector("#newsChipTop"),
+  newsSummaryRiskRadar: document.querySelector("#newsSummaryRiskRadar"),
+  newsRiskRadar: document.querySelector("#newsRiskRadar"),
+  chipsCard: document.querySelector("#chipsCard"),
+  assessmentCard: document.querySelector("#assessmentCard"),
+  loadChipsButton: document.querySelector("#loadChipsButton"),
+  screenerAvailable: document.querySelector("#screenerAvailable"),
+  screenerBelowCheap: document.querySelector("#screenerBelowCheap"),
+  screenerNearCheap: document.querySelector("#screenerNearCheap"),
+  screenerComplete: document.querySelector("#screenerComplete"),
+  screenerUpdatedAt: document.querySelector("#screenerUpdatedAt"),
+  screenerHighConfList: document.querySelector("#screenerHighConfList"),
+  screenerLowConfList: document.querySelector("#screenerLowConfList"),
+  screenerLowConfCard: document.querySelector("#screenerLowConfCard"),
+  screenerLowConfToggleRow: document.querySelector("#screenerLowConfToggleRow"),
+  screenerLowConfToggle: document.querySelector("#screenerLowConfToggle"),
+  screenerLowConfCount: document.querySelector("#screenerLowConfCount"),
+  screenerYieldList: document.querySelector("#screenerYieldList"),
+  screenerTrapList: document.querySelector("#screenerTrapList"),
+  screenerTrapCard: document.querySelector("#screenerTrapCard"),
+  screenerGainersList: document.querySelector("#screenerGainersList"),
+  screenerLosersList: document.querySelector("#screenerLosersList"),
+  message: document.querySelector("#message"),
+  portfolioStatus: document.querySelector("#portfolioStatus"),
+  portfolioSentence: document.querySelector("#portfolioSentence"),
+  portfolioPositionCount: document.querySelector("#portfolioPositionCount"),
+  portfolioCostBasis: document.querySelector("#portfolioCostBasis"),
+  portfolioMarketValue: document.querySelector("#portfolioMarketValue"),
+  portfolioUnrealized: document.querySelector("#portfolioUnrealized"),
+  portfolioRealized: document.querySelector("#portfolioRealized"),
+  portfolioCashDividends: document.querySelector("#portfolioCashDividends"),
+  portfolioTotalReturn: document.querySelector("#portfolioTotalReturn"),
+  portfolioXirr: document.querySelector("#portfolioXirr"),
+  portfolioBenchmark: document.querySelector("#portfolioBenchmark"),
+  portfolioForm: document.querySelector("#portfolioForm"),
+  portfolioTransactionId: document.querySelector("#portfolioTransactionId"),
+  portfolioStockId: document.querySelector("#portfolioStockId"),
+  portfolioTradeDate: document.querySelector("#portfolioTradeDate"),
+  portfolioSide: document.querySelector("#portfolioSide"),
+  portfolioShares: document.querySelector("#portfolioShares"),
+  portfolioPrice: document.querySelector("#portfolioPrice"),
+  portfolioFee: document.querySelector("#portfolioFee"),
+  portfolioTax: document.querySelector("#portfolioTax"),
+  portfolioNote: document.querySelector("#portfolioNote"),
+  portfolioStockSuggest: document.querySelector("#portfolioStockSuggest"),
+  portfolioPriceHint: document.querySelector("#portfolioPriceHint"),
+  portfolioSubmitButton: document.querySelector("#portfolioSubmitButton"),
+  portfolioResetButton: document.querySelector("#portfolioResetButton"),
+  portfolioRows: document.querySelector("#portfolioRows"),
+  portfolioTransactionRows: document.querySelector("#portfolioTransactionRows"),
+  portfolioTransactionCount: document.querySelector("#portfolioTransactionCount"),
+  portfolioLimitations: document.querySelector("#portfolioLimitations"),
+  portfolioExpertChecks: document.querySelector("#portfolioExpertChecks"),
+  portfolioExportButton: document.querySelector("#portfolioExportButton"),
+  portfolioPanel: document.querySelector("#portfolioPanel"),
+  emptyState: document.querySelector("#emptyState"),
+  stockView: document.querySelector("#stockView"),
+  stockMarket: document.querySelector("#stockMarket"),
+  stockTitle: document.querySelector("#stockTitle"),
+  stockHeaderPrice: document.querySelector("#stockHeaderPrice"),
+  stockHeaderChange: document.querySelector("#stockHeaderChange"),
+  stockHeaderPriceLabel: document.querySelector("#stockHeaderPriceLabel"),
+  etfNote: document.querySelector("#etfNote"),
+  stockSubtitle: document.querySelector("#stockSubtitle"),
+  stockDataNote: document.querySelector("#stockDataNote"),
+  syncProgressPanel: document.querySelector("#syncProgressPanel"),
+  syncProgressTitle: document.querySelector("#syncProgressTitle"),
+  syncProgressDetail: document.querySelector("#syncProgressDetail"),
+  syncProgressSteps: document.querySelector("#syncProgressSteps"),
+  syncButton: document.querySelector("#syncButton"),
+  watchlistButton: document.querySelector("#watchlistButton"),
+  buyStockButton: document.querySelector("#buyStockButton"),
+  stockExportButton: document.querySelector("#stockExportButton"),
+  quoteStatus: document.querySelector("#quoteStatus"),
+  quotePriceLabel: document.querySelector("#quotePriceLabel"),
+  quotePrice: document.querySelector("#quotePrice"),
+  quoteTime: document.querySelector("#quoteTime"),
+  quoteChangeLabel: document.querySelector("#quoteChangeLabel"),
+  quoteChange: document.querySelector("#quoteChange"),
+  quotePreviousClose: document.querySelector("#quotePreviousClose"),
+  quoteDayRange: document.querySelector("#quoteDayRange"),
+  quoteOpen: document.querySelector("#quoteOpen"),
+  quoteBidAsk: document.querySelector("#quoteBidAsk"),
+  quoteSpread: document.querySelector("#quoteSpread"),
+  quoteNote: document.querySelector("#quoteNote"),
+  companyBriefTitle: document.querySelector("#companyBriefTitle"),
+  companyBriefText: document.querySelector("#companyBriefText"),
+  companyRiskTags: document.querySelector("#companyRiskTags"),
+  companyBriefAdvice: document.querySelector("#companyBriefAdvice"),
+  latestClose: document.querySelector("#latestClose"),
+  dailyChangeLabel: document.querySelector("#dailyChangeLabel"),
+  dailyChange: document.querySelector("#dailyChange"),
+  pricePosition: document.querySelector("#pricePosition"),
+  rowCount: document.querySelector("#rowCount"),
+  revenueStatus: document.querySelector("#revenueStatus"),
+  revenueSummaryTitle: document.querySelector("#revenueSummaryTitle"),
+  revenueSummaryValue: document.querySelector("#revenueSummaryValue"),
+  revenueSummaryText: document.querySelector("#revenueSummaryText"),
+  revenueMom: document.querySelector("#revenueMom"),
+  revenueYoy: document.querySelector("#revenueYoy"),
+  revenueCumulativeYoy: document.querySelector("#revenueCumulativeYoy"),
+  revenueRows: document.querySelector("#revenueRows"),
+  financialStatus: document.querySelector("#financialStatus"),
+  financialSummaryTitle: document.querySelector("#financialSummaryTitle"),
+  financialSummaryValue: document.querySelector("#financialSummaryValue"),
+  financialSummaryText: document.querySelector("#financialSummaryText"),
+  netMargin: document.querySelector("#netMargin"),
+  roeValue: document.querySelector("#roeValue"),
+  roaValue: document.querySelector("#roaValue"),
+  financialRows: document.querySelector("#financialRows"),
+  priceChartTitle: document.querySelector("#priceChartTitle"),
+  dateRange: document.querySelector("#dateRange"),
+  validationItems: document.querySelector("#validationItems"),
+  reportEngine: document.querySelector("#reportEngine"),
+  healthReport: document.querySelector("#healthReport"),
+  reportDisclaimer: document.querySelector("#reportDisclaimer"),
+  avgCashDividend: document.querySelector("#avgCashDividend"),
+  dividendCoverage: document.querySelector("#dividendCoverage"),
+  peRatio: document.querySelector("#peRatio"),
+  marketDate: document.querySelector("#marketDate"),
+  marketYield: document.querySelector("#marketYield"),
+  valuationSuitability: document.querySelector("#valuationSuitability"),
+  valuationBands: document.querySelector("#valuationBands"),
+  relativeValuation: document.querySelector("#relativeValuation"),
+  valuationDividendBody: document.querySelector("#valuationDividendBody"),
+  valuationEstimates: document.querySelector("#valuationEstimates"),
+  dividendAssumptionNote: document.querySelector("#dividendAssumptionNote"),
+  historicalYieldStatus: document.querySelector("#historicalYieldStatus"),
+  historicalYieldGrid: document.querySelector("#historicalYieldGrid"),
+  valuationWarning: document.querySelector("#valuationWarning"),
+  dividendRows: document.querySelector("#dividendRows"),
+  latestNote: document.querySelector("#latestNote"),
+  priceRows: document.querySelector("#priceRows"),
+  priceChart: document.querySelector("#priceChart"),
+  eventDate: document.querySelector("#eventDate"),
+  eventSummary: document.querySelector("#eventSummary"),
+  eventClose: document.querySelector("#eventClose"),
+  eventDayChange: document.querySelector("#eventDayChange"),
+  eventVolume: document.querySelector("#eventVolume"),
+  eventVolumeSignal: document.querySelector("#eventVolumeSignal"),
+  eventItems: document.querySelector("#eventItems"),
+  eventNewsLink: document.querySelector("#eventNewsLink"),
+  glossaryOverlay: document.querySelector("#glossaryOverlay"),
+  glossaryClose: document.querySelector("#glossaryClose"),
+  glossaryTitle: document.querySelector("#glossaryTitle"),
+  glossaryPlain: document.querySelector("#glossaryPlain"),
+  glossaryHow: document.querySelector("#glossaryHow"),
+  glossaryGuide: document.querySelector("#glossaryGuide"),
+};
+
+elements.searchForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const query = elements.searchInput.value.trim();
+  if (!query) return;
+  await search(query);
+});
+
+elements.sheetTriggers.forEach((button) => {
+  button.addEventListener("click", () => showSheet(button.dataset.sheetTarget));
+});
+elements.searchInput.addEventListener("input", handleSearchInput);
+elements.searchInput.addEventListener("focus", handleSearchInput);
+elements.searchSuggestions.addEventListener("click", handleSearchSuggestionClick);
+elements.refreshLocalButton.addEventListener("click", loadWatchlist);
+elements.dashboardRefreshButton.addEventListener("click", loadWatchlist);
+elements.dashboardWatchlist.addEventListener("click", handleDashboardStockClick);
+elements.dashboardHoldings.addEventListener("click", handleDashboardStockClick);
+elements.quickSyncButton.addEventListener("click", () => syncStock("2330"));
+elements.refreshScreenerButton.addEventListener("click", refreshValueScreener);
+elements.screenerExportButton?.addEventListener("click", exportScreenerExcel);
+// 雷達中心：列表項目點擊（事件委派）
+document.querySelector("#screenerSheet").addEventListener("click", handleScreenerAction);
+document.querySelector("#dataSheet")?.addEventListener("click", handleScreenerAction);
+elements.portfolioForm.addEventListener("submit", savePortfolioTransaction);
+elements.portfolioResetButton.addEventListener("click", resetPortfolioForm);
+elements.portfolioStockId.addEventListener("input", handlePortfolioStockInput);
+elements.portfolioStockId.addEventListener("change", autofillTradePrice);
+elements.portfolioStockId.addEventListener("blur", () => window.setTimeout(hidePortfolioStockSuggest, 150));
+elements.portfolioStockSuggest?.addEventListener("mousedown", handlePortfolioStockSuggestPick);
+elements.portfolioTradeDate.addEventListener("change", autofillTradePrice);
+elements.portfolioShares.addEventListener("input", autofillFeeTax);
+elements.portfolioPrice.addEventListener("input", autofillFeeTax);
+elements.portfolioSide.addEventListener("change", autofillFeeTax);
+elements.portfolioFee.addEventListener("input", () => { state.feeManual = true; });
+elements.portfolioTax.addEventListener("input", () => { state.taxManual = true; });
+elements.portfolioTransactionRows.addEventListener("click", handlePortfolioTableAction);
+elements.portfolioExportButton.addEventListener("click", exportPortfolioExcel);
+elements.syncButton.addEventListener("click", () => {
+  if (state.activeStockId) syncStock(state.activeStockId);
+});
+elements.watchlistButton.addEventListener("click", () => {
+  if (state.activeStockId) toggleWatchlist(state.activeStockId);
+});
+elements.buyStockButton.addEventListener("click", () => {
+  if (state.activeStockId) {
+    elements.portfolioStockId.value = state.activeStockId;
+  }
+  showSheet("portfolio");
+  window.setTimeout(() => {
+    elements.portfolioForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    elements.portfolioStockId.focus();
+  }, 0);
+});
+elements.stockExportButton.addEventListener("click", exportStockExcel);
+elements.priceChart.addEventListener("mousemove", handleChartPointerMove);
+elements.priceChart.addEventListener("mouseleave", () => {
+  state.chartHoverIndex = null;
+  state.chartDragging = false;
+  drawChart();
+});
+elements.priceChart.addEventListener("wheel", handleChartWheel, { passive: false });
+elements.priceChart.addEventListener("mousedown", handleChartMouseDown);
+window.addEventListener("mouseup", handleChartMouseUp);
+elements.glossaryClose.addEventListener("click", hideGlossary);
+elements.glossaryOverlay.addEventListener("click", (event) => {
+  if (event.target === elements.glossaryOverlay) hideGlossary();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    hideGlossary();
+    hideSearchSuggestions();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".search-shell")) hideSearchSuggestions();
+  const trigger = event.target.closest("[data-glossary-term]");
+  if (!trigger) return;
+  showGlossary(trigger.dataset.glossaryTerm);
+});
+
+window.addEventListener("resize", () => {
+  if (state.activeStockId) {
+    loadStock(state.activeStockId, { quiet: true, keepSheet: true });
+  }
+});
+
+init();
+
+async function init() {
+  await loadGlossary();
+  resetPortfolioForm();
+  showSheet("dashboard", { preserveScroll: true });
+  await loadPortfolio();
+  await loadWatchlist();
+  await loadValueScreener();
+  renderDashboard();
+}
+
+async function loadGlossary() {
+  try {
+    const payload = await getJson("/api/glossary");
+    state.glossary.entries = new Map(payload.entries.map((entry) => [entry.term, entry]));
+    state.glossary.aliases = new Map(Object.entries(payload.aliases));
+    state.glossary.patterns = Array.from(state.glossary.aliases.keys())
+      .sort((a, b) => b.length - a.length);
+  } catch (error) {
+    console.warn("Glossary unavailable", error);
+  }
+}
+
+function showSheet(sheet, options = {}) {
+  const target = ["dashboard", "screener", "portfolio", "stock", "data"].includes(sheet) ? sheet : "dashboard";
+  state.activeSheet = target;
+  document.body.dataset.sheet = target;
+  const allSheets = [
+    elements.dashboardSheet,
+    elements.screenerSheet,
+    elements.portfolioPanel,
+    elements.dataSheet,
+    elements.emptyState,
+    elements.stockView,
+  ];
+  allSheets.forEach((item) => item?.classList.add("hidden"));
+
+  let visibleSheet = elements.dashboardSheet;
+  if (target === "screener") {
+    visibleSheet = elements.screenerSheet;
+  } else if (target === "portfolio") {
+    visibleSheet = elements.portfolioPanel;
+  } else if (target === "stock") {
+    visibleSheet = state.activePayload ? elements.stockView : elements.emptyState;
+  } else if (target === "data") {
+    visibleSheet = elements.dataSheet;
+  }
+  visibleSheet?.classList.remove("hidden");
+  if (target === "data" || target === "screener") loadLocalData();
+
+  elements.navButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.sheetTarget === target);
+  });
+
+  if (!options.preserveScroll) {
+    window.scrollTo({ top: 0, behavior: options.smooth ? "smooth" : "auto" });
+  }
+}
+
+function handleSearchInput() {
+  const query = elements.searchInput.value.trim();
+  window.clearTimeout(state.searchTimer);
+  if (!query) {
+    hideSearchSuggestions();
+    return;
+  }
+  state.searchTimer = window.setTimeout(() => loadSearchSuggestions(query), 180);
+}
+
+async function loadSearchSuggestions(query) {
+  const requestSeq = ++state.searchRequestSeq;
+  try {
+    const payload = await getJson(`/api/search?q=${encodeURIComponent(query)}`);
+    if (requestSeq !== state.searchRequestSeq) return;
+    renderSearchSuggestions(payload);
+  } catch (error) {
+    elements.searchSuggestions.innerHTML = `<div class="suggestion-empty">搜尋暫時失敗：${escapeHtml(error.message)}</div>`;
+    elements.searchSuggestions.classList.remove("hidden");
+  }
+}
+
+function renderSearchSuggestions(payload) {
+  const results = payload.results || [];
+  if (!results.length && !payload.can_sync) {
+    elements.searchSuggestions.innerHTML = `<div class="suggestion-empty">找不到相似股票。可輸入完整股票代號同步。</div>`;
+    elements.searchSuggestions.classList.remove("hidden");
+    return;
+  }
+
+  const rows = results.slice(0, 8).map((item) => `
+    <button class="suggestion-item" type="button" ${item.is_local ? `data-stock-id="${escapeHtml(item.stock_id)}"` : `data-sync-stock="${escapeHtml(item.stock_id)}"`}>
+      <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || item.name || "")}</strong>
+      <span>${escapeHtml(searchSuggestionMeta(item))}</span>
+    </button>
+  `);
+  if (payload.can_sync) {
+    rows.push(`
+      <button class="suggestion-item suggestion-sync" type="button" data-sync-stock="${escapeHtml(payload.query)}">
+        <strong>同步 ${escapeHtml(payload.query)}</strong>
+        <span>本地找不到時，抓取近 5 年資料</span>
+      </button>
+    `);
+  }
+  elements.searchSuggestions.innerHTML = rows.join("");
+  elements.searchSuggestions.classList.remove("hidden");
+}
+
+function searchSuggestionMeta(item) {
+  const name = item.name && item.name !== item.short_name ? ` · ${item.name}` : "";
+  if (item.is_local) return `已下載，可直接開啟${name}`;
+  return `股票名錄有這檔，點選後先同步資料${name}`;
+}
+
+function hideSearchSuggestions() {
+  elements.searchSuggestions.classList.add("hidden");
+}
+
+async function handleSearchSuggestionClick(event) {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const stockId = button.dataset.stockId;
+  const syncStockId = button.dataset.syncStock;
+  hideSearchSuggestions();
+  elements.searchInput.value = "";
+  if (stockId) {
+    await loadStock(stockId);
+    return;
+  }
+  if (syncStockId) {
+    await syncStock(syncStockId);
+  }
+}
+
+async function search(query) {
+  showMessage("搜尋中...");
+  hideSearchSuggestions();
+  try {
+    const payload = await getJson(`/api/search?q=${encodeURIComponent(query)}`);
+    if (payload.results.length > 0) {
+      const first = payload.results[0];
+      const stockId = first.stock_id;
+      hideMessage();
+      if (first.is_local) {
+        await loadStock(stockId);
+      } else {
+        await syncStock(stockId, {
+          label: `${stockId} ${first.short_name || first.name || ""}`.trim(),
+        });
+      }
+      elements.searchInput.value = "";
+      return;
+    }
+    if (payload.can_sync) {
+      await syncStock(query);
+      elements.searchInput.value = "";
+      return;
+    }
+    showMessage("本地找不到這個名稱；請先用股票代號同步。", true);
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function loadWatchlist() {
+  try {
+    const payload = await getJson("/api/watchlist");
+    state.watchlist = payload.items || [];
+    elements.localStocks.innerHTML = "";
+    elements.dataStatus.textContent = `${payload.items.length} 支自選股`;
+    if (payload.items.length === 0) {
+      elements.localStocks.innerHTML = `<div class="empty-local"><strong>尚未加入</strong><span>查到股票後加入自選</span></div>`;
+      renderDashboard();
+      return;
+    }
+    for (const item of payload.items) {
+      const profile = item.profile || {
+        stock_id: item.stock_id,
+        short_name: item.stock_id,
+        name: item.stock_id,
+      };
+      const latest = item.latest;
+      const button = document.createElement("button");
+      button.className = "stock-item";
+      button.type = "button";
+      button.dataset.stockId = profile.stock_id;
+      button.innerHTML = `
+        <strong>${escapeHtml(profile.stock_id)} ${escapeHtml(profile.short_name)}</strong>
+        <span>${latest ? `收盤 ${formatNumber(latest.close)} · ${escapeHtml(latest.date)}` : "尚無日線，請同步"}</span>
+        <span>${item.rows} 筆 · 已加入自選</span>
+      `;
+      button.addEventListener("click", () => loadStock(profile.stock_id));
+      elements.localStocks.appendChild(button);
+    }
+    markActiveStock();
+    renderDashboard();
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function loadValueScreener() {
+  try {
+    const payload = await getJson("/api/value-screener");
+    state.screener = payload;
+    renderScreener(payload);
+  } catch (error) {
+    elements.screenerStatus.textContent = `雷達中心讀取失敗：${error.message}`;
+  }
+}
+
+async function refreshValueScreener() {
+  setScreenerScanning(true);
+  elements.screenerStatus.textContent = "正在批次更新全市場資料，這次不會逐檔抓日線...";
+  showMessage("雷達中心更新中：抓最新價、股利公告與近年除息資料...");
+  try {
+    const payload = await postJson("/api/value-screener/refresh", {});
+    state.screener = payload;
+    renderScreener(payload);
+    showMessage(`雷達中心已更新：${formatInteger(payload.summary?.available_rows || 0)} 檔可估價`);
+    window.setTimeout(hideMessage, 1800);
+  } catch (error) {
+    elements.screenerStatus.textContent = `更新失敗：${error.message}`;
+    showMessage(error.message, true);
+  } finally {
+    setScreenerScanning(false);
+  }
+}
+
+function renderScreener(payload) {
+  const summary = payload?.summary || {};
+  elements.screenerAvailable.textContent = formatInteger(summary.available_rows || 0);
+  elements.screenerBelowCheap.textContent = formatInteger(summary.below_cheap_high_conf_rows || summary.below_cheap_rows || 0);
+  elements.screenerNearCheap.textContent = formatInteger(summary.gainers_rows || 0);
+  elements.screenerComplete.textContent = formatInteger(summary.yield_normal_rows || 0);
+  elements.screenerUpdatedAt.textContent = payload?.generated_at
+    ? `更新 ${formatDateTime(payload.generated_at)}`
+    : "尚未更新";
+  elements.screenerStatus.textContent = payload?.generated_at
+    ? "資料已更新。股利情境清單只顯示殖利率法適用、資料較完整的個股；低信心與陷阱區已標記。"
+    : "尚未更新。按「更新雷達」後會直接抓 TWSE 批次資料。";
+
+  const highConf = Array.isArray(payload?.below_cheap_high_conf) ? payload.below_cheap_high_conf : [];
+  const lowConf = Array.isArray(payload?.below_cheap_low_conf) ? payload.below_cheap_low_conf : [];
+  const yieldNormal = Array.isArray(payload?.yield_normal) ? payload.yield_normal : [];
+  const yieldTrap = Array.isArray(payload?.yield_trap) ? payload.yield_trap : [];
+  const gainers = Array.isArray(payload?.gainers) ? payload.gainers : [];
+  const losers = Array.isArray(payload?.losers) ? payload.losers : [];
+
+  // 左欄：資料較完整的股利情境候選
+  if (!highConf.length) {
+    elements.screenerHighConfList.innerHTML = `<p class="screener-empty">尚未更新，或目前沒有資料較完整的股利情境候選。</p>`;
+  } else {
+    elements.screenerHighConfList.innerHTML = highConf.slice(0, 20).map((item, i) =>
+      renderScreenerCheapRow(item, i + 1, "value")
+    ).join("");
+  }
+
+  // 左欄：低信心折疊
+  if (lowConf.length > 0) {
+    elements.screenerLowConfCount.textContent = lowConf.length;
+    elements.screenerLowConfToggleRow.classList.remove("hidden");
+    elements.screenerLowConfList.innerHTML = lowConf.slice(0, 15).map((item) =>
+      renderScreenerLowConfRow(item)
+    ).join("");
+    // 切換顯示/隱藏
+    elements.screenerLowConfToggle.onclick = () => {
+      const card = elements.screenerLowConfCard;
+      const isHidden = card.classList.toggle("hidden");
+      elements.screenerLowConfToggle.innerHTML = isHidden
+        ? `▾ 另有 <span id="screenerLowConfCount">${lowConf.length}</span> 檔「低信心」已收合　〔顯示〕`
+        : `▴ 收合低信心區`;
+    };
+  } else {
+    elements.screenerLowConfToggleRow.classList.add("hidden");
+    elements.screenerLowConfCard.classList.add("hidden");
+  }
+
+  // 右欄：高殖利率（正常）
+  if (!yieldNormal.length) {
+    elements.screenerYieldList.innerHTML = `<p class="screener-empty">尚未更新。</p>`;
+  } else {
+    elements.screenerYieldList.innerHTML = yieldNormal.slice(0, 20).map((item, i) =>
+      renderScreenerYieldRow(item, i + 1)
+    ).join("");
+  }
+
+  // 右欄：疑似陷阱
+  if (yieldTrap.length > 0) {
+    elements.screenerTrapCard.classList.remove("hidden");
+    elements.screenerTrapList.innerHTML = yieldTrap.slice(0, 10).map((item) =>
+      renderScreenerTrapRow(item)
+    ).join("");
+  } else {
+    elements.screenerTrapCard.classList.add("hidden");
+  }
+
+  // 下方：漲跌榜
+  elements.screenerGainersList.innerHTML = gainers.slice(0, 10).map((item, i) =>
+    renderScreenerMoverRow(item, i + 1, true)
+  ).join("") || `<p class="screener-empty">無資料</p>`;
+  elements.screenerLosersList.innerHTML = losers.slice(0, 10).map((item, i) =>
+    renderScreenerMoverRow(item, i + 1, false)
+  ).join("") || `<p class="screener-empty">無資料</p>`;
+}
+
+function renderScreenerCheapRow(item, _rank, _mode) {
+  const diffPct = item.difference_percent != null
+    ? Number(item.difference_percent).toFixed(1) + "%"
+    : "--";
+  const isBelow = Number(item.difference_percent || 0) <= 0;
+  const diffClass = "tone-neutral";
+  const diffLabel = isBelow
+    ? `相對情境 ${diffPct}`
+    : `相對情境 +${diffPct}`;
+  return `
+    <div class="screener-row screener-row-no-rank" data-screener-stock="${escapeHtml(item.stock_id)}">
+      <span class="screener-name">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
+      </span>
+      <span class="screener-price">現價 ${formatNumber(item.current_price)}</span>
+      <span class="screener-diff ${diffClass}">${diffLabel}</span>
+      ${srBadge(item)}
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
+    </div>
+  `;
+}
+
+function renderScreenerLowConfRow(item) {
+  const ctype = item.company_type_label || item.suitability_state || "";
+  const reason = item.suitability_reason || "";
+  return `
+    <div class="screener-row screener-row-no-rank screener-row-dim" data-screener-stock="${escapeHtml(item.stock_id)}">
+      <span class="screener-name">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
+        ${ctype ? `<span class="screener-ctype">${escapeHtml(ctype)}</span>` : ""}
+      </span>
+      <span class="screener-dim-reason">${escapeHtml(reason || "低信心")}</span>
+      ${srBadge(item)}
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
+    </div>
+  `;
+}
+
+function renderScreenerYieldRow(item, _rank) {
+  const yld = item.current_yield_percent != null
+    ? Number(item.current_yield_percent).toFixed(1) + "%"
+    : "--";
+  const dataYears = Number(item.data_years || 0) >= 5 ? "配息穩 · 5 年完整" : "配息年份不足 5 年";
+  return `
+    <div class="screener-row screener-row-no-rank" data-screener-stock="${escapeHtml(item.stock_id)}">
+      <span class="screener-name">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
+      </span>
+      <span class="screener-yield-note-inline">${dataYears}</span>
+      <span class="screener-yield-pct tone-up">${yld}</span>
+      ${srBadge(item)}
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
+    </div>
+  `;
+}
+
+function renderScreenerTrapRow(item) {
+  const yld = item.current_yield_percent != null
+    ? Number(item.current_yield_percent).toFixed(1) + "%"
+    : "--";
+  const trapReason = item.yield_trap_reason === "one_off_dividend"
+    ? "含一次性高股利"
+    : "殖利率陷阱";
+  return `
+    <div class="screener-row screener-row-no-rank screener-row-trap" data-screener-stock="${escapeHtml(item.stock_id)}">
+      <span class="screener-name">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
+      </span>
+      <span class="screener-yield-pct tone-up">${yld}</span>
+      <span class="screener-trap-reason">${trapReason}</span>
+      ${srBadge(item)}
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
+    </div>
+  `;
+}
+
+function renderScreenerMoverRow(item, rank, isGainer) {
+  const pct = item.day_change_percent != null
+    ? (isGainer ? "+" : "") + Number(item.day_change_percent).toFixed(2) + "%"
+    : "--";
+  const cls = isGainer ? "tone-up" : "tone-down";
+  return `
+    <div class="screener-row" data-screener-stock="${escapeHtml(item.stock_id)}">
+      <span class="screener-rank">${rank}</span>
+      <span class="screener-name">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
+      </span>
+      <span class="screener-price">現價 ${formatNumber(item.current_price)}</span>
+      <span class="${cls} screener-diff">${pct}</span>
+      ${srBadge(item)}
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
+    </div>
+  `;
+}
+
+async function handleScreenerAction(event) {
+  const button = event.target.closest("[data-screener-stock]");
+  if (!button) return;
+  await syncStock(button.dataset.screenerStock);
+}
+
+async function loadStock(stockId, options = {}) {
+  state.activeStockId = stockId;
+  if (!options.quiet) showMessage("讀取本地資料...");
+  try {
+    const payload = await getJson(`/api/stocks/${encodeURIComponent(stockId)}?days=365`);
+    renderStock(payload, stockId);
+    if (!options.keepSheet) showSheet("stock");
+    hideMessage();
+    markActiveStock();
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function syncStock(stockId, options = {}) {
+  if (state.syncing) return;
+  state.syncing = true;
+  setSyncing(true);
+  state.activeStockId = stockId;
+  renderSyncLoading(stockId, options);
+  showSheet("stock");
+  try {
+    const payload = await postJson("/api/sync", {
+      stock_id: stockId,
+      lookback_days: STOCK_SYNC_LOOKBACK_DAYS,
+    });
+    state.activeStockId = stockId;
+    renderStock(payload, stockId);
+    showSheet("stock");
+    elements.searchInput.value = "";
+    await loadWatchlist();
+    showMessage(payload.sync?.message || "同步完成");
+    window.setTimeout(hideMessage, 1800);
+  } catch (error) {
+    renderSyncFailure(stockId, error);
+    showMessage(error.message, true);
+  } finally {
+    state.syncing = false;
+    setSyncing(false);
+    stopSyncProgress();
+  }
+}
+
+function renderSyncLoading(stockId, options = {}) {
+  const label = options.label || stockId;
+  state.activePayload = { syncing: true, stock_id: stockId };
+  elements.stockMarket.textContent = "TWSE";
+  elements.stockTitle.textContent = label;
+  elements.stockSubtitle.textContent = "正在建立本地資料，完成後會自動顯示個股頁。";
+  elements.stockDataNote.textContent = "第一次同步通常需要較久，視證交所回應速度而定。";
+  elements.quoteStatus.textContent = "同步中";
+  elements.quotePriceLabel.textContent = "目前價";
+  elements.quotePrice.textContent = "--";
+  elements.quoteTime.textContent = "同步完成後更新";
+  elements.quoteChangeLabel.textContent = "今日漲跌";
+  elements.quoteChange.textContent = "--";
+  elements.quotePreviousClose.textContent = "--";
+  elements.quoteDayRange.textContent = "--";
+  elements.quoteOpen.textContent = "--";
+  elements.quoteBidAsk.textContent = "--";
+  elements.quoteSpread.textContent = "--";
+  elements.quoteNote.textContent = "資料下載中，先不要重複點同步。";
+  elements.latestClose.textContent = "--";
+  elements.dailyChange.textContent = "--";
+  elements.pricePosition.textContent = "--";
+  elements.rowCount.textContent = "--";
+  elements.validationItems.innerHTML = `
+    <article class="validation-card neutral">
+      <strong>資料同步中</strong>
+      <p>系統正在把這檔股票需要的價格、股利與財報資料建立到本地。</p>
+    </article>
+  `;
+
+  elements.syncProgressPanel.classList.remove("hidden", "sync-progress-error");
+  elements.syncProgressTitle.textContent = `正在同步 ${label}`;
+  elements.syncProgressDetail.textContent = "請先停在這個畫面，完成或失敗都會在這裡更新。";
+
+  let activeIndex = 0;
+  renderSyncSteps(activeIndex);
+  stopSyncProgress();
+  state.syncStepTimer = window.setInterval(() => {
+    activeIndex = Math.min(activeIndex + 1, SYNC_STEPS.length - 1);
+    renderSyncSteps(activeIndex);
+  }, 2600);
+}
+
+function renderSyncFailure(stockId, error) {
+  state.activePayload = { sync_error: true, stock_id: stockId };
+  elements.stockMarket.textContent = "TWSE";
+  elements.stockTitle.textContent = stockId;
+  elements.stockSubtitle.textContent = "同步失敗，尚未建立完整個股資料。";
+  elements.stockDataNote.textContent = "可以稍後重試；若同一檔一直失敗，再檢查資料源或代號。";
+  elements.syncProgressPanel.classList.remove("hidden");
+  elements.syncProgressPanel.classList.add("sync-progress-error");
+  elements.syncProgressTitle.textContent = `同步 ${stockId} 失敗`;
+  elements.syncProgressDetail.textContent = error.message || "資料源暫時沒有回應。";
+  elements.syncProgressSteps.innerHTML = `
+    <li class="failed">
+      <strong>沒有完成同步</strong>
+      <span>請按右上角「同步」重試，或換一檔股票確認是否為資料源暫時異常。</span>
+    </li>
+  `;
+}
+
+function renderSyncSteps(activeIndex) {
+  elements.syncProgressSteps.innerHTML = SYNC_STEPS.map(([title, detail], index) => {
+    const status = index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
+    const label = status === "done" ? "完成" : status === "active" ? "進行中" : "等待";
+    return `
+      <li class="${status}">
+        <strong>${escapeHtml(title)} <em>${label}</em></strong>
+        <span>${escapeHtml(detail)}</span>
+      </li>
+    `;
+  }).join("");
+}
+
+function hideSyncProgress() {
+  stopSyncProgress();
+  elements.syncProgressPanel.classList.add("hidden");
+  elements.syncProgressPanel.classList.remove("sync-progress-error");
+}
+
+function stopSyncProgress() {
+  if (!state.syncStepTimer) return;
+  window.clearInterval(state.syncStepTimer);
+  state.syncStepTimer = null;
+}
+
+async function loadPortfolio() {
+  try {
+    const payload = await getJson("/api/portfolio");
+    renderPortfolio(payload);
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function savePortfolioTransaction(event) {
+  event.preventDefault();
+  const transactionId = elements.portfolioTransactionId.value.trim();
+  const body = portfolioFormBody();
+  elements.portfolioSubmitButton.disabled = true;
+  try {
+    const payload = transactionId
+      ? await putJson(`/api/portfolio/transactions/${encodeURIComponent(transactionId)}`, body)
+      : await postJson("/api/portfolio/transactions", body);
+    renderPortfolio(payload.portfolio || payload);
+    resetPortfolioForm();
+    showMessage(transactionId ? "交易已更新" : "交易已儲存");
+    window.setTimeout(hideMessage, 1400);
+  } catch (error) {
+    showMessage(error.message, true);
+  } finally {
+    elements.portfolioSubmitButton.disabled = false;
+  }
+}
+
+async function handlePortfolioTableAction(event) {
+  const button = event.target.closest("button[data-portfolio-action]");
+  if (!button) return;
+  const transactionId = Number(button.dataset.transactionId);
+  const transaction = (state.portfolio?.transactions || [])
+    .find((item) => Number(item.id) === transactionId);
+  if (!transaction) return;
+  if (button.dataset.portfolioAction === "edit") {
+    fillPortfolioForm(transaction);
+    return;
+  }
+  if (!window.confirm("確定刪除這筆交易紀錄？")) return;
+  try {
+    const payload = await deleteJson(`/api/portfolio/transactions/${encodeURIComponent(transactionId)}`);
+    renderPortfolio(payload);
+    showMessage("交易已刪除");
+    window.setTimeout(hideMessage, 1400);
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+function exportPortfolioExcel() {
+  window.location.href = "/api/export/portfolio.xlsx";
+}
+
+function exportStockExcel() {
+  if (!state.activeStockId) {
+    showMessage("請先開啟一檔股票再匯出。", true);
+    return;
+  }
+  window.location.href = `/api/export/stocks/${encodeURIComponent(state.activeStockId)}.xlsx`;
+}
+
+function exportScreenerExcel() {
+  if (!state.screener?.generated_at) {
+    showMessage("請先按「更新雷達」產生資料，再匯出。", true);
+    return;
+  }
+  window.location.href = "/api/export/screener.xlsx";
+}
+
+async function loadNews(stockId, name = "") {
+  if (!elements.newsList) return;
+  if (!stockId) return;
+  if (state.newsLoadedFor === stockId) return; // 同一檔已抓過，避免 resize 重複打新聞來源
+  state.newsLoadedFor = stockId;
+  const requestStockId = stockId;
+  elements.newsStatus.textContent = "讀取中…";
+  elements.newsOverall.textContent = "正在抓取最近新聞並做關鍵字歸類…";
+  elements.newsList.innerHTML = "";
+  elements.newsSummaryRiskRadar?.classList.add("hidden");
+  elements.newsRiskRadar?.classList.add("hidden");
+  setNewsChip("讀取中", "neutral", "正在抓取最近新聞…", []);
+  try {
+    const query = name ? `?name=${encodeURIComponent(name)}` : "";
+    const payload = await getJson(`/api/news/${encodeURIComponent(stockId)}${query}`);
+    if (state.activeStockId !== requestStockId) return;
+    renderNews(payload);
+  } catch (error) {
+    state.newsLoadedFor = null; // 失敗就清掉，下次開同檔可重試
+    if (state.activeStockId !== requestStockId) return;
+    elements.newsStatus.textContent = "暫無法取得";
+    elements.newsOverall.textContent = "目前無法取得新聞（可能是沒有網路或來源暫時無回應），稍後再試。";
+    elements.newsList.innerHTML = "";
+    setNewsChip("暫無法取得", "neutral", "目前無法取得新聞，稍後再試。", []);
+  }
+}
+
+function setNewsChip(label, tone, text, top) {
+  if (!elements.newsChip) return;
+  elements.newsChip.textContent = label;
+  elements.newsChip.className = `news-chip news-chip-${tone}`;
+  if (elements.newsChipText) elements.newsChipText.textContent = text || "";
+  if (elements.newsChipTop) {
+    elements.newsChipTop.innerHTML = (top || []).map((item) => {
+      const t = newsLabelTone(item.label);
+      return `<div class="news-chip-line"><span class="news-tag news-tag-${t}">${escapeHtml(item.label || "中性")}</span><span>${escapeHtml(item.title)}</span></div>`;
+    }).join("");
+  }
+}
+
+function newsChipTone(label) {
+  if (label === "偏多") return "positive";
+  if (label === "偏空") return "caution";
+  return "neutral";
+}
+
+function renderNews(payload) {
+  if (!elements.newsList) return;
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const status = payload?.status;
+  if (status === "unavailable") {
+    elements.newsStatus.textContent = "暫無法取得";
+  } else if (!items.length) {
+    elements.newsStatus.textContent = "近期無新聞";
+  } else {
+    const counts = payload.counts || {};
+    elements.newsStatus.textContent = `${items.length} 則 · 利多 ${counts["利多"] || 0} / 利空 ${counts["利空"] || 0} / 中性 ${counts["中性"] || 0}`;
+  }
+  elements.newsOverall.textContent = payload?.overall || "";
+  const chipLabel = payload?.overall_label || (items.length ? "中性" : "無消息");
+  setNewsChip(chipLabel, newsChipTone(chipLabel), payload?.overall || "", payload?.top || []);
+  renderRiskRadar(payload?.risk_summary, elements.newsRiskRadar);
+  renderRiskRadar(payload?.risk_summary, elements.newsSummaryRiskRadar);
+  state.chartNewsEvents = (items || [])
+    .filter((it) => it.risk && Number(it.risk.risk_score || 0) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(it.published || "")))
+    .map((it) => ({ date: it.published, type: "風險", label: `風險新聞：${it.title}` }));
+  if (typeof rebuildEventIndex === "function" && state.chartAll && state.chartAll.length) {
+    rebuildEventIndex();
+    drawChart();
+  }
+  state.newsRiskSummary = payload && payload.risk_summary ? payload.risk_summary : null;
+  renderAssessmentMerged();
+  if (!items.length) {
+    elements.newsList.innerHTML = "";
+    return;
+  }
+  const recent = Array.isArray(payload?.recent_events) ? payload.recent_events : [];
+  const eventsRow = recent.length
+    ? `<div class="news-events-row"><span class="news-events-label">近期動向</span>${recent.map((e) => `<span class="news-event">${escapeHtml(e)}</span>`).join("")}</div>`
+    : "";
+  elements.newsList.innerHTML = eventsRow + items.map((item) => {
+    const tone = newsLabelTone(item.label);
+    const link = item.link
+      ? `<a class="news-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>`
+      : `<span>${escapeHtml(item.title)}</span>`;
+    const meta = [item.source, item.published].filter(Boolean).map(escapeHtml).join(" · ");
+    const events = (item.events || []).map((e) => `<span class="news-event">${escapeHtml(e)}</span>`).join("");
+    const risk = item.risk || {};
+    const hasRisk = Number(risk.risk_score || 0) > 0;
+    const riskBadge = hasRisk
+      ? `<span class="news-risk-badge risk-${riskItemTone(risk.risk_level)}">地雷 ${escapeHtml(risk.risk_level)} ${escapeHtml(String(risk.risk_score))}</span>`
+      : "";
+    const riskDetails = hasRisk
+      ? `<details class="news-risk-more">
+          <summary>風險細節</summary>
+          <div class="risk-term-row">${(risk.matched_terms || []).map((t) => `<span class="risk-term">${escapeHtml(t)}</span>`).join("")}</div>
+          <div class="risk-dim-row">${Object.entries(risk.dimensions || {}).map(([d, s]) => `<span class="risk-dim">${escapeHtml(d)} ${escapeHtml(String(s))}</span>`).join("")}</div>
+        </details>`
+      : "";
+    return `
+      <article class="news-item news-${tone}">
+        <span class="news-tag news-tag-${tone}">${escapeHtml(item.label || "中性")}</span>
+        <div class="news-body">
+          ${link}${riskBadge}
+          ${events ? `<div class="news-event-tags">${events}</div>` : ""}
+          <div class="news-meta">${meta}${item.reason ? ` · ${escapeHtml(item.reason)}` : ""}</div>
+          ${riskDetails}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderRiskRadar(summary, el = elements.newsRiskRadar) {
+  if (!el) return;
+  const level = summary?.level;
+  if (!summary || !level || level === "無") {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  const tone = riskLevelTone(level);
+  const reason = (summary.reasons && summary.reasons.length) ? summary.reasons.join(" ") : "出現需留意的字眼。";
+  const heat = summary.heating ? `<span class="risk-heat">風險升溫</span>` : "";
+  el.className = `risk-radar risk-${tone}`;
+  el.innerHTML = `
+    <div class="risk-radar-head">
+      <span class="risk-radar-title">地雷雷達</span>
+      <span class="risk-level-badge risk-${tone}">${escapeHtml(level)}</span>
+      ${heat}
+    </div>
+    <ol class="risk-reasons">
+      <li><strong>消息面</strong>：${escapeHtml(reason)}</li>
+      <li><strong>籌碼面</strong>：${escapeHtml(chipsRadarBody(state.activeChips))}</li>
+      <li><strong>價量面</strong>：可參考下方走勢圖的 MA5 / MA20 / MA60。</li>
+    </ol>
+    <p class="disclaimer">地雷雷達只整理新聞中的風險字眼，不預測股價、不構成投資建議。</p>
+  `;
+}
+
+function riskLevelTone(level) {
+  if (level === "警戒") return "high";
+  if (level === "注意") return "mid";
+  return "low";
+}
+
+function riskItemTone(level) {
+  if (level === "極高" || level === "高") return "high";
+  if (level === "中") return "mid";
+  return "low";
+}
+
+function newsLabelTone(label) {
+  if (label === "利多") return "positive";
+  if (label === "利空") return "caution";
+  return "neutral";
+}
+
+function handlePortfolioStockInput() {
+  const query = (elements.portfolioStockId.value || "").trim();
+  window.clearTimeout(state.portfolioSearchTimer);
+  if (!query) {
+    hidePortfolioStockSuggest();
+    return;
+  }
+  state.portfolioSearchTimer = window.setTimeout(() => loadPortfolioStockSuggest(query), 180);
+}
+
+async function loadPortfolioStockSuggest(query) {
+  if (!elements.portfolioStockSuggest) return;
+  try {
+    const payload = await getJson(`/api/search?q=${encodeURIComponent(query)}`);
+    const results = (payload.results || []).slice(0, 6);
+    if (!results.length) {
+      hidePortfolioStockSuggest();
+      return;
+    }
+    elements.portfolioStockSuggest.innerHTML = results.map((item) => `
+      <button type="button" class="form-suggest-item" data-stock-id="${escapeHtml(item.stock_id)}">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || item.name || "")}</strong>
+        <span>${item.is_local ? "已下載" : "點選後可同步"}</span>
+      </button>
+    `).join("");
+    elements.portfolioStockSuggest.classList.remove("hidden");
+  } catch (error) {
+    hidePortfolioStockSuggest();
+  }
+}
+
+function handlePortfolioStockSuggestPick(event) {
+  const button = event.target.closest("[data-stock-id]");
+  if (!button) return;
+  event.preventDefault(); // mousedown：搶在 input blur 前填值，避免下拉先消失
+  elements.portfolioStockId.value = button.dataset.stockId;
+  hidePortfolioStockSuggest();
+  state.feeManual = false;
+  state.taxManual = false;
+  autofillTradePrice();
+}
+
+function hidePortfolioStockSuggest() {
+  elements.portfolioStockSuggest?.classList.add("hidden");
+}
+
+async function autofillTradePrice() {
+  const stockId = (elements.portfolioStockId.value || "").trim();
+  const day = elements.portfolioTradeDate.value;
+  if (!elements.portfolioPriceHint) return;
+  if (!stockId || !day) return;
+  try {
+    const payload = await getJson(
+      `/api/daily-price?stock_id=${encodeURIComponent(stockId)}&date=${encodeURIComponent(day)}`,
+    );
+    if (!payload.available) {
+      elements.portfolioPriceHint.textContent = payload.message || "查無當日價格，可手動輸入。";
+      return;
+    }
+    const dateNote = payload.is_exact ? payload.date : `${payload.date}（最近交易日）`;
+    elements.portfolioPriceHint.textContent =
+      `${dateNote}　開 ${formatNumber(payload.open)}／高 ${formatNumber(payload.high)}／低 ${formatNumber(payload.low)}／收 ${formatNumber(payload.close)}`;
+    if (!elements.portfolioPrice.value) {
+      elements.portfolioPrice.value = payload.close;
+      autofillFeeTax();
+    }
+  } catch (error) {
+    elements.portfolioPriceHint.textContent = "";
+  }
+}
+
+function autofillFeeTax() {
+  const shares = Number(elements.portfolioShares.value);
+  const price = Number(elements.portfolioPrice.value);
+  const amount = shares > 0 && price > 0 ? shares * price : 0;
+  if (!amount) return;
+  const isEtf = (elements.portfolioStockId.value || "").trim().startsWith("00");
+  if (!state.feeManual) {
+    elements.portfolioFee.value = Math.max(20, Math.round(amount * 0.001425));
+  }
+  if (!state.taxManual) {
+    const taxRate = isEtf ? 0.001 : 0.003; // ETF 證交稅 0.1%，一般股 0.3%
+    elements.portfolioTax.value = elements.portfolioSide.value === "sell" ? Math.round(amount * taxRate) : 0;
+  }
+}
+
+function portfolioFormBody() {
+  return {
+    stock_id: elements.portfolioStockId.value.trim(),
+    trade_date: elements.portfolioTradeDate.value,
+    side: elements.portfolioSide.value,
+    shares: Number(elements.portfolioShares.value),
+    price: Number(elements.portfolioPrice.value),
+    fee: Number(elements.portfolioFee.value || 0),
+    tax: Number(elements.portfolioTax.value || 0),
+    note: elements.portfolioNote.value.trim(),
+  };
+}
+
+function renderPortfolio(payload) {
+  state.portfolio = payload;
+  const summary = payload.summary || {};
+  const performance = payload.performance || {};
+  const benchmark = performance.benchmark || {};
+  const positions = payload.positions || [];
+  const transactions = payload.transactions || [];
+
+  elements.portfolioStatus.textContent = `${summary.transactions_count || 0} 筆交易 · ${summary.cost_method || "移動平均成本法"}`;
+  elements.portfolioSentence.textContent = summary.sentence || "尚未新增交易。";
+  elements.portfolioPositionCount.textContent = `${summary.positions_count || 0}`;
+  elements.portfolioCostBasis.textContent = formatMoney(summary.total_cost_basis);
+  elements.portfolioMarketValue.textContent = formatMoney(summary.total_market_value);
+  elements.portfolioUnrealized.textContent = portfolioPnlText(
+    summary.total_unrealized_pnl,
+    summary.total_unrealized_return_percent,
+  );
+  setTone(elements.portfolioUnrealized, summary.total_unrealized_pnl);
+  elements.portfolioRealized.textContent = formatSignedMoney(summary.realized_pnl);
+  setTone(elements.portfolioRealized, summary.realized_pnl);
+  elements.portfolioCashDividends.textContent = formatMoney(performance.total_cash_dividends);
+  elements.portfolioTotalReturn.textContent = portfolioPnlText(
+    performance.total_return_amount,
+    performance.total_return_percent,
+  );
+  setTone(elements.portfolioTotalReturn, performance.total_return_amount);
+  elements.portfolioXirr.textContent = performance.xirr_percent == null
+    ? "資料不足"
+    : formatPercent(performance.xirr_percent);
+  setTone(elements.portfolioXirr, performance.xirr_percent);
+  elements.portfolioBenchmark.textContent = benchmark.status === "available"
+    ? formatPercent(benchmark.total_return_percent)
+    : "待同步";
+  setTone(elements.portfolioBenchmark, benchmark.total_return_percent);
+  elements.portfolioTransactionCount.textContent = `${transactions.length} 筆`;
+
+  elements.portfolioRows.innerHTML = positions.length
+    ? positions.map(renderPortfolioPositionRow).join("")
+    : `<tr><td colspan="7">尚無持倉。新增一筆買進交易後，這裡會顯示平均成本與帳面損益。</td></tr>`;
+
+  elements.portfolioTransactionRows.innerHTML = transactions.length
+    ? [...transactions].reverse().map(renderPortfolioTransactionRow).join("")
+    : `<tr><td colspan="8">尚無交易紀錄。</td></tr>`;
+
+  elements.portfolioLimitations.innerHTML = (payload.limitations || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  elements.portfolioExpertChecks.innerHTML = (payload.expert_checks || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  renderDashboard();
+}
+
+function renderDashboard() {
+  if (!elements.dashboardSheet) return;
+  const portfolio = state.portfolio || {};
+  const summary = portfolio.summary || {};
+  const positions = portfolio.positions || [];
+  const watchlist = state.watchlist || [];
+  const totalValue = summary.total_market_value ?? summary.total_cost_basis;
+  const pnl = summary.total_unrealized_pnl;
+  const returnPercent = summary.total_unrealized_return_percent;
+
+  elements.dashboardGreeting.textContent = dashboardGreetingText();
+  elements.dashboardTotalValue.textContent = totalValue == null
+    ? "--"
+    : `NT$ ${formatMoney(totalValue)}`;
+  elements.dashboardReturn.textContent = pnl == null
+    ? "尚未有可估算市值的持倉。"
+    : `帳面損益 ${formatSignedMoney(pnl)} (${formatPercent(returnPercent)})`;
+  elements.dashboardReturn.className = toneClass(pnl);
+
+  elements.dashboardBrief.textContent = buildDashboardBrief(summary, positions, watchlist);
+  elements.dashboardAlerts.innerHTML = buildDashboardAlerts(summary, positions, watchlist)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  elements.dashboardHoldings.innerHTML = positions.length
+    ? positions.slice(0, 5).map(renderDashboardPosition).join("")
+    : `<div class="dashboard-empty">尚未新增交易。到持倉頁記一筆買進，這裡就會顯示組合摘要。</div>`;
+  elements.dashboardWatchlist.innerHTML = watchlist.length
+    ? watchlist.slice(0, 6).map(renderDashboardWatchlistItem).join("")
+    : `<div class="dashboard-empty">尚未加入自選股。搜尋股票後可以加入觀察。</div>`;
+}
+
+function dashboardGreetingText() {
+  const now = new Date();
+  const weekday = ["日", "一", "二", "三", "四", "五", "六"][now.getDay()];
+  return `今天是 ${now.getMonth() + 1}/${now.getDate()}（${weekday}），先看這些重點。`;
+}
+
+function buildDashboardBrief(summary, positions, watchlist) {
+  if ((summary.positions_count || 0) > 0) {
+    const leader = positions
+      .filter((item) => item.unrealized_pnl != null)
+      .sort((a, b) => Number(b.unrealized_pnl) - Number(a.unrealized_pnl))[0];
+    const leaderText = leader
+      ? `主要變化來自 ${portfolioStockLabel(leader)}。`
+      : "部分持股缺少最近收盤價，先補同步資料。";
+    return `目前持有 ${summary.positions_count} 檔，帳面損益 ${formatSignedMoney(summary.total_unrealized_pnl)}（${formatPercent(summary.total_unrealized_return_percent)}）。${leaderText}`;
+  }
+  if (watchlist.length > 0) {
+    return `目前有 ${watchlist.length} 檔自選股。可以從自選股挑一檔進個股頁，看白話健檢與估值情境。`;
+  }
+  return "還沒有持倉或自選股。先搜尋一檔股票，系統會把資料翻成白話。";
+}
+
+function buildDashboardAlerts(summary, positions, watchlist) {
+  const alerts = [];
+  if ((summary.transactions_count || 0) === 0) {
+    alerts.push("你還沒有交易紀錄，可以先用持倉頁建立一筆測試資料。");
+  }
+  const missingPriceCount = summary.missing_price_count || 0;
+  if (missingPriceCount > 0) {
+    alerts.push(`${missingPriceCount} 檔持股缺少最近收盤價，建議先同步資料。`);
+  }
+  const concentrated = positions
+    .filter((item) => item.market_value != null && summary.total_market_value)
+    .map((item) => ({
+      label: portfolioStockLabel(item),
+      weight: (Number(item.market_value) / Number(summary.total_market_value)) * 100,
+    }))
+    .sort((a, b) => b.weight - a.weight)[0];
+  if (concentrated && concentrated.weight >= 40) {
+    alerts.push(`${concentrated.label} 佔比約 ${formatPlainPercent(concentrated.weight)}，集中度偏高。`);
+  }
+  if (watchlist.length > 0) {
+    alerts.push(`自選股 ${watchlist.length} 檔，可從首頁直接進個股分析。`);
+  }
+  if (alerts.length === 0) {
+    alerts.push("目前沒有明顯待辦；可以到個股頁查看估價與事件線索。");
+  }
+  return alerts.slice(0, 4);
+}
+
+function renderDashboardPosition(item) {
+  return `
+    <button class="dashboard-row" type="button" data-stock-id="${escapeHtml(item.stock_id)}">
+      <strong>${escapeHtml(portfolioStockLabel(item))}</strong>
+      <span class="${toneClass(item.unrealized_return_percent)}">${formatPercent(item.unrealized_return_percent)}</span>
+      <small>${item.latest_close == null ? "缺少收盤價" : `最近收盤 ${formatNumber(item.latest_close)}`}</small>
+    </button>
+  `;
+}
+
+function renderDashboardWatchlistItem(item) {
+  const profile = item.profile || { stock_id: item.stock_id, short_name: item.stock_id };
+  const latest = item.latest;
+  return `
+    <button class="dashboard-row" type="button" data-stock-id="${escapeHtml(profile.stock_id)}">
+      <strong>${escapeHtml(profile.stock_id)} ${escapeHtml(profile.short_name || "")}</strong>
+      <span>${latest ? formatNumber(latest.close) : "--"}</span>
+      <small>${latest ? `資料日 ${escapeHtml(latest.date)}` : "尚無日線資料"}</small>
+    </button>
+  `;
+}
+
+async function handleDashboardStockClick(event) {
+  const button = event.target.closest("[data-stock-id]");
+  if (!button) return;
+  await loadStock(button.dataset.stockId);
+}
+
+function renderPortfolioPositionRow(item) {
+  const name = portfolioStockLabel(item);
+  const totalMarketValue = Number(state.portfolio?.summary?.total_market_value || 0);
+  const allocationPercent = totalMarketValue > 0
+    ? (Number(item.market_value || 0) / totalMarketValue) * 100
+    : null;
+  const allocationWidth = allocationPercent == null
+    ? 0
+    : Math.max(2, Math.min(100, allocationPercent));
+  return `
+    <tr>
+      <td>${escapeHtml(name)}</td>
+      <td>${formatInteger(item.shares)}</td>
+      <td>${formatNumber(item.average_cost)}</td>
+      <td>${item.latest_close == null ? "--" : `${formatNumber(item.latest_close)}<br><span class="cell-note">${escapeHtml(item.latest_close_date || "")}</span>`}</td>
+      <td class="${toneClass(item.unrealized_pnl)}">${formatSignedMoney(item.unrealized_pnl)}</td>
+      <td class="${toneClass(item.unrealized_return_percent)}">${formatPercent(item.unrealized_return_percent)}</td>
+      <td>
+        <div class="portfolio-allocation">
+          <span class="allocation-track"><span class="allocation-fill" style="width: ${allocationWidth}%"></span></span>
+          <span class="allocation-label">${formatPlainPercent(allocationPercent)}</span>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderPortfolioTransactionRow(item) {
+  return `
+    <tr>
+      <td>${escapeHtml(item.trade_date)}</td>
+      <td>${escapeHtml(portfolioStockLabel(item))}</td>
+      <td>${sideLabel(item.side)}</td>
+      <td>${formatInteger(item.shares)}</td>
+      <td>${formatNumber(item.price)}</td>
+      <td>${formatMoney((item.fee || 0) + (item.tax || 0))}</td>
+      <td>${escapeHtml(item.note || "")}</td>
+      <td>
+        <button class="table-action" type="button" data-portfolio-action="edit" data-transaction-id="${escapeHtml(item.id)}">編輯</button>
+        <button class="table-action danger-text" type="button" data-portfolio-action="delete" data-transaction-id="${escapeHtml(item.id)}">刪除</button>
+      </td>
+    </tr>
+  `;
+}
+
+function fillPortfolioForm(transaction) {
+  elements.portfolioTransactionId.value = transaction.id || "";
+  elements.portfolioStockId.value = transaction.stock_id || "";
+  elements.portfolioTradeDate.value = transaction.trade_date || "";
+  elements.portfolioSide.value = transaction.side || "buy";
+  elements.portfolioShares.value = transaction.shares || "";
+  elements.portfolioPrice.value = transaction.price ?? "";
+  elements.portfolioFee.value = transaction.fee ?? 0;
+  elements.portfolioTax.value = transaction.tax ?? 0;
+  elements.portfolioNote.value = transaction.note || "";
+  elements.portfolioSubmitButton.textContent = "更新交易";
+  elements.portfolioForm.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function resetPortfolioForm() {
+  elements.portfolioTransactionId.value = "";
+  elements.portfolioStockId.value = state.activeStockId || "";
+  elements.portfolioTradeDate.value = new Date().toISOString().slice(0, 10);
+  elements.portfolioSide.value = "buy";
+  elements.portfolioShares.value = "";
+  elements.portfolioPrice.value = "";
+  elements.portfolioFee.value = "0";
+  elements.portfolioTax.value = "0";
+  elements.portfolioNote.value = "";
+  elements.portfolioSubmitButton.textContent = "儲存交易";
+  state.feeManual = false;
+  state.taxManual = false;
+  if (elements.portfolioPriceHint) elements.portfolioPriceHint.textContent = "";
+  hidePortfolioStockSuggest();
+}
+
+function portfolioStockLabel(item) {
+  const profile = item.profile;
+  if (profile?.short_name) return `${item.stock_id} ${profile.short_name}`;
+  return item.stock_id;
+}
+
+function portfolioPnlText(value, percent) {
+  if (value == null) return "--";
+  return `${formatSignedMoney(value)} (${formatPercent(percent)})`;
+}
+
+function sideLabel(side) {
+  return side === "sell" ? "賣出" : "買進";
+}
+
+function renderStock(payload, fallbackStockId) {
+  const profile = payload.profile;
+  const prices = payload.prices || [];
+  const summary = payload.summary || {};
+  state.activeSummary = summary;
+  state.activePayload = payload;
+  hideSyncProgress();
+
+  elements.stockMarket.textContent = profile?.market || "TWSE";
+  elements.stockTitle.textContent = profile
+    ? `${profile.stock_id} ${profile.short_name}`
+    : fallbackStockId;
+  elements.stockSubtitle.textContent = profile?.name || "本地尚無公司基本資料";
+  elements.stockDataNote.textContent = summary.end_date
+    ? `資料日 ${summary.end_date}｜日線收盤資料，非即時報價`
+    : "日線收盤資料，非即時報價";
+
+  // 公司類型 + 股利法適用性徽章
+  const suitability = payload.valuation?.suitability;
+  const ctypeBadge = document.querySelector("#stockCtypeBadge");
+  const confBadge = document.querySelector("#stockConfBadge");
+  if (ctypeBadge) {
+    const label = suitability?.company_type_label;
+    if (label && suitability?.state !== "applicable") {
+      ctypeBadge.textContent = `🏷 ${label}`;
+      ctypeBadge.className = "ctype-header-badge";
+    } else {
+      ctypeBadge.textContent = "";
+      ctypeBadge.className = "ctype-header-badge hidden";
+    }
+  }
+  if (confBadge) {
+    const suitabilityState = suitability?.state;
+    if (suitabilityState && suitabilityState !== "applicable") {
+      const tone = suitabilityState === "not_applicable" ? "low" : "medium";
+      confBadge.textContent = suitability?.state_label || valuationStateLabel(suitabilityState);
+      confBadge.className = `conf-header-badge conf-header-${tone}`;
+    } else {
+      confBadge.textContent = "";
+      confBadge.className = "conf-header-badge hidden";
+    }
+  }
+  if (!elements.portfolioTransactionId.value && !elements.portfolioStockId.value) {
+    elements.portfolioStockId.value = profile?.stock_id || fallbackStockId || "";
+  }
+  elements.latestClose.textContent = formatNumber(summary.latest_close);
+  elements.rowCount.textContent = `${summary.rows || 0}`;
+  renderPriceWindow(payload.price_window, summary);
+  elements.pricePosition.textContent = summary.price_position == null
+    ? "--"
+    : `${Math.round(summary.price_position * 100)}%`;
+
+  const change = summary.change;
+  const changePercent = summary.change_percent;
+  elements.dailyChangeLabel.textContent = summary.change_source === "twse_change"
+    ? "官方漲跌價差"
+    : "較前一交易日";
+  elements.dailyChange.classList.toggle("up", change > 0);
+  elements.dailyChange.classList.toggle("down", change < 0);
+  elements.dailyChange.textContent = change == null
+    ? "--"
+    : `${change > 0 ? "+" : ""}${formatNumber(change)} (${changePercent > 0 ? "+" : ""}${formatNumber(changePercent)}%)`;
+
+  const latestWithNote = [...prices].reverse().find((item) => item.note);
+  elements.latestNote.textContent = summary.change_note || (latestWithNote ? formatPriceNote(latestWithNote.note) : "");
+  renderQuote(payload.quote, summary);
+  renderCompanyBrief(payload.brief);
+  renderRevenue(payload.revenue_summary, payload.monthly_revenues || []);
+  renderFinancial(payload.financial_summary, payload.financial_statements || []);
+  renderValidation(payload.validation);
+  renderHealthReport(payload.report);
+  renderValuation(payload.valuation, payload.dividends || [], summary, payload.quote || {});
+  renderWatchlistButton(Boolean(payload.is_watchlisted));
+  renderRows(prices.filter(isTradingRow));
+  state.activeChips = payload.chips || null;
+  state.chartNewsEvents = [];
+  setupChart(prices, payload.chips_series || [], buildChartEvents(payload));
+  renderDateEvent((state.chartAll || []).length - 1);
+  renderChipsCard(payload.chips);
+  state.activeAssessment = payload.assessment;
+  state.newsRiskSummary = null;
+  renderAssessmentMerged();
+  scheduleQuoteRefresh();
+  loadNews(profile?.stock_id || fallbackStockId, profile?.short_name || profile?.name || "");
+}
+
+function renderPriceWindow(priceWindow, summary) {
+  const fallbackLabel = summary.start_date && summary.end_date
+    ? `${summary.start_date} 至 ${summary.end_date}`
+    : "--";
+  const isPartial = Boolean(priceWindow?.is_partial || priceWindow?.is_stale);
+  elements.priceChartTitle.textContent = isPartial
+    ? "可用收盤價（日線，非完整近一年）"
+    : "近一年收盤價（日線）";
+  elements.dateRange.textContent = priceWindow?.label || fallbackLabel;
+  elements.dateRange.classList.toggle("stale", isPartial);
+  if (isPartial && priceWindow?.stale_days != null) {
+    elements.stockDataNote.textContent += `｜日線資料過期 ${priceWindow.stale_days} 天，請重新同步`;
+  }
+}
+
+async function refreshQuote(stockId) {
+  if (!stockId || stockId !== state.activeStockId) return;
+  try {
+    const payload = await getJson(`/api/quotes/${encodeURIComponent(stockId)}`);
+    if (stockId === state.activeStockId) {
+      renderQuote(payload.quote, state.activeSummary || {});
+    }
+  } catch (error) {
+    renderQuote(
+      {
+        available: false,
+        status_label: "未取得盤中報價",
+        display_price: state.activeSummary?.latest_close,
+        display_price_label: "最近收盤",
+        message: error.message,
+      },
+      state.activeSummary || {},
+    );
+  }
+}
+
+function scheduleQuoteRefresh() {
+  if (state.quoteTimer) {
+    window.clearInterval(state.quoteTimer);
+  }
+  if (!state.activeStockId) return;
+  state.quoteTimer = window.setInterval(() => {
+    refreshQuote(state.activeStockId);
+  }, 30000);
+}
+
+function renderQuote(quote, summary) {
+  const fallbackClose = summary?.latest_close;
+  const displayPrice = quote?.display_price ?? fallbackClose;
+  const displayChange = quote?.display_change;
+  const displayChangePercent = quote?.display_change_percent;
+
+  elements.quoteStatus.textContent = quote?.status_label || "未取得盤中報價";
+  elements.quotePriceLabel.textContent = quote?.display_price_label || "最近收盤";
+  elements.quotePrice.textContent = formatNumber(displayPrice);
+  elements.quotePrice.classList.toggle("up", displayChange > 0);
+  elements.quotePrice.classList.toggle("down", displayChange < 0);
+  elements.quoteTime.textContent = quote?.trade_datetime
+    ? `資料時間 ${quote.trade_datetime}`
+    : "目前只顯示日線收盤";
+
+  elements.quoteChangeLabel.textContent = quote?.status === "reference_only"
+    ? "參考漲跌"
+    : "今日漲跌";
+  elements.quoteChange.classList.toggle("up", displayChange > 0);
+  elements.quoteChange.classList.toggle("down", displayChange < 0);
+  elements.quoteChange.textContent = displayChange == null
+    ? "--"
+    : `${displayChange > 0 ? "+" : ""}${formatNumber(displayChange)} (${displayChangePercent > 0 ? "+" : ""}${formatNumber(displayChangePercent)}%)`;
+  elements.quotePreviousClose.textContent = quote?.previous_close == null
+    ? "昨收 --"
+    : `昨收 ${formatNumber(quote.previous_close)}`;
+
+  elements.quoteDayRange.textContent = quote?.high_price == null || quote?.low_price == null
+    ? "--"
+    : `${formatNumber(quote.high_price)} / ${formatNumber(quote.low_price)}`;
+  elements.quoteOpen.textContent = quote?.open_price == null
+    ? "開盤 --"
+    : `開盤 ${formatNumber(quote.open_price)}`;
+
+  elements.quoteBidAsk.textContent = quote?.best_bid_price == null || quote?.best_ask_price == null
+    ? "--"
+    : `${formatNumber(quote.best_bid_price)} / ${formatNumber(quote.best_ask_price)}`;
+  elements.quoteSpread.textContent = quote?.spread == null
+    ? "價差 --"
+    : `價差 ${formatNumber(quote.spread)} (${formatNumber(quote.spread_percent)}%)`;
+  elements.quoteNote.textContent = quote?.message || "盤中報價僅供資料檢視，不構成投資建議。";
+
+  // 同步到第一層 hero header 的大字價格
+  if (elements.stockHeaderPrice) {
+    elements.stockHeaderPrice.textContent = formatNumber(displayPrice);
+    elements.stockHeaderPrice.classList.toggle("up", displayChange > 0);
+    elements.stockHeaderPrice.classList.toggle("down", displayChange < 0);
+  }
+  if (elements.stockHeaderPriceLabel) {
+    elements.stockHeaderPriceLabel.textContent = quote?.display_price_label || "最近收盤";
+  }
+  if (elements.stockHeaderChange) {
+    elements.stockHeaderChange.textContent = displayChange == null
+      ? "--"
+      : `${displayChange > 0 ? "+" : ""}${formatNumber(displayChange)} (${displayChangePercent > 0 ? "+" : ""}${formatNumber(displayChangePercent)}%)`;
+    elements.stockHeaderChange.classList.toggle("up", displayChange > 0);
+    elements.stockHeaderChange.classList.toggle("down", displayChange < 0);
+  }
+}
+
+function renderRevenue(summary, records) {
+  const latest = records[0];
+  elements.revenueStatus.textContent = latest?.source_updated_at
+    ? `資料日 ${latest.source_updated_at}`
+    : "資料源 TWSE";
+  elements.revenueSummaryTitle.textContent = summary?.title || "每月營收待補";
+  elements.revenueSummaryValue.textContent = latest
+    ? formatRevenue(latest.current_month_revenue)
+    : "--";
+  elements.revenueSummaryText.textContent = summary?.sentence || "同步後會顯示最新月營收。";
+  elements.revenueMom.textContent = formatPercent(latest?.mom_percent);
+  elements.revenueYoy.textContent = formatPercent(latest?.yoy_percent);
+  elements.revenueCumulativeYoy.textContent = formatPercent(latest?.cumulative_yoy_percent);
+  setTone(elements.revenueMom, latest?.mom_percent);
+  setTone(elements.revenueYoy, latest?.yoy_percent);
+  setTone(elements.revenueCumulativeYoy, latest?.cumulative_yoy_percent);
+
+  elements.revenueRows.innerHTML = records.length
+    ? records.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.year_month)}</td>
+        <td>${formatRevenue(item.current_month_revenue)}</td>
+        <td class="${toneClass(item.mom_percent)}">${formatPercent(item.mom_percent)}</td>
+        <td class="${toneClass(item.yoy_percent)}">${formatPercent(item.yoy_percent)}</td>
+        <td>${formatRevenue(item.cumulative_revenue)}</td>
+        <td class="${toneClass(item.cumulative_yoy_percent)}">${formatPercent(item.cumulative_yoy_percent)}</td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="6">尚無每月營收資料，請按同步更新。</td></tr>`;
+}
+
+function renderFinancial(summary, records) {
+  const latest = records[0];
+  elements.financialStatus.textContent = latest?.source_updated_at
+    ? `資料日 ${latest.source_updated_at}`
+    : "資料源 TWSE";
+  elements.financialSummaryTitle.textContent = summary?.title || "獲利資料待補";
+  elements.financialSummaryValue.textContent = latest?.eps == null
+    ? "--"
+    : `${formatNumber(latest.eps)} 元`;
+  elements.financialSummaryText.textContent = summary?.sentence || "同步後會顯示 EPS、ROE、ROA。";
+  elements.netMargin.textContent = formatPercent(latest?.net_margin_percent);
+  elements.roeValue.textContent = formatPercent(latest?.roe_percent);
+  elements.roaValue.textContent = formatPercent(latest?.roa_percent);
+  setTone(elements.netMargin, latest?.net_margin_percent);
+  setTone(elements.roeValue, latest?.roe_percent);
+  setTone(elements.roaValue, latest?.roa_percent);
+
+  elements.financialRows.innerHTML = records.length
+    ? records.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.quarter_label)}</td>
+        <td>${formatRevenue(item.revenue)}</td>
+        <td>${formatPercent(item.gross_margin_percent)}</td>
+        <td>${formatPercent(item.operating_margin_percent)}</td>
+        <td>${formatRevenue(item.parent_net_income ?? item.net_income)}</td>
+        <td>${formatNumber(item.eps)}</td>
+        <td>${formatPercent(item.roe_percent)}</td>
+        <td>${formatPercent(item.roa_percent)}</td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="8">尚無最新季財報資料，請按同步更新。</td></tr>`;
+}
+
+function renderValidation(validation) {
+  const items = validation?.items || [];
+  const title = document.querySelector("#validationTitle");
+  if (title) {
+    title.textContent = validation?.title || "明牌驗證工作台";
+  }
+  elements.validationItems.innerHTML = items.map((item) => `
+    <article class="validation-item tone-${escapeHtml(item.tone || "neutral")}">
+      <strong>${escapeHtml(item.label)}</strong>
+      <p>${renderGlossaryText(item.text)}</p>
+    </article>
+  `).join("");
+}
+
+function renderWatchlistButton(isWatchlisted) {
+  elements.watchlistButton.dataset.watchlisted = isWatchlisted ? "true" : "false";
+  elements.watchlistButton.innerHTML = `${starIconMarkup()} ${isWatchlisted ? "移除自選" : "加入自選"}`;
+  elements.watchlistButton.classList.toggle("danger-button", isWatchlisted);
+}
+
+async function toggleWatchlist(stockId) {
+  const isWatchlisted = elements.watchlistButton.dataset.watchlisted === "true";
+  try {
+    if (isWatchlisted) {
+      await fetch(`/api/watchlist/${encodeURIComponent(stockId)}`, { method: "DELETE" }).then(readJsonResponse);
+      renderWatchlistButton(false);
+      showMessage(`${stockId} 已移出自選`);
+    } else {
+      await postJson("/api/watchlist", { stock_id: stockId });
+      renderWatchlistButton(true);
+      showMessage(`${stockId} 已加入自選`);
+    }
+    await loadWatchlist();
+    window.setTimeout(hideMessage, 1600);
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+function renderHealthReport(report) {
+  if (!report || !Array.isArray(report.sections)) {
+    elements.reportEngine.textContent = "尚無解說";
+    elements.healthReport.innerHTML = "";
+    elements.reportDisclaimer.textContent = "";
+    return;
+  }
+
+  elements.reportEngine.textContent = report.engine === "rule_based"
+    ? "規則式解說"
+    : escapeHtml(report.engine || "解說");
+  elements.healthReport.innerHTML = report.sections.map(renderHealthCard).join("");
+  elements.reportDisclaimer.textContent = report.disclaimer || "";
+}
+
+function renderHealthCard(section) {
+  const tone = escapeHtml(section.tone || "neutral");
+  const parts = parseHealthSentences(section.sentences || []);
+  const hero = parts.hero
+    ? `<p class="report-hero">${renderGlossaryText(parts.hero)}</p>`
+    : "";
+  const stat = parts.stat
+    ? `<p class="report-stat">${renderGlossaryText(parts.stat)}</p>`
+    : "";
+  const extra = parts.extra
+    .map((text) => `<p class="report-extra">${renderGlossaryText(text)}</p>`)
+    .join("");
+  const details = parts.details.length
+    ? `<details class="report-more">
+        <summary>為什麼 · 要注意</summary>
+        <ul>${parts.details.map((line) => `<li>${renderGlossaryText(line)}</li>`).join("")}</ul>
+      </details>`
+    : "";
+  return `
+    <article class="report-card tone-${tone}">
+      <div class="report-card-head">
+        <span class="report-icon">${healthIcon(section.title)}</span>
+        <h4>${renderGlossaryText(section.title)}</h4>
+        <span class="report-tone">${toneLabel(section.tone)}</span>
+      </div>
+      ${hero}${stat}${extra}${details}
+    </article>
+  `;
+}
+
+function parseHealthSentences(sentences) {
+  const parts = { hero: "", stat: "", details: [], extra: [] };
+  for (const sentence of sentences) {
+    const [label, body] = splitHealthLabel(sentence);
+    if (label === "白話" && !parts.hero) parts.hero = body;
+    else if (label === "數字" && !parts.stat) parts.stat = body;
+    else if (label === "為什麼" || label === "要注意") parts.details.push(sentence);
+    else parts.extra.push(sentence);
+  }
+  if (!parts.hero) {
+    // 沒有「白話：」前綴時，用第一句當結論，其餘進摺疊
+    if (parts.extra.length) parts.hero = parts.extra.shift();
+    else if (parts.stat) { parts.hero = parts.stat; parts.stat = ""; }
+  }
+  return parts;
+}
+
+function splitHealthLabel(sentence) {
+  const text = String(sentence ?? "");
+  const index = text.indexOf("：");
+  if (index > 0 && index <= 4) {
+    return [text.slice(0, index), text.slice(index + 1).trim()];
+  }
+  return ["", text];
+}
+
+function healthIcon(title) {
+  const key = String(title || "");
+  let path = '<path d="M4 19V5M4 19h16M8 15l3-3 2 2 4-5"/>'; // 趨勢
+  if (key.includes("位階")) path = '<path d="M12 3a9 9 0 0 0-9 9h4a5 5 0 0 1 10 0h4a9 9 0 0 0-9-9Z"/><path d="M12 12l4-2"/>';
+  else if (key.includes("獲利")) path = '<path d="M4 19V5M4 19h16M8 16v-4M12 16V9M16 16v-7"/>';
+  else if (key.includes("波動")) path = '<path d="M3 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/>';
+  else if (key.includes("股利")) path = '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 9.8c0-1 1.1-1.8 2.5-1.8s2.5.7 2.5 1.6c0 2.2-5 1-5 3.2 0 .9 1.1 1.6 2.5 1.6s2.5-.8 2.5-1.8"/>';
+  else if (key.includes("估值") || key.includes("適用")) path = '<path d="M12 3v18M5 8l7-5 7 5M3 12l4-2 4 2-4 2zM13 12l4-2 4 2-4 2z"/>';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>`;
+}
+
+function renderValuationSuitability(suitability) {
+  const banner = elements.valuationSuitability;
+  const body = elements.valuationDividendBody;
+  if (!banner) return;
+  if (!suitability) {
+    banner.hidden = true;
+    banner.innerHTML = "";
+    if (body) body.classList.remove("val-collapsed", "val-dim");
+    return;
+  }
+  const state = suitability.state || "applicable";
+  const rec = suitability.recommended || {};
+  const variant = state === "not_applicable" ? "na" : state === "low_confidence" ? "low" : "ok";
+  const tag = suitability.company_type_label
+    ? `<span class="ctype-tag">🏷 ${escapeHtml(suitability.company_type_label)}</span>`
+    : "";
+  const badgeTone = state === "not_applicable" ? "low" : state === "low_confidence" ? "medium" : "high";
+  const badge = `<span class="conf-badge conf-${badgeTone}">${escapeHtml(suitability.state_label || valuationStateLabel(state))}</span>`;
+  const head = `<div class="sb-head">${tag}${badge}<strong class="sb-title">${escapeHtml(suitability.headline || "")}</strong></div>`;
+
+  banner.hidden = false;
+  banner.className = `suitability-banner is-${variant}`;
+
+  if (state === "applicable") {
+    banner.innerHTML = head;
+    body.classList.remove("val-collapsed", "val-dim");
+    return;
+  }
+
+  const reasons = (suitability.reason_texts || [])
+    .map((text) => `<li>${escapeHtml(text)}</li>`)
+    .join("");
+  const methods = [];
+  if (rec.primary_label && rec.primary && rec.primary !== "yield" && rec.primary !== "none") {
+    methods.push(rec.primary_label);
+  }
+  (rec.secondary_labels || []).forEach((label) => methods.push(label));
+  const methodLine = methods.length
+    ? `<p class="sb-methods">建議改看 👉 ${methods.map(escapeHtml).join(" · ")}</p>`
+    : "";
+  const toggle = state === "not_applicable"
+    ? `<button type="button" class="sb-toggle" id="valSuitabilityToggle">▸ 仍要看股利法試算（已知參考性低）</button>`
+    : "";
+  banner.innerHTML = `
+    ${head}
+    ${reasons ? `<ul class="sb-reasons">${reasons}</ul>` : ""}
+    ${methodLine}
+    ${toggle}
+  `;
+
+  if (state === "not_applicable") {
+    body.classList.add("val-collapsed");
+    body.classList.remove("val-dim");
+    const btn = document.querySelector("#valSuitabilityToggle");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const collapsed = body.classList.toggle("val-collapsed");
+        btn.textContent = collapsed
+          ? "▸ 仍要看股利法試算（已知參考性低）"
+          : "▾ 收起股利法試算";
+      });
+    }
+  } else {
+    body.classList.add("val-dim");
+    body.classList.remove("val-collapsed");
+  }
+}
+
+function renderCompanyBrief(brief) {
+  if (!elements.companyBriefTitle) return;
+  elements.companyBriefTitle.textContent = brief?.company_sentence || "公司資料待補";
+  elements.companyBriefText.textContent = brief?.valuation_sentence || "同步後會顯示這檔股票適合先看哪一把尺。";
+  elements.companyBriefAdvice.textContent = brief?.non_advice || "這是資料翻譯，不是買賣建議，也不預測股價。";
+  const tags = brief?.risk_tags || [];
+  elements.companyRiskTags.innerHTML = tags.length
+    ? tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")
+    : `<span>待補風險標籤</span>`;
+}
+
+function renderValuation(valuation, dividends, stockSummary = {}, quote = {}) {
+  const market = valuation?.market;
+  const dividendSummary = valuation?.dividend_summary || {};
+  const displayPrice = quote?.display_price ?? stockSummary?.latest_close;
+  elements.avgCashDividend.textContent = formatNumber(dividendSummary.average_cash_dividend);
+  elements.dividendCoverage.textContent = dividendEstimateLabel(dividendSummary);
+  elements.peRatio.textContent = formatNumber(market?.pe_ratio);
+  elements.marketDate.textContent = market?.date ? `資料日 ${market.date}` : "尚無官方日資料";
+  elements.marketYield.textContent = market?.dividend_yield == null
+    ? "--"
+    : `${formatNumber(market.dividend_yield)}%`;
+  const confidence = valuation?.confidence || "medium";
+  renderEtfNote();
+  renderValuationSuitability(valuation?.suitability);
+  renderValuationBands(valuation?.bands);
+  renderRelativeValuation(valuation?.relative, valuation?.vital_signs);
+  elements.valuationEstimates.hidden = true;
+  elements.valuationEstimates.innerHTML = "";
+  if (elements.dividendAssumptionNote) {
+    elements.dividendAssumptionNote.textContent = buildDividendAssumptionNote(dividendSummary);
+  }
+  renderAverageDividendValuation(valuation, displayPrice);
+  const suitabilityNotes = valuation?.suitability_notes || [];
+  elements.valuationWarning.textContent = [
+    valuationConfidenceSentence(confidence),
+    ...(suitabilityNotes || []),
+    valuation?.warning,
+  ].filter(Boolean).join(" ");
+  elements.valuationWarning.classList.toggle("caution-note", confidence === "low");
+  elements.dividendRows.innerHTML = dividends.length
+    ? dividends.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.year)}</td>
+        <td>${escapeHtml(item.period)}</td>
+        <td>${formatNumber(item.cash_dividend)}</td>
+        <td>${formatNumber(item.stock_dividend)}</td>
+        <td>${escapeHtml(item.status)}</td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="5">尚無股利資料，請先同步或等待資料源補齊。</td></tr>`;
+}
+
+function isEtfStock(stockId) {
+  const id = String(stockId || "").trim();
+  return /^00\d/.test(id) && id.length >= 4; // 台股 ETF 代號 00 開頭（0050/0056/00878…）
+}
+
+function renderEtfNote() {
+  const note = elements.etfNote;
+  if (!note) return;
+  if (isEtfStock(state.activeStockId)) {
+    note.hidden = false;
+    note.innerHTML = `🏷 <strong>ETF</strong> · 一籃子股票，沒有單一公司獲利。下面的「殖利率情境」請當成<strong>配息殖利率區間</strong>參考，<strong>不適用</strong>個股本益比／股利估價。折溢價與成分股集中度待接資料源後再補。`;
+  } else {
+    note.hidden = true;
+    note.innerHTML = "";
+  }
+}
+
+function renderValuationBands(bands) {
+  const container = elements.valuationBands;
+  if (!container) return;
+  const metrics = [];
+  if (bands?.pe?.available) metrics.push(["本益比 (PE)", "pe", bands.pe]);
+  if (bands?.pb?.available) metrics.push(["本淨比 (PB)", "pb", bands.pb]);
+  if (!metrics.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+  container.hidden = false;
+  container.innerHTML = `
+    <div class="bands-head">
+      <h4>歷史本益比 / 本淨比河流圖</h4>
+      <span class="muted-tag">近 ${escapeHtml(String(bands.years || 5))} 年 · 中性呈現</span>
+    </div>
+    ${metrics.map(([label, key, band]) => renderRiverBlock(label, key, band)).join("")}
+    <p class="disclaimer">${escapeHtml(bands.disclaimer || "只呈現目前倍數在自己近年區間的相對位置，不是估值高低判斷、不預測股價。")}</p>
+  `;
+  metrics.forEach(([, key, band]) => {
+    const canvas = container.querySelector(`#river_${key}`);
+    if (canvas) drawValuationRiver(canvas, band);
+  });
+}
+
+function renderRiverBlock(label, key, band) {
+  const pct = band.current_percentile == null ? null : Math.round(Number(band.current_percentile));
+  const zone = pct == null ? "資料不足" : pct >= 80 ? "相對高" : pct <= 20 ? "相對低" : "中段";
+  const pctText = pct == null ? "" : `近年第 ${pct} 百分位（${zone}）`;
+  const hasSeries = Array.isArray(band.series) && band.series.length >= 2;
+  const body = hasSeries
+    ? `<canvas id="river_${key}" class="band-river" width="600" height="120"></canvas>`
+    : renderBandBar(band);
+  return `
+    <div class="band-row">
+      <div class="band-row-head">
+        <strong>${escapeHtml(label)}</strong>
+        <span>目前 ${formatNumber(band.current)} 倍 · ${pctText}</span>
+      </div>
+      ${body}
+      <div class="band-scale"><span>低 ${formatNumber(band.low)}</span><span>中段帶 = 近年第 20–80 百分位</span><span>高 ${formatNumber(band.high)}</span></div>
+    </div>
+  `;
+}
+
+function renderBandBar(band) {
+  const lo = Number(band.low);
+  const hi = Number(band.high);
+  const span = hi - lo || 1;
+  const pos = (v) => Math.max(0, Math.min(100, ((Number(v) - lo) / span) * 100));
+  return `
+    <div class="band-track">
+      <span class="band-zone" style="left:${pos(band.p20)}%; width:${Math.max(0, pos(band.p80) - pos(band.p20))}%"></span>
+      <span class="band-tick" style="left:${pos(band.p50)}%"></span>
+      <span class="band-cursor" style="left:${pos(band.current)}%"></span>
+    </div>
+  `;
+}
+
+function drawValuationRiver(canvas, band) {
+  const series = Array.isArray(band.series) ? band.series : [];
+  if (series.length < 2) return;
+  const values = series.map((p) => Number(p.value));
+  const scale = window.devicePixelRatio || 1;
+  const cssWidth = canvas.clientWidth || canvas.parentElement?.clientWidth || 600;
+  const cssHeight = 120;
+  canvas.width = Math.floor(cssWidth * scale);
+  canvas.height = Math.floor(cssHeight * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  const pad = { top: 12, right: 48, bottom: 18, left: 10 };
+  const innerW = cssWidth - pad.left - pad.right;
+  const innerH = cssHeight - pad.top - pad.bottom;
+  const lo = Math.min(Number(band.low), ...values);
+  const hi = Math.max(Number(band.high), ...values);
+  const range = hi - lo || 1;
+  const xAt = (i) => pad.left + (innerW * i) / (series.length - 1);
+  const yAt = (v) => pad.top + innerH - ((v - lo) / range) * innerH;
+
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+  if (band.p20 != null && band.p80 != null) {
+    const yTop = yAt(Number(band.p80));
+    const yBot = yAt(Number(band.p20));
+    ctx.fillStyle = "rgba(28, 61, 90, 0.12)";
+    ctx.fillRect(pad.left, yTop, innerW, Math.max(1, yBot - yTop));
+  }
+  if (band.p50 != null) {
+    ctx.strokeStyle = "#9AA6B2";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, yAt(Number(band.p50)));
+    ctx.lineTo(cssWidth - pad.right, yAt(Number(band.p50)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.beginPath();
+  series.forEach((point, i) => {
+    const px = xAt(i);
+    const py = yAt(Number(point.value));
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.strokeStyle = "#1C3D5A";
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  const lastIndex = series.length - 1;
+  ctx.fillStyle = "#1C3D5A";
+  ctx.beginPath();
+  ctx.arc(xAt(lastIndex), yAt(values[lastIndex]), 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#9AA6B2";
+  ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillText(formatNumber(hi), cssWidth - pad.right + 6, pad.top + 4);
+  ctx.fillText(formatNumber(lo), cssWidth - pad.right + 6, cssHeight - pad.bottom);
+  ctx.fillText(String(series[0].date || "").slice(0, 7), pad.left, cssHeight - 5);
+  const lastLabel = String(series[lastIndex].date || "").slice(0, 7);
+  ctx.fillText(lastLabel, cssWidth - pad.right - 38, cssHeight - 5);
+}
+
+function renderRelativeValuation(relative, vitalSigns = null) {
+  const container = elements.relativeValuation;
+  if (!container) return;
+  if (relative?.status === "not_applicable") {
+    const notes = (relative.notes || [])
+      .map((text) => `<li>${escapeHtml(text)}</li>`)
+      .join("");
+    container.hidden = false;
+    container.innerHTML = `
+      <article class="relative-card relative-refusal confidence-low">
+        <div class="relative-card-head">
+          <div>
+            <span class="relative-kicker">誠實功能</span>
+            <h4>${escapeHtml(relative.headline || "目前先不估價")}</h4>
+          </div>
+          <span class="conf-badge conf-low">不估價</span>
+        </div>
+        <p class="relative-headline">這檔現在不適合硬塞股利、PE 或 PB 價格。先看基本面趨勢，等資料穩定再談估值。</p>
+        ${notes ? `<ul class="relative-refusal-list">${notes}</ul>` : ""}
+        ${renderVitalSigns(vitalSigns)}
+      </article>
+    `;
+    return;
+  }
+  const methods = (relative?.methods || []).filter((item) => item && item.estimates?.length).slice(0, 2);
+  if (!methods.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    return;
+  }
+
+  container.hidden = false;
+  container.innerHTML = methods.map((method) => {
+    const note = (method.notes || [])[0] || method.warning || "";
+    const primary = method.method === relative.primary_method;
+    const estimates = method.estimates.map((item) => `
+      <div class="relative-scenario">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${formatApproxPrice(item.price)}</strong>
+        <p>${formatNumber(item.multiple)} 倍</p>
+      </div>
+    `).join("");
+    const anchorText = "中心情境等於目前價；上下兩格只看倍數變動敏感度。";
+    return `
+      <article class="relative-card confidence-${escapeHtml(method.confidence || "medium")} ${primary ? "is-primary" : ""}">
+        <div class="relative-card-head">
+          <div>
+            <span class="relative-kicker">${primary ? "改看主尺" : "輔助尺"}</span>
+            <h4>${escapeHtml(method.title)}</h4>
+          </div>
+          <span class="conf-badge conf-${relativeConfidenceTone(method.confidence)}">${escapeHtml(valuationConfidenceLabel(method.confidence))}</span>
+        </div>
+        <p class="relative-headline">${escapeHtml(method.headline)}</p>
+        <p class="relative-note">以目前倍數為中心；目前倍數本身可能偏高或偏低，這裡不判斷交易基準。</p>
+        <div class="relative-metrics">
+          <div>
+            <span>${escapeHtml(method.basis_label)}</span>
+            <strong>${formatNumber(method.basis_value)}</strong>
+            <p>${escapeHtml(relativeBasisLabel(method.basis_source))}</p>
+          </div>
+          <div>
+            <span>${escapeHtml(method.multiple_label)}</span>
+            <strong>${formatNumber(method.current_multiple)} 倍</strong>
+            <p>${escapeHtml(anchorText)}</p>
+          </div>
+        </div>
+        <div class="relative-scenarios">${estimates}</div>
+        <p class="relative-note">${escapeHtml(note)}</p>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderVitalSigns(vitalSigns) {
+  const facts = Array.isArray(vitalSigns?.facts) ? vitalSigns.facts : [];
+  if (!facts.length) return "";
+  const cards = facts.map((item) => `
+    <div class="vital-sign tone-${escapeHtml(item.tone || "neutral")}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+      <p>${escapeHtml(item.text)}</p>
+    </div>
+  `).join("");
+  return `
+    <section class="vital-signs-card tone-${escapeHtml(vitalSigns.tone || "neutral")}">
+      <div>
+        <span class="relative-kicker">替代看法</span>
+        <h5>${escapeHtml(vitalSigns.title || "體質觀察")}</h5>
+        <p>${escapeHtml(vitalSigns.sentence || "先看營收、毛利率與 EPS 是否改善。")}</p>
+      </div>
+      <div class="vital-signs-grid">${cards}</div>
+    </section>
+  `;
+}
+
+function renderAverageDividendValuation(valuation, displayPrice = null) {
+  const dividendSummary = valuation?.dividend_summary || {};
+  const estimates = valuation?.estimates || [];
+  const confidence = valuation?.confidence || "medium";
+  if (!estimates.length) {
+    elements.historicalYieldStatus.textContent = "資料不足";
+    elements.historicalYieldGrid.innerHTML = `
+      <div class="estimate-card">
+        <span>近 5 年平均股利</span>
+        <strong>--</strong>
+        <p>需要最近 5 個發放年度股利</p>
+      </div>
+      <div class="estimate-card">
+        <span>高殖利率情境</span>
+        <strong>--</strong>
+        <p>尚無法反推情境價</p>
+      </div>
+      <div class="estimate-card">
+        <span>平均殖利率情境</span>
+        <strong>--</strong>
+        <p>尚無歷史平均殖利率</p>
+      </div>
+      <div class="estimate-card">
+        <span>低殖利率情境</span>
+        <strong>--</strong>
+        <p>尚無歷史低殖利率</p>
+      </div>
+    `;
+    return;
+  }
+
+  const estimatesByScenario = new Map(estimates.map((item) => [item.scenario, item]));
+  const highYield = estimatesByScenario.get("high_yield");
+  const averageYield = estimatesByScenario.get("average_yield");
+  const lowYield = estimatesByScenario.get("low_yield");
+  const yearsCount = Math.min((dividendSummary.years || []).length, 5);
+  elements.historicalYieldStatus.textContent = `${yearsCount || 0} 年資料 · ${valuationConfidenceLabel(confidence)} · 最近 5 個發放年度平均股利`;
+  const currentDifference = displayPrice != null && highYield?.price != null
+    ? Number(displayPrice) - Number(highYield.price)
+    : null;
+  const currentDifferencePercent = currentDifference != null && highYield?.price
+    ? (currentDifference / Number(highYield.price)) * 100
+    : null;
+  const differenceText = currentDifference == null
+    ? "相對差異 --"
+    : `目前價相對此情境 ${formatSignedNumber(currentDifference)} (${formatPercent(currentDifferencePercent)})`;
+  elements.historicalYieldGrid.innerHTML = `
+    <div class="estimate-card">
+      <span>近 5 年平均股利</span>
+      <strong>${formatNumber(dividendSummary.average_cash_dividend)}</strong>
+      <p>${dividendEstimateLabel(dividendSummary)}</p>
+    </div>
+    <div class="estimate-card highlight-card confidence-${escapeHtml(confidence)}">
+      <span>高殖利率情境</span>
+      <strong>${formatApproxPrice(highYield?.price)}</strong>
+      <p class="${toneClass(currentDifference)}">${confidence === "low" ? "低信心估算 · " : ""}${differenceText}</p>
+    </div>
+    <div class="estimate-card">
+      <span>平均殖利率情境</span>
+      <strong>${formatApproxPrice(averageYield?.price)}</strong>
+      <p>用歷史平均殖利率 ${formatNumber(averageYield?.target_yield_percent)}% 反推</p>
+    </div>
+    <div class="estimate-card">
+      <span>低殖利率情境</span>
+      <strong>${formatApproxPrice(lowYield?.price)}</strong>
+      <p>用歷史低殖利率 ${formatNumber(lowYield?.target_yield_percent)}% 反推</p>
+    </div>
+  `;
+}
+
+function dividendScenarioLabel(item) {
+  if (!item) return "股利情境";
+  if (item.scenario === "high_yield") return "高殖利率情境";
+  if (item.scenario === "average_yield") return "平均殖利率情境";
+  if (item.scenario === "low_yield") return "低殖利率情境";
+  if (item.target_yield_percent != null) {
+    return `要求殖利率 ${formatNumber(item.target_yield_percent)}%`;
+  }
+  return "股利情境";
+}
+
+function buildDividendAssumptionNote(summary = {}) {
+  const cash = formatNumber(summary.average_cash_dividend);
+  const source = dividendEstimateLabel(summary);
+  return `股利情境不是交易基準：它只是在「年股利約 ${cash}、未來配息維持類似水準」的假設下，用要求殖利率反推價格。成長股、循環股、虧損股或配息不穩股票要降權看。資料基礎：${source}。`;
+}
+
+function relativeBasisLabel(source) {
+  if (source === "latest_four_quarters_eps") return "近四季 EPS 合計";
+  if (source === "official_pe_implied_ttm_eps") return "官方 PE 反推";
+  if (source === "latest_quarter_eps_annualized") return "最新季 EPS 年化";
+  if (source === "latest_financial_book_value") return "最新季財報";
+  if (source === "official_pb_implied_book_value") return "官方 PB 反推";
+  return "資料來源待確認";
+}
+
+function relativeConfidenceTone(confidence) {
+  if (confidence === "high") return "high";
+  if (confidence === "low") return "low";
+  return "medium";
+}
+
+function valuationConfidenceLabel(confidence) {
+  if (confidence === "high") return "信心較高";
+  if (confidence === "low") return "低信心";
+  return "信心中等";
+}
+
+function valuationConfidenceSentence(confidence) {
+  if (confidence === "low") return "這檔不適合只用股利法估價。";
+  if (confidence === "high") return "股利樣本較完整，但仍只能當配息回推參考。";
+  return "股利樣本尚可，但仍要搭配營收、獲利與產業判讀。";
+}
+
+function dividendEstimateLabel(summary) {
+  if (summary.estimate_source === "annual_dividend_records") {
+    return `${summary.rows} 筆官方股利分派資料`;
+  }
+  if (summary.estimate_source === "market_yield_implied") {
+    return "由官方殖利率與最新收盤反推";
+  }
+  if (summary.rows) {
+    return `${summary.rows} 筆股利資料，尚不足以年化`;
+  }
+  return "尚無股利資料";
+}
+
+function formatPriceNote(note) {
+  if (!note) return "";
+  if (String(note).includes("change_marker=")) {
+    const marker = String(note).split("change_marker=", 2)[1].split(";", 1)[0].trim();
+    return `日線含 ${marker || "特殊"} 標記，可能是除權息或特殊交易日；不要用前一天收盤硬減判斷單日漲跌。`;
+  }
+  return note;
+}
+
+function renderRows(prices) {
+  const recent = [...prices].slice(-12).reverse();
+  elements.priceRows.innerHTML = recent.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.date)}</td>
+      <td>${formatNumber(item.open)}</td>
+      <td>${formatNumber(item.high)}</td>
+      <td>${formatNumber(item.low)}</td>
+      <td>${formatNumber(item.close)}</td>
+      <td>${formatInteger(item.volume)}</td>
+    </tr>
+  `).join("");
+}
+
+function renderGlossaryText(text) {
+  const source = String(text ?? "");
+  if (state.glossary.patterns.length === 0) return escapeHtml(source);
+
+  let html = "";
+  let index = 0;
+  while (index < source.length) {
+    const matched = state.glossary.patterns.find((pattern) => source.startsWith(pattern, index));
+    if (matched) {
+      const term = state.glossary.aliases.get(matched);
+      html += `<button class="term-link" type="button" data-glossary-term="${escapeHtml(term)}">${escapeHtml(matched)}</button>`;
+      index += matched.length;
+    } else {
+      html += escapeHtml(source[index]);
+      index += 1;
+    }
+  }
+  return html;
+}
+
+function showGlossary(term) {
+  const entry = state.glossary.entries.get(term);
+  if (!entry) return;
+  elements.glossaryTitle.textContent = entry.term;
+  elements.glossaryPlain.textContent = entry.plain;
+  elements.glossaryHow.textContent = entry.how_to_read;
+  if (elements.glossaryGuide) { elements.glossaryGuide.innerHTML = ""; elements.glossaryGuide.classList.add("hidden"); }
+  elements.glossaryOverlay.classList.remove("hidden");
+  elements.glossaryOverlay.setAttribute("aria-hidden", "false");
+  elements.glossaryClose.focus();
+}
+
+function hideGlossary() {
+  elements.glossaryOverlay.classList.add("hidden");
+  elements.glossaryOverlay.setAttribute("aria-hidden", "true");
+}
+
+
+function renderDateEvent(index) {
+  const payload = state.activePayload || {};
+  const prices = state.chartPrices || [];
+  if (!prices.length || index == null || index < 0 || index >= prices.length) {
+    resetDateEvent();
+    return;
+  }
+
+  const price = prices[index];
+  const previous = index > 0 ? prices[index - 1] : null;
+  const changeInfo = dayChangeInfo(price, previous);
+  const change = changeInfo.change;
+  const changePercent = changeInfo.changePercent;
+  const volumeSignal = calculateVolumeSignal(prices, index);
+  const localEvents = collectNearbyEvents(payload, price.date);
+
+  elements.eventDate.textContent = price.date;
+  elements.eventSummary.textContent = buildDateEventSummary(price, changeInfo, volumeSignal);
+  elements.eventClose.textContent = formatNumber(price.close);
+  elements.eventDayChange.textContent = change == null
+    ? "--"
+    : `${change > 0 ? "+" : ""}${formatNumber(change)} (${changePercent > 0 ? "+" : ""}${formatNumber(changePercent)}%)`;
+  setTone(elements.eventDayChange, change);
+  elements.eventVolume.textContent = formatInteger(price.volume);
+  elements.eventVolumeSignal.textContent = volumeSignal.label;
+  elements.eventVolumeSignal.className = volumeSignal.tone ? `tone-text-${volumeSignal.tone}` : "";
+
+  elements.eventNewsLink.href = buildNewsSearchUrl(payload.profile, price.date);
+  elements.eventNewsLink.textContent = `查 ${price.date} 附近新聞`;
+  elements.eventItems.innerHTML = localEvents.length
+    ? localEvents.map(renderEventItem).join("")
+    : `
+      <article class="event-item tone-unknown">
+        <strong>本地事件</strong>
+        <div>
+          <span>${escapeHtml(price.date)}</span>
+          <p>附近沒有對到已同步的月營收、財報或股利事件；可以先看價量，再用新聞入口補查外部消息。</p>
+        </div>
+      </article>
+    `;
+}
+
+function resetDateEvent() {
+  elements.eventDate.textContent = "--";
+  elements.eventSummary.textContent = "指到圖表上的日期，這裡會整理當天價格、成交量與附近已知事件。";
+  elements.eventClose.textContent = "--";
+  elements.eventDayChange.textContent = "--";
+  elements.eventDayChange.classList.remove("up", "down");
+  elements.eventVolume.textContent = "--";
+  elements.eventVolumeSignal.textContent = "--";
+  elements.eventVolumeSignal.className = "";
+  elements.eventItems.innerHTML = "";
+  elements.eventNewsLink.href = "#";
+  elements.eventNewsLink.textContent = "查附近新聞";
+}
+
+function dayChangeInfo(price, previous) {
+  if (price?.change != null) {
+    return {
+      change: Number(price.change),
+      changePercent: previous?.close ? (Number(price.change) / Number(previous.close)) * 100 : null,
+      note: formatPriceNote(price.note),
+      source: "twse_change",
+    };
+  }
+  const change = previous ? Number(price.close) - Number(previous.close) : null;
+  return {
+    change,
+    changePercent: previous?.close && change != null ? (change / Number(previous.close)) * 100 : null,
+    note: "",
+    source: "close_to_close",
+  };
+}
+
+function buildDateEventSummary(price, changeInfo, volumeSignal) {
+  const change = changeInfo.change;
+  const changePercent = changeInfo.changePercent;
+  const prefix = changeInfo.source === "twse_change" ? "官方漲跌價差" : "較前一交易日";
+  let changeText = "缺少前一筆交易日，暫時不能比較漲跌";
+  if (change != null) {
+    if (change > 0) {
+      changeText = `${prefix}上漲 ${formatNumber(Math.abs(change))}（${formatPercent(changePercent)}）`;
+    } else if (change < 0) {
+      changeText = `${prefix}下跌 ${formatNumber(Math.abs(change))}（${formatPercent(changePercent)}）`;
+    } else {
+      changeText = `${prefix}持平`;
+    }
+  }
+  const noteText = changeInfo.note ? ` ${changeInfo.note}` : "";
+  return `這天收盤 ${formatNumber(price.close)}，${changeText}；成交量 ${formatInteger(price.volume)}，${volumeSignal.label}。${noteText}`;
+}
+
+function calculateVolumeSignal(prices, index) {
+  const currentVolume = Number(prices[index]?.volume);
+  const history = prices
+    .slice(Math.max(0, index - 20), index)
+    .map((item) => Number(item.volume))
+    .filter((value) => value > 0);
+  if (!currentVolume || history.length < 5) {
+    return { label: "量能待比", ratio: null, tone: "unknown" };
+  }
+  const averageVolume = history.reduce((sum, value) => sum + value, 0) / history.length;
+  const ratio = currentVolume / averageVolume;
+  if (ratio >= 2) return { label: `爆量 ${formatNumber(ratio)} 倍`, ratio, tone: "caution" };
+  if (ratio >= 1.3) return { label: `量放大 ${formatNumber(ratio)} 倍`, ratio, tone: "caution" };
+  if (ratio <= 0.6) return { label: `量偏低 ${formatNumber(ratio)} 倍`, ratio, tone: "muted" };
+  return { label: "量接近平常", ratio, tone: "neutral" };
+}
+
+function collectNearbyEvents(payload, selectedDate) {
+  const events = [];
+  const addEvent = (event) => {
+    const distance = dateDistance(selectedDate, event.eventDate);
+    if (distance == null || Math.abs(distance) > 3) return;
+    events.push({ ...event, distance });
+  };
+
+  (payload.monthly_revenues || []).forEach((item) => {
+    addEvent({
+      type: "月營收",
+      tone: Number(item.yoy_percent) >= 0 ? "positive" : "caution",
+      eventDate: item.source_updated_at,
+      title: `${item.year_month} 月營收公布`,
+      text: `當月營收 ${formatRevenue(item.current_month_revenue)}，年增 ${formatPercent(item.yoy_percent)}，累計年增 ${formatPercent(item.cumulative_yoy_percent)}。`,
+    });
+  });
+
+  (payload.financial_statements || []).forEach((item) => {
+    addEvent({
+      type: "財報",
+      tone: Number(item.eps) > 0 ? "positive" : "caution",
+      eventDate: item.source_updated_at,
+      title: `${item.quarter_label} 財報資料`,
+      text: `EPS ${formatNumber(item.eps)}，淨利率 ${formatPercent(item.net_margin_percent)}，單季 ROE ${formatPercent(item.roe_percent)}。`,
+    });
+  });
+
+  (payload.dividends || []).forEach((item) => {
+    addEvent({
+      type: "股利",
+      tone: Number(item.cash_dividend) > 0 || Number(item.stock_dividend) > 0 ? "positive" : "neutral",
+      eventDate: item.board_date || item.source_updated_at,
+      title: `${item.year} ${item.period} 股利事件`,
+      text: `現金股利 ${formatNumber(item.cash_dividend)}，股票股利 ${formatNumber(item.stock_dividend)}，狀態 ${item.status || "未標示"}。`,
+    });
+  });
+
+  return events
+    .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
+    .slice(0, 4);
+}
+
+function renderEventItem(item) {
+  return `
+    <article class="event-item tone-${escapeHtml(item.tone || "neutral")}">
+      <strong>${escapeHtml(item.type)}</strong>
+      <div>
+        <span>${escapeHtml(item.eventDate)} · ${escapeHtml(relativeDateLabel(item.distance))}</span>
+        <h4>${escapeHtml(item.title)}</h4>
+        <p>${escapeHtml(item.text)}</p>
+      </div>
+    </article>
+  `;
+}
+
+function relativeDateLabel(distance) {
+  if (distance === 0) return "同日";
+  if (distance > 0) return `${distance} 天後`;
+  return `${Math.abs(distance)} 天前`;
+}
+
+function dateDistance(fromDate, toDate) {
+  const fromDay = dateToUtcDay(fromDate);
+  const toDay = dateToUtcDay(toDate);
+  if (fromDay == null || toDay == null) return null;
+  return toDay - fromDay;
+}
+
+function dateToUtcDay(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day)) / 86400000;
+}
+
+function buildNewsSearchUrl(profile, date) {
+  const stockId = profile?.stock_id || state.activeStockId || "";
+  const name = profile?.short_name || profile?.name || "";
+  const query = `${stockId} ${name} ${date} 股票 新聞`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+const PRICE_MOVING_AVERAGES = [
+  { key: "ma5", label: "MA5", window: 5, color: "#8f5f00", width: 1.4 },
+  { key: "ma20", label: "月線 MA20", window: 20, color: "#2f63a3", width: 1.5 },
+  { key: "ma60", label: "季線 MA60", window: 60, color: "#7a4fb0", width: 1.6 },
+];
+const CANDLE_UP_COLOR = "#E03131";   // 台股慣例：收漲為紅
+const CANDLE_DOWN_COLOR = "#2F9E44"; // 收跌為綠
+const CANDLE_FLAT_COLOR = "#8a96a3";
+// 三大法人各自一個色（非紅綠，避免和漲跌混淆）；上=買超、下=賣超
+const INST_COLORS = { foreign_net: "#1C3D5A", trust_net: "#C77D11", dealer_net: "#6B4FA0" };
+const INST_LABELS = { foreign_net: "外資", trust_net: "投信", dealer_net: "自營商" };
+const EVENT_COLORS = { 風險: "#E8590C", 財報: "#2C5475", 營收: "#2C5475", 除息: "#1F9E6B" };
+
+function isTradingRow(p) {
+  return Boolean(p) && [p.open, p.high, p.low, p.close].every((v) => Number.isFinite(Number(v)) && Number(v) > 0);
+}
+
+function calculateMovingAverage(prices, windowSize) {
+  const result = [];
+  const windowValues = [];
+  let sum = 0;
+  (prices || []).forEach((item) => {
+    const value = Number(item && item.close);
+    if (!Number.isFinite(value)) { windowValues.length = 0; sum = 0; result.push(null); return; }
+    windowValues.push(value); sum += value;
+    if (windowValues.length > windowSize) sum -= windowValues.shift();
+    result.push(windowValues.length === windowSize ? sum / windowSize : null);
+  });
+  return result;
+}
+
+// ---- 設定整合圖（價格 + 三大法人 + 事件），預設顯示全部，可滾輪縮放、拖曳平移 ----
+function setupChart(prices, chipsSeries, localEvents) {
+  const valid = (prices || []).filter(isTradingRow);
+  if (!state.chartSeriesHidden) state.chartSeriesHidden = { vol: true, sr_s: true, sr_l: true };
+  state.chartAll = valid;
+  state.chartPrices = valid; // 與 renderDateEvent 等相容
+  const chipsMap = {};
+  (chipsSeries || []).forEach((c) => { if (c && c.date) chipsMap[c.date] = c; });
+  state.chartChips = chipsMap;
+  state.chartMA = PRICE_MOVING_AVERAGES.map((s) => ({ ...s, values: calculateMovingAverage(valid, s.window) }));
+  state.chartLocalEvents = localEvents || [];
+  state.chartNewsEvents = state.chartNewsEvents || [];
+  rebuildEventIndex();
+  const n = valid.length;
+  state.chartView = { start: 0, end: Math.max(0, n - 1) };
+  state.chartHoverIndex = null;
+  state.chartDragging = false;
+  drawChart();
+  updateChartLegendState();
+}
+
+function buildChartEvents(payload) {
+  const ev = [];
+  (payload.financial_statements || []).forEach((f) => {
+    if (f.source_updated_at) ev.push({ date: f.source_updated_at, type: "財報", label: `財報公布${f.quarter_label ? "（" + f.quarter_label + "）" : ""}` });
+  });
+  (payload.monthly_revenues || []).forEach((m) => {
+    if (m.source_updated_at) ev.push({ date: m.source_updated_at, type: "營收", label: `月營收公布${m.year_month ? "（" + m.year_month + "）" : ""}` });
+  });
+  (payload.dividends || []).forEach((d) => {
+    const dt = d.board_date;
+    const isEx = String(d.period || "").includes("除息") || String(d.status || "").includes("除息");
+    if (dt && isEx) ev.push({ date: dt, type: "除息", label: `除息${d.cash_dividend ? " " + d.cash_dividend + " 元" : ""}` });
+  });
+  return ev;
+}
+
+function dateDiffDays(a, b) {
+  const da = new Date(a), db = new Date(b);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return Infinity;
+  return Math.round((da - db) / 86400000);
+}
+
+function nearestChartIndex(dateStr) {
+  const all = state.chartAll || [];
+  if (!all.length || !dateStr) return -1;
+  let best = -1, bestDiff = Infinity;
+  for (let i = 0; i < all.length; i += 1) {
+    const diff = Math.abs(dateDiffDays(all[i].date, dateStr));
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return bestDiff <= 7 ? best : -1;
+}
+
+function rebuildEventIndex() {
+  const byIdx = {};
+  const add = (e) => {
+    const idx = nearestChartIndex(e.date);
+    if (idx < 0) return;
+    (byIdx[idx] = byIdx[idx] || []).push({ label: e.label, type: e.type });
+  };
+  (state.chartLocalEvents || []).forEach(add);
+  (state.chartNewsEvents || []).forEach(add);
+  state.chartEventsByIndex = byIdx;
+}
+
+function chartLayout(canvas) {
+  const scale = window.devicePixelRatio || 1;
+  const width = canvas.width ? canvas.width / scale : canvas.getBoundingClientRect().width;
+  const height = canvas.height ? canvas.height / scale : 440;
+  const padding = { top: 16, right: 66, bottom: 24, left: 56 };
+  const innerWidth = width - padding.left - padding.right;
+  const hidden = state.chartSeriesHidden || {};
+  const showVol = !hidden.vol;
+  const gap = 14;
+  const volH = showVol ? 72 : 0;
+  const extra = showVol ? gap : 0;
+  const priceH = height - padding.top - padding.bottom - volH - extra;
+  let y = padding.top;
+  const price = { top: y, height: priceH }; y += priceH;
+  let vol = null;
+  if (showVol) { y += gap; vol = { top: y, height: volH }; y += volH; }
+  return { width, height, padding, innerWidth, price, vol, chips: null };
+}
+
+function chartView() {
+  const n = (state.chartAll || []).length;
+  let v = state.chartView || { start: 0, end: Math.max(0, n - 1) };
+  let start = Math.max(0, Math.min(v.start, Math.max(0, n - 1)));
+  let end = Math.max(start, Math.min(v.end, Math.max(0, n - 1)));
+  return { start, end };
+}
+
+function chartXOf(i, view, layout) {
+  const count = view.end - view.start;
+  const denom = count > 0 ? count : 1;
+  return layout.padding.left + (layout.innerWidth * (i - view.start)) / denom;
+}
+
+function drawChart() {
+  const canvas = elements.priceChart;
+  if (!canvas) return;
+  const all = state.chartAll || [];
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.max(720, Math.floor((rect.width || 960) * scale));
+  canvas.height = Math.floor(440 * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  const layout = chartLayout(canvas);
+  ctx.clearRect(0, 0, layout.width, layout.height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, layout.width, layout.height);
+  if (all.length < 2) {
+    ctx.fillStyle = "#657068";
+    ctx.font = "13px Microsoft JhengHei, Segoe UI, Arial";
+    ctx.fillText("尚無足夠資料", layout.padding.left, layout.price.top + 24);
+    return;
+  }
+  const view = chartView();
+  const slot = layout.innerWidth / Math.max(1, view.end - view.start + 1);
+
+  drawPricePanel(ctx, layout, view, slot);
+  if (!(state.chartSeriesHidden && state.chartSeriesHidden.sr)) drawSupportResistance(ctx, layout, view);
+  if (layout.vol) drawVolPanel(ctx, layout, view, slot);
+  drawEventMarkers(ctx, layout, view);
+  drawCrosshairTooltip(ctx, layout, view);
+}
+
+function drawPricePanel(ctx, layout, view, slot) {
+  const all = state.chartAll;
+  const panel = layout.price;
+  const hidden = state.chartSeriesHidden || {};
+  const mas = state.chartMA.filter((s) => !hidden[s.key]);
+  let hi = -Infinity, lo = Infinity;
+  for (let i = view.start; i <= view.end; i += 1) {
+    hi = Math.max(hi, Number(all[i].high));
+    lo = Math.min(lo, Number(all[i].low));
+    mas.forEach((s) => { const v = s.values[i]; if (v != null && Number.isFinite(v)) { hi = Math.max(hi, v); lo = Math.min(lo, v); } });
+  }
+  const rng = (hi - lo) || 1;
+  const min = lo - rng * 0.06, max = hi + rng * 0.06, range = (max - min) || 1;
+  const yOf = (v) => panel.top + panel.height - ((v - min) / range) * panel.height;
+  state._priceYOf = yOf;
+
+  ctx.strokeStyle = "#e8ece8"; ctx.lineWidth = 1;
+  ctx.fillStyle = "#8a93a0"; ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
+  for (let g = 0; g <= 4; g += 1) {
+    const y = panel.top + (panel.height * g) / 4;
+    ctx.beginPath(); ctx.moveTo(layout.padding.left, y); ctx.lineTo(layout.width - layout.padding.right, y); ctx.stroke();
+    ctx.fillText(formatNumber(max - (range * g) / 4), layout.width - layout.padding.right + 6, y + 4);
+  }
+  // 日期軸（首尾）
+  ctx.fillStyle = "#8a93a0";
+  ctx.fillText(all[view.start].date, layout.padding.left, layout.height - 8);
+  const lastLabel = all[view.end].date;
+  ctx.fillText(lastLabel, layout.width - layout.padding.right - ctx.measureText(lastLabel).width, layout.height - 8);
+
+  // 蠟燭
+  const cw = Math.max(1, Math.min(11, slot * 0.68));
+  for (let i = view.start; i <= view.end; i += 1) {
+    const p = all[i];
+    const o = Number(p.open), h = Number(p.high), l = Number(p.low), c = Number(p.close);
+    const x = chartXOf(i, view, layout);
+    const color = c > o ? CANDLE_UP_COLOR : c < o ? CANDLE_DOWN_COLOR : CANDLE_FLAT_COLOR;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, yOf(h)); ctx.lineTo(x, yOf(l)); ctx.stroke();
+    const top = Math.min(yOf(o), yOf(c)), bh = Math.max(1, Math.abs(yOf(c) - yOf(o)));
+    ctx.fillRect(x - cw / 2, top, cw, bh);
+  }
+  // 均線
+  mas.slice().reverse().forEach((s) => {
+    ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    let started = false; ctx.beginPath();
+    for (let i = view.start; i <= view.end; i += 1) {
+      const v = s.values[i];
+      if (v == null || !Number.isFinite(v)) { started = false; continue; }
+      const x = chartXOf(i, view, layout), y = yOf(v);
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.restore();
+  });
+}
+
+function drawVolPanel(ctx, layout, view, slot) {
+  const all = state.chartAll, panel = layout.vol;
+  let vmax = 1;
+  for (let i = view.start; i <= view.end; i += 1) vmax = Math.max(vmax, Number(all[i].volume) || 0);
+  ctx.fillStyle = "#9aa4ad"; ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillText("量", layout.padding.left, panel.top - 2);
+  const bw = Math.max(1, Math.min(11, slot * 0.68));
+  for (let i = view.start; i <= view.end; i += 1) {
+    const p = all[i], v = Number(p.volume) || 0;
+    const bh = (v / vmax) * panel.height;
+    const x = chartXOf(i, view, layout);
+    const up = Number(p.close) >= Number(p.open);
+    ctx.fillStyle = up ? "rgba(224,49,49,0.45)" : "rgba(47,158,68,0.45)";
+    ctx.fillRect(x - bw / 2, panel.top + panel.height - bh, bw, bh);
+  }
+}
+
+function drawChipsPanel(ctx, layout, view, slot) {
+  const all = state.chartAll, chips = state.chartChips, panel = layout.chips;
+  const mid = panel.top + panel.height / 2;
+  const keys = ["foreign_net", "trust_net", "dealer_net"];
+  const grouped = slot >= 9; // 夠寬才畫三家，否則畫合計
+  let maxAbs = 1;
+  for (let i = view.start; i <= view.end; i += 1) {
+    const c = chips[all[i].date]; if (!c) continue;
+    if (grouped) keys.forEach((k) => { maxAbs = Math.max(maxAbs, Math.abs(Number(c[k]) || 0)); });
+    else maxAbs = Math.max(maxAbs, Math.abs(Number(c.total_net) || 0));
+  }
+  // 零軸
+  ctx.strokeStyle = "#dce2e8"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(layout.padding.left, mid); ctx.lineTo(layout.width - layout.padding.right, mid); ctx.stroke();
+  // 標題 + 小圖例
+  ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = "#6B7785";
+  ctx.fillText("三大法人買賣超（上買下賣，張）", layout.padding.left, panel.top - 2);
+  if (grouped) {
+    let lx = layout.width - layout.padding.right - 168;
+    keys.forEach((k) => { ctx.fillStyle = INST_COLORS[k]; ctx.fillRect(lx, panel.top - 9, 9, 8); ctx.fillStyle = "#6B7785"; ctx.fillText(INST_LABELS[k], lx + 12, panel.top - 2); lx += 56; });
+  }
+  ctx.fillStyle = "#8a93a0"; ctx.font = "10px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillText(Math.round(maxAbs / 1000).toLocaleString("zh-TW"), layout.width - layout.padding.right + 6, panel.top + 9);
+  const half = panel.height / 2 - 4;
+  const barOf = (v) => (Math.abs(v) / maxAbs) * half;
+  if (grouped) {
+    const groupW = Math.min(slot * 0.8, 18);
+    const bw = Math.max(1.2, groupW / 3 - 0.6);
+    for (let i = view.start; i <= view.end; i += 1) {
+      const c = chips[all[i].date]; if (!c) continue;
+      const x = chartXOf(i, view, layout);
+      keys.forEach((k, ki) => {
+        const v = Number(c[k]) || 0; if (!v) return;
+        const bx = x - groupW / 2 + ki * (bw + 0.6);
+        const bh = barOf(v);
+        ctx.fillStyle = INST_COLORS[k];
+        if (v > 0) ctx.fillRect(bx, mid - bh, bw, bh); else ctx.fillRect(bx, mid, bw, bh);
+      });
+    }
+  } else {
+    const bw = Math.max(1, Math.min(11, slot * 0.68));
+    for (let i = view.start; i <= view.end; i += 1) {
+      const c = chips[all[i].date]; if (!c) continue;
+      const v = Number(c.total_net) || 0; if (!v) continue;
+      const x = chartXOf(i, view, layout), bh = barOf(v);
+      ctx.fillStyle = v > 0 ? "rgba(28,61,90,0.8)" : "rgba(199,125,17,0.85)";
+      if (v > 0) ctx.fillRect(x - bw / 2, mid - bh, bw, bh); else ctx.fillRect(x - bw / 2, mid, bw, bh);
+    }
+  }
+}
+
+function drawEventMarkers(ctx, layout, view) {
+  const byIdx = state.chartEventsByIndex || {};
+  const y = layout.price.top + 2;
+  Object.keys(byIdx).forEach((key) => {
+    const i = Number(key);
+    if (i < view.start || i > view.end) return;
+    const evs = byIdx[key];
+    const risky = evs.some((e) => e.type === "風險");
+    const color = risky ? EVENT_COLORS["風險"] : (EVENT_COLORS[evs[0].type] || "#2C5475");
+    const x = chartXOf(i, view, layout);
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.lineTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.closePath(); ctx.fill();
+  });
+}
+
+function chartIndexAtClientX(clientX) {
+  const canvas = elements.priceChart;
+  const rect = canvas.getBoundingClientRect();
+  const layout = chartLayout(canvas);
+  const view = chartView();
+  const localX = ((clientX - rect.left) / rect.width) * layout.width;
+  const ratio = (localX - layout.padding.left) / layout.innerWidth;
+  const count = view.end - view.start;
+  let idx = view.start + Math.round(ratio * count);
+  return Math.max(view.start, Math.min(view.end, idx));
+}
+
+function drawCrosshairTooltip(ctx, layout, view) {
+  const idx = state.chartHoverIndex;
+  if (idx == null || idx < view.start || idx > view.end) return;
+  const all = state.chartAll, item = all[idx];
+  const x = chartXOf(idx, view, layout);
+  ctx.save();
+  ctx.strokeStyle = "rgba(47,99,163,0.5)"; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(x, layout.price.top); ctx.lineTo(x, layout.height - layout.padding.bottom); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const o = Number(item.open), h = Number(item.high), l = Number(item.low), c = Number(item.close);
+  const prev = idx > 0 ? Number(all[idx - 1].close) : null;
+  const chg = prev != null && Number.isFinite(prev) ? c - prev : null;
+  const chgPct = chg != null && prev ? (chg / prev) * 100 : null;
+  const lots = Math.round((Number(item.volume) || 0) / 1000);
+  const head = `${item.date}　${c > o ? "收漲" : c < o ? "收跌" : "持平"}`;
+  const lines = [
+    `開 ${formatNumber(o)}　收 ${formatNumber(c)}`,
+    `高 ${formatNumber(h)}　低 ${formatNumber(l)}`,
+    chg == null ? "漲跌 --" : `漲跌 ${chg > 0 ? "+" : ""}${formatNumber(chg)}（${chgPct > 0 ? "+" : ""}${formatNumber(chgPct)}%）`,
+    `量 ${lots.toLocaleString("zh-TW")} 張`,
+  ];
+  const chip = (state.chartChips || {})[item.date];
+  if (chip) {
+    lines.push(`外資 ${formatLots(chip.foreign_net)}　投信 ${formatLots(chip.trust_net)}`);
+    lines.push(`自營 ${formatLots(chip.dealer_net)}　三大 ${formatLots(chip.total_net)} 張`);
+  }
+  const evs = (state.chartEventsByIndex || {})[idx] || [];
+  evs.slice(0, 3).forEach((e) => lines.push(`◆ ${e.label}`));
+
+  const lh = 17, pad = 10, w = 224;
+  const hgt = pad * 2 + 20 + lines.length * lh;
+  let tx = x + 12; if (tx + w > layout.width - 6) tx = x - w - 12;
+  let ty = layout.price.top + 6;
+  ctx.fillStyle = "rgba(23,32,27,0.93)"; ctx.beginPath(); roundedRect(ctx, tx, ty, w, hgt, 8); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "13px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillText(head, tx + pad, ty + pad + 12);
+  ctx.font = "12px Microsoft JhengHei, Segoe UI, Arial";
+  lines.forEach((ln, i) => {
+    if (ln.startsWith("◆")) ctx.fillStyle = "#ffd9b0"; else ctx.fillStyle = "#eef2f0";
+    ctx.fillText(ln, tx + pad, ty + pad + 20 + (i + 1) * lh - 4);
+  });
+  ctx.restore();
+}
+
+// ---- 互動：滾輪縮放 / 拖曳平移 / hover ----
+function handleChartPointerMove(event) {
+  if (state.chartDragging) { doChartPan(event); return; }
+  const all = state.chartAll || [];
+  if (all.length < 2) return;
+  const idx = chartIndexAtClientX(event.clientX);
+  if (idx !== state.chartHoverIndex) {
+    state.chartHoverIndex = idx;
+    drawChart();
+    renderDateEvent(idx);
+  }
+}
+
+function handleChartWheel(event) {
+  const all = state.chartAll || [];
+  if (all.length < 2) return;
+  event.preventDefault();
+  const view = chartView();
+  const count = view.end - view.start + 1;
+  const anchor = chartIndexAtClientX(event.clientX);
+  const factor = event.deltaY < 0 ? 0.82 : 1.22;
+  let newCount = Math.round(count * factor);
+  newCount = Math.max(20, Math.min(all.length, newCount));
+  const rel = count > 1 ? (anchor - view.start) / (count - 1) : 0.5;
+  let start = Math.round(anchor - rel * (newCount - 1));
+  start = Math.max(0, Math.min(start, all.length - newCount));
+  state.chartView = { start, end: start + newCount - 1 };
+  drawChart();
+}
+
+function handleChartMouseDown(event) {
+  state.chartDragging = true;
+  state.chartDragStartX = event.clientX;
+  state.chartDragStartView = chartView();
+  if (elements.priceChart) elements.priceChart.style.cursor = "grabbing";
+}
+
+function doChartPan(event) {
+  const all = state.chartAll || [];
+  const canvas = elements.priceChart;
+  const layout = chartLayout(canvas);
+  const v0 = state.chartDragStartView || chartView();
+  const count = v0.end - v0.start + 1;
+  const perIdx = layout.innerWidth / Math.max(1, count - 1);
+  const shift = Math.round(-(event.clientX - state.chartDragStartX) / perIdx);
+  let start = v0.start + shift;
+  start = Math.max(0, Math.min(start, all.length - count));
+  state.chartView = { start, end: start + count - 1 };
+  state.chartHoverIndex = null;
+  drawChart();
+}
+
+function handleChartMouseUp() {
+  state.chartDragging = false;
+  if (elements.priceChart) elements.priceChart.style.cursor = "crosshair";
+}
+
+function resetChartZoom() {
+  const n = (state.chartAll || []).length;
+  state.chartView = { start: 0, end: Math.max(0, n - 1) };
+  state.chartHoverIndex = null;
+  drawChart();
+}
+
+function toggleChartSeries(key) {
+  if (!state.chartSeriesHidden) state.chartSeriesHidden = {};
+  state.chartSeriesHidden[key] = !state.chartSeriesHidden[key];
+  updateChartLegendState();
+  drawChart();
+}
+
+function updateChartLegendState() {
+  const hidden = state.chartSeriesHidden || {};
+  document.querySelectorAll("[data-series]").forEach((el) => {
+    el.classList.toggle("legend-off", !!hidden[el.dataset.series]);
+  });
+}
+
+function roundedRect(ctx, x, y, width, height, radius) {
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+}
+
+function markActiveStock() {
+  document.querySelectorAll(".stock-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.stockId === state.activeStockId);
+  });
+}
+
+function setSyncing(isSyncing) {
+  elements.syncButton.disabled = isSyncing;
+  elements.quickSyncButton.disabled = isSyncing;
+  elements.watchlistButton.disabled = isSyncing;
+  elements.syncButton.innerHTML = `${refreshIconMarkup()} ${isSyncing ? "同步中" : "同步"}`;
+}
+
+function setScreenerScanning(isScanning) {
+  elements.screenerIllustration?.classList.toggle("is-scanning", isScanning);
+  elements.screenerStatus?.classList.toggle("is-updating", isScanning);
+  elements.screenerSheet?.setAttribute("aria-busy", isScanning ? "true" : "false");
+  const radarImage = elements.screenerRadarImage;
+  if (radarImage) {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const nextSrc = isScanning && !reduceMotion
+      ? radarImage.dataset.scanningSrc
+      : radarImage.dataset.idleSrc;
+    if (nextSrc && radarImage.getAttribute("src") !== nextSrc) {
+      radarImage.setAttribute("src", nextSrc);
+    }
+  }
+  if (elements.refreshScreenerButton) {
+    elements.refreshScreenerButton.disabled = isScanning;
+    elements.refreshScreenerButton.innerHTML = `${refreshIconMarkup()} ${isScanning ? "更新中" : "更新雷達"}`;
+  }
+}
+
+async function getJson(url) {
+  const response = await fetch(url);
+  return readJsonResponse(response);
+}
+
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return readJsonResponse(response);
+}
+
+async function putJson(url, body) {
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return readJsonResponse(response);
+}
+
+async function deleteJson(url) {
+  const response = await fetch(url, { method: "DELETE" });
+  return readJsonResponse(response);
+}
+
+async function readJsonResponse(response) {
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function showMessage(text, isError = false) {
+  elements.message.textContent = text;
+  elements.message.classList.toggle("error", isError);
+  elements.message.classList.remove("hidden");
+}
+
+function hideMessage() {
+  elements.message.classList.add("hidden");
+}
+
+function formatNumber(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return Number(value).toLocaleString("zh-TW", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  });
+}
+
+function formatApproxPrice(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const number = Number(value);
+  let rounded = number;
+  if (Math.abs(number) >= 1000) {
+    rounded = Math.round(number / 10) * 10;
+  } else if (Math.abs(number) >= 100) {
+    rounded = Math.round(number);
+  } else if (Math.abs(number) >= 10) {
+    rounded = Math.round(number * 10) / 10;
+  } else {
+    rounded = Math.round(number * 100) / 100;
+  }
+  return `約 ${formatNumber(rounded)}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatInteger(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return Number(value).toLocaleString("zh-TW", { maximumFractionDigits: 0 });
+}
+
+function formatMoney(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return `${Number(value).toLocaleString("zh-TW", {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  })}`;
+}
+
+function formatSignedMoney(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const number = Number(value);
+  const sign = number > 0 ? "+" : number < 0 ? "-" : "";
+  return `${sign}${Math.abs(number).toLocaleString("zh-TW", {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  })}`;
+}
+
+function formatSignedNumber(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const number = Number(value);
+  const sign = number > 0 ? "+" : number < 0 ? "-" : "";
+  return `${sign}${Math.abs(number).toLocaleString("zh-TW", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  })}`;
+}
+
+function formatPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const sign = Number(value) > 0 ? "+" : "";
+  return `${sign}${Number(value).toLocaleString("zh-TW", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  })}%`;
+}
+
+function formatPlainPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return `${Number(value).toLocaleString("zh-TW", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+  })}%`;
+}
+
+function formatRevenue(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return `${(Number(value) / 100000).toLocaleString("zh-TW", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  })} 億元`;
+}
+
+function setTone(element, value) {
+  element.classList.toggle("up", Number(value) > 0);
+  element.classList.toggle("down", Number(value) < 0);
+}
+
+function toneClass(value) {
+  if (Number(value) > 0) return "up";
+  if (Number(value) < 0) return "down";
+  return "";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function toneLabel(tone) {
+  if (tone === "positive") return "相對穩";
+  if (tone === "caution") return "留意";
+  if (tone === "unknown") return "待補資料";
+  return "觀察";
+}
+
+function valuationStateLabel(state) {
+  if (state === "applicable") return "股利法適用";
+  if (state === "low_confidence") return "股利法參考性低";
+  if (state === "not_applicable") return "股利法不適合";
+  return "股利法待判斷";
+}
+
+function refreshIconMarkup() {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>`;
+}
+
+function starIconMarkup() {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 14.7 9l6 .9-4.3 4.2 1 6-5.4-2.9L6.6 20l1-6L3.3 9.9l6-.9L12 3.5Z"/></svg>`;
+}
+// UI 重整版本標記
+
+// ---- 法人籌碼（三大法人）卡片與雷達籌碼面 ----
+function formatLots(shares) {
+  if (shares == null || Number.isNaN(Number(shares))) return "--";
+  const lots = Math.round(Number(shares) / 1000);
+  const sign = lots > 0 ? "+" : "";
+  return `${sign}${lots.toLocaleString("zh-TW")}`;
+}
+
+function chipsLevelTone(level) {
+  if (level === "警戒") return "high";
+  if (level === "注意") return "mid";
+  if (level === "留意") return "low";
+  return "calm";
+}
+
+function chipsRadarBody(chips) {
+  if (!chips || !chips.available) return "尚未同步三大法人買賣超（按『同步』後顯示）。";
+  const parts = [];
+  if (chips.consecutive_total_sell_days >= 1) {
+    parts.push(`三大法人連續 ${chips.consecutive_total_sell_days} 天賣超`);
+  } else {
+    parts.push("三大法人最新一日未連續賣超");
+  }
+  const sum = chips.sum_20 ? chips.sum_20.total_net : null;
+  if (sum != null) {
+    const word = sum < 0 ? "淨賣超" : sum > 0 ? "淨買超" : "持平";
+    parts.push(`近${chips.sum_20.days}日合計${word} ${formatLots(Math.abs(sum))} 張`);
+  }
+  return `${parts.join("，")}。`;
+}
+
+function renderChipsCard(chips) {
+  const el = elements.chipsCard;
+  if (!el) return;
+  if (!chips || !chips.available) {
+    el.className = "chips-card chips-empty";
+    el.innerHTML = `<p class="chips-empty-text">${escapeHtml((chips && chips.headline) || "尚未同步三大法人買賣超資料。")}</p>`;
+    return;
+  }
+  const tone = chipsLevelTone(chips.level);
+  const latest = chips.latest || {};
+  const rows = [
+    ["外資", latest.foreign_net],
+    ["投信", latest.trust_net],
+    ["自營商", latest.dealer_net],
+    ["三大法人", latest.total_net],
+  ];
+  const cells = rows.map(([label, v]) => {
+    const dir = Number(v) > 0 ? "買超" : Number(v) < 0 ? "賣超" : "持平";
+    return `<div class="chips-cell"><span>${label}</span><strong>${formatLots(v)}</strong><em>張・${dir}</em></div>`;
+  }).join("");
+  const reasons = (chips.reasons || []).map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+  const analysisItems = (chips.analysis || []).map((a) => `<li>${escapeHtml(a)}</li>`).join("");
+  const analysisBlock = analysisItems
+    ? `<div class="chips-analysis"><div class="chips-analysis-title">可能的解讀</div><ul>${analysisItems}</ul><p class="chips-analysis-note">${escapeHtml(chips.analysis_note || "")}</p></div>`
+    : "";
+  el.className = `chips-card chips-${tone}`;
+  el.innerHTML = `
+    <div class="chips-head">
+      <span class="chips-badge chips-${tone}">籌碼面 ${escapeHtml(chips.level)}</span>
+      <span class="chips-asof">資料日 ${escapeHtml(chips.as_of || "--")}</span>
+    </div>
+    <p class="chips-headline">${escapeHtml(chips.headline || "")}</p>
+    <div class="chips-grid">${cells}</div>
+    <div class="chips-trend">
+      <div class="chips-trend-label">近 ${(chips.trend || []).length} 日三大法人買賣超（上=買超，下=賣超）</div>
+      <canvas id="chipsSparkline" width="520" height="64"></canvas>
+    </div>
+    ${reasons ? `<ul class="chips-reasons">${reasons}</ul>` : ""}
+    ${analysisBlock}
+    <p class="disclaimer">${escapeHtml(chips.disclaimer || "")}</p>
+  `;
+  drawChipsSparkline(document.getElementById("chipsSparkline"), chips.trend || []);
+}
+
+function drawChipsSparkline(canvas, trend) {
+  if (!canvas || !canvas.getContext) return;
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const w = Math.max(320, Math.floor((rect.width || 520) * scale));
+  const h = Math.floor(64 * scale);
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  const width = w / scale;
+  const height = h / scale;
+  ctx.clearRect(0, 0, width, height);
+  const vals = (trend || []).map((t) => Number(t.value) || 0);
+  if (!vals.length) return;
+  const maxAbs = Math.max(1, ...vals.map((v) => Math.abs(v)));
+  const mid = height / 2;
+  const n = vals.length;
+  const slot = width / n;
+  const bw = Math.max(2, slot * 0.62);
+  ctx.strokeStyle = "#d3dae0";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(width, mid);
+  ctx.stroke();
+  vals.forEach((v, i) => {
+    const x = slot * i + slot / 2;
+    const barH = (Math.abs(v) / maxAbs) * (mid - 5);
+    ctx.fillStyle = v >= 0 ? "rgba(44,84,117,0.78)" : "rgba(176,130,11,0.82)";
+    if (v >= 0) ctx.fillRect(x - bw / 2, mid - barH, bw, barH);
+    else ctx.fillRect(x - bw / 2, mid, bw, barH);
+  });
+}
+
+// ---- 三大法人獨立讀取 + 體質總評 ----
+async function loadInstitutional() {
+  const stockId = state.activeStockId;
+  if (!stockId) return;
+  const btn = elements.loadChipsButton || document.getElementById("loadChipsButton");
+  if (btn) { btn.disabled = true; btn.textContent = "讀取中…第一次較久"; }
+  try {
+    const payload = await postJson("/api/institutional/sync", { stock_id: stockId });
+    if (state.activeStockId !== stockId) return;
+    state.activeChips = payload.chips || null;
+    renderChipsCard(payload.chips);
+    state.activeAssessment = payload.assessment;
+    renderAssessmentMerged();
+    const chipsMap = {};
+    (payload.chips_series || []).forEach((c) => { if (c && c.date) chipsMap[c.date] = c; });
+    state.chartChips = chipsMap;
+    drawChart();
+  } catch (error) {
+    showMessage(`讀取三大法人失敗：${error.message}`, true);
+  } finally {
+    if (btn && state.activeStockId === stockId) { btn.disabled = false; btn.textContent = "讀取三大法人（近一年）"; }
+  }
+}
+
+function assessTone(lean) {
+  if (lean === "偏多解讀") return "bull";
+  if (lean === "偏空解讀") return "bear";
+  return "neutral";
+}
+
+function assessmentGrade(counts) {
+  const net = (Number(counts.bull) || 0) - (Number(counts.bear) || 0);
+  if (net >= 2) return { label: "體質偏強", tone: "bull" };
+  if (net <= -2) return { label: "體質偏弱", tone: "bear" };
+  return { label: "體質中性", tone: "neutral" };
+}
+
+function assessmentConclusion(factors, grade) {
+  const bull = factors.filter((f) => f.lean === "偏多解讀").map((f) => f.label);
+  const bear = factors.filter((f) => f.lean === "偏空解讀").map((f) => f.label);
+  let s = `綜合 ${factors.length} 個面向，目前「${grade.label}」`;
+  if (bull.length) s += `；偏多的是 ${bull.join("、")}`;
+  if (bear.length) s += `；偏空的是 ${bear.join("、")}`;
+  if (!bull.length && !bear.length) s += "；各面向多為中性";
+  return `${s}。這是傳統解讀的清點，不是預測，也不是買賣建議。`;
+}
+
+function assessmentChecklist(factors) {
+  const out = [];
+  const bear = factors.filter((f) => f.lean === "偏空解讀").map((f) => f.label);
+  if (bear.length) out.push(`先弄懂為什麼這幾項偏空：${bear.join("、")}`);
+  out.push("營收／獲利趨勢有沒有站穩？（看下方營收、財報）");
+  out.push("最近有沒有地雷風險新聞？（看消息面／地雷雷達）");
+  out.push("三大法人最近偏買還偏賣？（按法人卡的「讀取三大法人」）");
+  out.push("你能接受的最大虧損是多少？停損點想好了嗎？");
+  return out;
+}
+
+function renderAssessment(a) {
+  const el = elements.assessmentCard;
+  if (!el) return;
+  if (!a || !a.available) {
+    el.className = "assess-card assess-empty";
+    el.innerHTML = `<p class="assess-empty-text">${escapeHtml((a && a.summary) || "日線資料不足，先同步後再看體質總評。")}</p>`;
+    return;
+  }
+  const counts = a.counts || {};
+  const factorsArr = a.factors || [];
+  const grade = assessmentGrade(counts);
+  const conclusion = assessmentConclusion(factorsArr, grade);
+  const checklist = assessmentChecklist(factorsArr);
+  const factorRows = factorsArr.map((f) => `
+    <details class="assess-factor assess-${f.tone}">
+      <summary>
+        <span class="assess-dot assess-${f.tone}"></span>
+        <span class="assess-flabel">${escapeHtml(f.label)}</span>
+        <span class="assess-lean assess-${f.tone}">${escapeHtml(f.lean)}</span>
+      </summary>
+      <div class="assess-detail">
+        <p class="assess-reading">${escapeHtml(f.reading)}${f.value ? `（${escapeHtml(String(f.value))}）` : ""}</p>
+        <p class="assess-trad">${escapeHtml(f.traditional || "")}</p>
+        ${INDICATOR_GUIDES[f.key] ? `<button type="button" class="guide-link" onclick="openIndicatorGuide('${f.key}')">📖 怎麼看「${escapeHtml(f.label)}」？</button>` : ""}
+      </div>
+    </details>`).join("");
+  el.className = "assess-card";
+  el.innerHTML = `
+    <div class="assess-grade assess-grade-${grade.tone}">
+      <div class="assess-grade-badge">${escapeHtml(grade.label)}</div>
+      <div class="assess-grade-meta">
+        <div class="assess-tally">
+          <span class="assess-pill assess-bull">偏多 ${counts.bull || 0}</span>
+          <span class="assess-pill assess-bear">偏空 ${counts.bear || 0}</span>
+          <span class="assess-pill assess-neutral">中性 ${counts.neutral || 0}</span>
+        </div>
+        <p class="assess-conclusion">${escapeHtml(conclusion)}</p>
+      </div>
+    </div>
+    <details class="assess-factors-wrap">
+      <summary>看 ${factorsArr.length} 項因子細節</summary>
+      <div class="assess-factors">${factorRows}</div>
+    </details>
+    <div class="assess-checklist">
+      <div class="assess-checklist-title">決定前，先問自己</div>
+      <ul>${checklist.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>
+    </div>
+    <p class="disclaimer">${escapeHtml(a.disclaimer || "")}</p>
+  `;
+}
+
+// ---- 支撐/壓力參考線（近60日高低） ----
+// 三種週期的支撐/壓力（swing pivot）；可由圖例個別開關
+const SR_TIMEFRAMES = [
+  { key: "sr_s", label: "短", window: 20, k: 2, color: "#2C5475" },
+  { key: "sr_m", label: "波", window: 60, k: 3, color: "#B0820B" },
+  { key: "sr_l", label: "長", window: 240, k: 5, color: "#6B4FA0" },
+];
+
+function findSwingPivots(bars, k) {
+  const highs = [];
+  const lows = [];
+  for (let i = k; i < bars.length - k; i += 1) {
+    const h = Number(bars[i].high);
+    const l = Number(bars[i].low);
+    if (!Number.isFinite(h) || !Number.isFinite(l)) continue;
+    let isHigh = true;
+    let isLow = true;
+    for (let j = i - k; j <= i + k; j += 1) {
+      if (j === i) continue;
+      if (Number(bars[j].high) >= h) isHigh = false;
+      if (Number(bars[j].low) <= l) isLow = false;
+    }
+    if (isHigh) highs.push(h);
+    if (isLow) lows.push(l);
+  }
+  return { highs, lows };
+}
+
+function pickResistance(pivotHighs, seg, close) {
+  const above = pivotHighs.filter((p) => p > close);
+  if (above.length) return Math.min(...above);
+  if (pivotHighs.length) return Math.max(...pivotHighs);
+  const hs = seg.map((p) => Number(p.high)).filter(Number.isFinite);
+  return hs.length ? Math.max(...hs) : null;
+}
+
+function pickSupport(pivotLows, seg, close) {
+  const below = pivotLows.filter((p) => p < close);
+  if (below.length) return Math.max(...below);
+  if (pivotLows.length) return Math.min(...pivotLows);
+  const ls = seg.map((p) => Number(p.low)).filter(Number.isFinite);
+  return ls.length ? Math.min(...ls) : null;
+}
+
+function drawSupportResistance(ctx, layout, view) {
+  const yOf = state._priceYOf;
+  const all = state.chartAll || [];
+  if (!yOf || all.length < 10) return;
+  const hidden = state.chartSeriesHidden || {};
+  const c = Number(all[all.length - 1].close);
+  const top = layout.price.top;
+  const bot = layout.price.top + layout.price.height;
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
+  SR_TIMEFRAMES.forEach((tf) => {
+    if (hidden[tf.key]) return;
+    const seg = all.slice(all.length - Math.min(tf.window, all.length));
+    const piv = findSwingPivots(seg, tf.k);
+    const resistance = pickResistance(piv.highs, seg, c);
+    const support = pickSupport(piv.lows, seg, c);
+    [[`${tf.label}壓`, resistance], [`${tf.label}撐`, support]].forEach(([label, price]) => {
+      if (price == null || !Number.isFinite(price)) return;
+      const y = yOf(price);
+      if (y < top || y > bot) return;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = tf.color;
+      ctx.beginPath();
+      ctx.moveTo(layout.padding.left, y);
+      ctx.lineTo(layout.width - layout.padding.right, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = tf.color;
+      ctx.fillText(`${label} ${formatNumber(price)}`, layout.padding.left + 4, y - 3);
+    });
+  });
+  ctx.restore();
+}
+
+// ---- 體質總評併入消息面（地雷雷達） ----
+function newsFactorFromRisk(rs) {
+  if (!rs || !rs.level) return null;
+  const level = rs.level;
+  const reasons = rs.reasons && rs.reasons.length ? rs.reasons.join(" ") : "";
+  let lean, tone, reading;
+  if (level === "警戒" || level === "注意") {
+    lean = "偏空解讀"; tone = "bear";
+    reading = `消息面${level}：${reasons || "近期新聞出現需留意的風險字眼"}`;
+  } else if (level === "留意") {
+    lean = "中性"; tone = "neutral";
+    reading = `消息面留意：${reasons || "近期新聞有少量風險字眼"}`;
+  } else {
+    lean = "中性"; tone = "neutral";
+    reading = "近期新聞未偵測到明顯風險字眼，消息面暫時平靜。";
+  }
+  return {
+    key: "news", label: "消息面（地雷雷達）", reading, lean, tone, value: level,
+    traditional: "退場、財務危機、交易限制等屬於重大風險事件，傳統上被視為利空；沒有風險字眼則消息面暫時平靜。新聞只涵蓋近期。",
+  };
+}
+
+function recountAssessment(factors) {
+  const bull = factors.filter((f) => f.lean === "偏多解讀").length;
+  const bear = factors.filter((f) => f.lean === "偏空解讀").length;
+  const neutral = factors.length - bull - bear;
+  const tilt = bull > bear ? "目前以『偏多解讀』的因子居多"
+    : bear > bull ? "目前以『偏空解讀』的因子居多"
+    : "目前多空解讀的因子大致均衡";
+  const summary = `綜合 ${factors.length} 個面向：傳統上偏多解讀 ${bull} 項、偏空解讀 ${bear} 項、中性 ${neutral} 項，${tilt}。這只是把各面向的傳統解讀做個清點，不是預測，也不是買賣建議。`;
+  return { bull, bear, neutral, summary };
+}
+
+function renderAssessmentMerged() {
+  const base = state.activeAssessment;
+  if (!base || !base.available) { renderAssessment(base); return; }
+  const factors = base.factors.slice();
+  const nf = newsFactorFromRisk(state.newsRiskSummary);
+  if (nf) factors.push(nf);
+  const c = recountAssessment(factors);
+  renderAssessment({
+    available: true,
+    counts: { bull: c.bull, bear: c.bear, neutral: c.neutral },
+    summary: c.summary,
+    factors,
+    disclaimer: base.disclaimer,
+  });
+}
+
+// ---- 指標教學庫（怎麼看），點體質總評因子的「怎麼看」會跳出 ----
+const INDICATOR_GUIDES = {
+  rsi: {
+    title: "RSI 相對強弱指標",
+    intro: "衡量一段期間內價格『漲勢』與『跌勢』力道的指標，數值 0–100。越高代表買方越強，越低代表賣方越強。本 App 用 14 日 Wilder RSI。",
+    points: [
+      { h: "50 多空分水嶺", b: "大於 50 代表多方（買方）力道較強、偏強格局；小於 50 偏弱格局。" },
+      { h: "70 / 30 過熱過冷", b: "大於等於 70 為超買（漲多過熱，傳統上隨時有拉回風險）；小於等於 30 為超賣（跌深，傳統上有反彈機會）。" },
+      { h: "黃金 / 死亡交叉", b: "短天期 RSI 向上穿過長天期＝買盤回流（偏多訊號）；向下跌破＝賣壓湧現（偏空訊號）。" },
+      { h: "背離（判斷反轉）", b: "股價越跌越低、RSI 卻越來越高＝底背離，跌勢減弱可能反轉向上；股價越漲越高、RSI 卻越來越低＝頂背離，漲勢衰退可能反轉向下。" },
+    ],
+    note: "技術面僅供參考，不預測股價、不構成買賣建議；市場常常不照技術面走。",
+  },
+  kd: {
+    title: "KD 隨機指標 (Stochastic)",
+    intro: "用近 9 日的最高、最低與收盤，算出 K 與 D 兩條線（0–100），反映收盤落在區間的相對高低與短期動能。本 App 用 9,3,3。",
+    points: [
+      { h: "80 / 20 過熱過冷", b: "K 大於 80 為高檔超買（傳統上易回或鈍化）；K 小於 20 為低檔超賣（傳統上易彈）。" },
+      { h: "黃金 / 死亡交叉", b: "K 由下往上穿過 D＝黃金交叉（偏多）；K 由上往下跌破 D＝死亡交叉（偏空）。" },
+      { h: "高 / 低檔鈍化", b: "強勢時 K、D 可能長時間黏在 80 以上（高檔鈍化）續強；弱勢時黏在 20 以下續弱。" },
+    ],
+    note: "技術面僅供參考，不預測股價、不構成買賣建議。",
+  },
+  bias: {
+    title: "乖離率 BIAS（對月線）",
+    intro: "收盤價偏離均線（這裡用 20 日月線）的百分比，看股價拉離平均成本多遠。",
+    points: [
+      { h: "正乖離過大", b: "股價遠高於均線、漲多，傳統上容易回測均線（不保證）。" },
+      { h: "負乖離過大", b: "股價遠低於均線、跌深，傳統上容易出現反彈。" },
+      { h: "貼近均線", b: "乖離小，價格在平均成本附近、較無極端。" },
+      { h: "沒有固定門檻", b: "每檔波動不同，乖離『多大算大』要看自己歷史；本 App 以 ±8% 溫和、±15% 偏大當參考。" },
+    ],
+    note: "只描述目前讀數，不預測股價、不構成買賣建議。",
+  },
+  ma: {
+    title: "均線 MA（5 / 20 / 60）",
+    intro: "近 N 日的平均收盤：MA5 週線、MA20 月線、MA60 季線，用來看趨勢方向與平均成本。",
+    points: [
+      { h: "多頭排列", b: "MA5 大於 MA20 大於 MA60 且股價在上，短中長期都向上，傳統上偏多。" },
+      { h: "空頭排列", b: "MA5 小於 MA20 小於 MA60 且股價在下，傳統上偏弱。" },
+      { h: "均線糾結", b: "三條均線交錯黏在一起，方向不明、常是盤整。" },
+      { h: "動態支撐 / 壓力", b: "上升時均線常被當支撐，下跌時常被當壓力。" },
+    ],
+    note: "趨勢工具，不預測股價、不構成買賣建議。",
+  },
+  volume: {
+    title: "量能（量比）",
+    intro: "當日成交量 ÷ 近 20 日均量，看今天交投比平常熱還是冷。",
+    points: [
+      { h: "爆量（約 1.8 倍以上）", b: "成交量明顯放大。配合上漲＝買盤積極；配合下跌＝賣壓宣洩，要和價格方向一起看。" },
+      { h: "量縮（約 0.6 倍以下）", b: "交投清淡、觀望氣氛濃。" },
+      { h: "量先價行", b: "傳統上成交量常領先價格，轉折前後量常先變化。" },
+      { h: "單看量不分多空", b: "量大不一定是好或壞，關鍵看價格往哪走。" },
+    ],
+    note: "只描述目前讀數，不預測股價、不構成買賣建議。",
+  },
+  position: {
+    title: "價格位階（近一年）",
+    intro: "目前收盤落在近一年最高與最低之間的相對位置（百分位）。",
+    points: [
+      { h: "高位階（80% 以上）", b: "接近近一年高點，追高風險較大（不代表會回）。" },
+      { h: "低位階（20% 以下）", b: "接近近一年低點、相對抗跌，但弱勢股也可能再破底。" },
+      { h: "中段", b: "落在區間中間，較無極端。" },
+    ],
+    note: "只描述相對位置，不預測股價、不構成買賣建議。",
+  },
+  candle: {
+    title: "K 線（蠟燭圖）",
+    intro: "每根 K 棒代表一天：紅色＝收盤高於開盤（收漲），綠色＝收盤低於開盤（收跌）。",
+    points: [
+      { h: "實體與影線", b: "中間粗體＝開盤到收盤的範圍；上下細線（影線）＝當天最高與最低價。" },
+      { h: "長紅 / 長黑", b: "實體很長代表當天買方（紅）或賣方（綠）力道強勁。" },
+      { h: "上下影線", b: "長下影＝低點有買盤承接；長上影＝高點有賣壓出現。" },
+      { h: "十字線", b: "開盤約等於收盤、實體很小，多空拉鋸、方向猶豫，常出現在轉折附近。" },
+    ],
+    note: "K 線只是把每天價格畫出來幫你看趨勢，不預測股價、不構成買賣建議。",
+  },
+  sr: {
+    title: "支撐 / 壓力",
+    intro: "支撐＝地板（跌到這裡常有人接、止跌）；壓力＝天花板（漲到這裡常有人賣、卡住）。本 App 取近期波段轉折點中最接近現價的上方壓力與下方支撐。",
+    points: [
+      { h: "為什麼會形成", b: "那個價位之前大量成交過，套牢、停利、停損的人都集中在附近，價格回到那裡就湧出買盤或賣壓。" },
+      { h: "突破與跌破（角色互換）", b: "壓力被突破後常變成支撐；支撐被跌破後常變成壓力。" },
+      { h: "時間尺要配交易長度", b: "短線看近 20 日、波段看近 60 日、長線看近一年；本 App 三種都可由圖例個別開關。" },
+      { h: "是區帶、不是精準價", b: "它是『很多人會有反應的價帶』，而且會被突破，不是會反彈或回跌的保證。" },
+    ],
+    note: "只描述價位參考，不預測股價、不構成買賣建議。",
+  },
+  chips: {
+    title: "三大法人（籌碼）",
+    intro: "三大法人＝外資、投信（國內基金）、自營商（券商自有部位）。買賣超＝當天買進減賣出的張數，正值買超、負值賣超。",
+    points: [
+      { h: "誰的錢", b: "外資資金大、偏快錢；投信偏中長線的本土法人；自營商偏短線與避險，單日波動大。" },
+      { h: "連續性比單日重要", b: "連續多天同方向，比單一天更能看出態度；單日大買大賣可能只是調節。" },
+      { h: "同步 vs 分歧", b: "三大法人同步買或同步賣＝共識較強；外資賣、投信買＝看法分歧、沒有一面倒。" },
+      { h: "賣壓是否加速", b: "近 3 日賣超明顯大於近 20 日平均，代表賣壓在加速，值得多留意。" },
+    ],
+    note: "法人也可能因避險、調節、換股而進出，不代表股價方向，也不是買賣建議。",
+  },
+  risk: {
+    title: "地雷雷達",
+    intro: "把近期新聞裡的『風險字眼』抓出來，配上籌碼與價量，整理成消息面／籌碼面／價量面三行提醒。",
+    points: [
+      { h: "抓哪些風險", b: "終止上市、變更交易方法、淨值轉負、暫停交易、財務危機、訴訟裁罰等重大風險事件。" },
+      { h: "等級", b: "由低到高：留意 → 注意 → 警戒；出現退場、財務危機這類關鍵風險會直接升到警戒。" },
+      { h: "看到警戒怎麼辦", b: "別只看雷達，自己再去公開資訊觀測站、重大訊息查證，確認是不是真的踩到地雷。" },
+      { h: "限制", b: "新聞只涵蓋最近約 45 天，且是關鍵字粗略歸類，可能漏抓或誤判。" },
+    ],
+    note: "只幫你快速察覺風險，不預測股價、不構成買賣建議。",
+  },
+};
+
+function openIndicatorGuide(key) {
+  const g = INDICATOR_GUIDES[key];
+  if (!g || !elements.glossaryOverlay) return;
+  elements.glossaryTitle.textContent = g.title;
+  elements.glossaryPlain.textContent = g.intro || "";
+  if (elements.glossaryHow) elements.glossaryHow.textContent = "";
+  if (elements.glossaryGuide) {
+    const pts = (g.points || []).map((p) =>
+      `<div class="guide-point"><div class="guide-point-h">${escapeHtml(p.h)}</div><div class="guide-point-b">${escapeHtml(p.b)}</div></div>`
+    ).join("");
+    elements.glossaryGuide.innerHTML = pts + (g.note ? `<p class="guide-note">${escapeHtml(g.note)}</p>` : "");
+    elements.glossaryGuide.classList.remove("hidden");
+  }
+  elements.glossaryOverlay.classList.remove("hidden");
+  elements.glossaryOverlay.setAttribute("aria-hidden", "false");
+  if (elements.glossaryClose) elements.glossaryClose.focus();
+}
+
+function srBadge(item) {
+  const sr = item.sr;
+  if (!sr || !sr.available) return "";
+  let badge = "";
+  if (sr.status === "接近波撐") badge = `<span class="sr-badge sr-support">接近波撐 ${formatNumber(sr.support)}</span>`;
+  else if (sr.status === "接近波壓") badge = `<span class="sr-badge sr-resist">接近波壓 ${formatNumber(sr.resistance)}</span>`;
+  else return "";
+  return badge + srDateTag(sr.as_of);
+}
+
+function srDateTag(asOf) {
+  if (!asOf) return "";
+  const d = new Date(asOf);
+  if (Number.isNaN(d.getTime())) return "";
+  const days = Math.round((Date.now() - d.getTime()) / 86400000);
+  const stale = days > 7;
+  const label = stale ? `資料 ${asOf}・過期 ${days} 天` : `資料 ${asOf}`;
+  return `<span class="sr-date${stale ? " stale" : ""}">${escapeHtml(label)}</span>`;
+}
+
+// ---- 全市場資料下載：控制 + 輪詢 ----
+async function bulkStart() {
+  try { renderBulk(await postJson("/api/bulk-download/start", {})); startBulkPolling(); }
+  catch (e) { showMessage(`無法開始下載：${e.message}`, true); }
+}
+async function bulkPause() {
+  try { renderBulk(await postJson("/api/bulk-download/pause", {})); } catch (e) { showMessage(e.message, true); }
+}
+async function bulkResume() {
+  try { renderBulk(await postJson("/api/bulk-download/resume", {})); startBulkPolling(); } catch (e) { showMessage(e.message, true); }
+}
+async function bulkStop() {
+  try { renderBulk(await postJson("/api/bulk-download/stop", {})); } catch (e) { showMessage(e.message, true); }
+}
+function startBulkPolling() {
+  if (state.bulkTimer) return;
+  state.bulkTimer = window.setInterval(async () => {
+    try {
+      const st = await getJson("/api/bulk-download/status");
+      renderBulk(st);
+      if (!st.running) { window.clearInterval(state.bulkTimer); state.bulkTimer = null; }
+    } catch (e) { /* 暫時讀不到狀態，下次再試 */ }
+  }, 2000);
+}
+function renderBulk(st) {
+  if (!st) return;
+  const wrap = document.getElementById("bulkProgressWrap");
+  const bar = document.getElementById("bulkBar");
+  const txt = document.getElementById("bulkStatusText");
+  const startBtn = document.getElementById("bulkStartBtn");
+  const pauseBtn = document.getElementById("bulkPauseBtn");
+  const resumeBtn = document.getElementById("bulkResumeBtn");
+  const stopBtn = document.getElementById("bulkStopBtn");
+  if (!wrap) return;
+  const active = Boolean(st.running);
+  wrap.classList.toggle("hidden", st.status === "idle");
+  if (bar) {
+    const pct = st.total ? Math.round((Number(st.done) / Number(st.total)) * 100) : (st.status === "preparing" ? 5 : 0);
+    bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  }
+  if (txt) {
+    const map = { idle: "尚未開始", preparing: "準備中（抓全市場共用資料）…", running: "下載中", paused: "已暫停", stopped: "已停止", done: "完成", error: "發生錯誤" };
+    let s = map[st.status] || st.status || "";
+    if (st.total) s += `　${st.done}/${st.total}`;
+    if (st.current) s += `　目前：${st.current}`;
+    if (st.skipped) s += `　已跳過 ${st.skipped}`;
+    if (st.failed_count) s += `　失敗 ${st.failed_count}`;
+    if (st.message) s += `　${st.message}`;
+    txt.textContent = s;
+  }
+  if (startBtn) startBtn.disabled = active || st.status === "preparing";
+  if (pauseBtn) pauseBtn.disabled = !active || Boolean(st.paused);
+  if (resumeBtn) resumeBtn.disabled = !(active && st.paused);
+  if (stopBtn) stopBtn.disabled = !active;
+}
+(async function bulkInit() {
+  try {
+    const st = await getJson("/api/bulk-download/status");
+    renderBulk(st);
+    if (st.running) startBulkPolling();
+  } catch (e) { /* 伺服器尚未就緒，略過 */ }
+})();
+
+// ---- 本地資料盤點 + 波段關卡提醒 ----
+async function loadLocalData() {
+  try {
+    const payload = await getJson("/api/local-data");
+    state.localData = payload;
+    renderLevelsRadar(payload);
+    renderLocalDataTable(payload);
+  } catch (e) { /* 伺服器忙或無資料，略過 */ }
+}
+
+function renderLevelsRadar(payload) {
+  const el = elements.levelsRadarList;
+  if (!el) return;
+  const near = (payload && payload.near) || [];
+  if (!near.length) {
+    el.innerHTML = `<p class="levels-empty">目前本地資料中沒有接近波撐/波壓的股票（同步個股、或在雷達中心完成全市場下載後會出現）。</p>`;
+    return;
+  }
+  el.innerHTML = near.map((it) => {
+    const isSup = it.sr_status === "接近波撐";
+    const cls = isSup ? "sr-support" : "sr-resist";
+    const level = isSup ? `波撐 ${formatNumber(it.support)}` : `波壓 ${formatNumber(it.resistance)}`;
+    const stale = it.stale_days > 7
+      ? `<span class="sr-date stale">過期 ${it.stale_days} 天</span>`
+      : `<span class="sr-date">資料 ${escapeHtml(it.last_date)}</span>`;
+    return `<div class="levels-row" data-screener-stock="${escapeHtml(it.stock_id)}">
+      <span class="levels-name"><strong>${escapeHtml(it.stock_id)} ${escapeHtml(it.name || "")}</strong></span>
+      <span class="sr-badge ${cls}">${escapeHtml(it.sr_status)}・${level}</span>
+      ${stale}
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button>
+    </div>`;
+  }).join("");
+}
+
+function renderLocalDataTable(payload) {
+  const tbody = elements.localDataRows;
+  if (!tbody) return;
+  const items = (payload && payload.items) || [];
+  if (elements.localDataSummary) {
+    elements.localDataSummary.textContent = items.length
+      ? `本地共有 ${items.length} 檔有日線資料（資料日 ${payload.generated_at}）。過期會以紅字標示。`
+      : "本地還沒有任何已下載的日線資料；到雷達中心按『開始下載』，或開個股按『同步』。";
+  }
+  tbody.innerHTML = items.map((it) => {
+    const stale = it.stale_days > 7;
+    const dateCell = `<span class="${stale ? "ld-stale" : ""}">${escapeHtml(it.last_date)}${stale ? `（過期${it.stale_days}天）` : ""}</span>`;
+    const sr = it.sr_status && it.sr_status !== "資料不足" ? escapeHtml(it.sr_status) : "—";
+    return `<tr>
+      <td>${escapeHtml(it.stock_id)}</td>
+      <td>${escapeHtml(it.name || "")}</td>
+      <td>${it.price_rows}</td>
+      <td>${dateCell}</td>
+      <td>${it.has_institutional ? "✓" : "—"}</td>
+      <td>${sr}</td>
+      <td><button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button></td>
+    </tr>`;
+  }).join("");
+}

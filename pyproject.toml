@@ -1,0 +1,17 @@
+[project]
+name = "stock-translator"
+version = "0.1.0"
+description = "Local-first Taiwan stock data engine for the stock translator MVP."
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+build = [
+    "pillow>=10",
+    "pyinstaller>=6",
+]
+
+[tool.unittest]
+start-dir = "tests"

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" font-family="'PingFang TC','Microsoft JhengHei','Noto Sans TC','Heiti TC',sans-serif">
+  <defs>
+    <filter id="s4" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#1C3D5A" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="700" fill="#EDF0F4"/>
+
+  <!-- 頂部列 -->
+  <rect x="0" y="0" width="1200" height="56" fill="#FFFFFF"/>
+  <rect x="0" y="55" width="1200" height="1" fill="#E3E8EF"/>
+  <text x="24" y="35" font-size="18" font-weight="700" fill="#1C3D5A">📈 股票翻譯機</text>
+  <rect x="300" y="14" width="420" height="28" rx="14" fill="#F1F4F8" stroke="#E3E8EF"/>
+  <text x="318" y="33" font-size="13" fill="#9AA6B2">🔍  搜尋股票 / 代號…</text>
+  <text x="1132" y="34" font-size="17">🤖</text>
+
+  <!-- 個股標題卡 -->
+  <rect x="24" y="72" width="1152" height="84" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s4)"/>
+  <text x="48" y="112" font-size="24" font-weight="800" fill="#1A1F26">3576 聯合再生</text>
+  <text x="48" y="136" font-size="12" fill="#9AA6B2">上市 · 資料更新 6/13 收盤</text>
+  <!-- price (漲=紅) -->
+  <text x="320" y="114" font-size="26" font-weight="800" fill="#E03131">21.05</text>
+  <text x="320" y="138" font-size="14" fill="#E03131">▲ +1.20 (+6.06%)</text>
+  <!-- 公司類型標籤(循環=琥珀色警示) -->
+  <rect x="700" y="96" width="200" height="30" rx="15" fill="#FFF4E6" stroke="#FFD8A8"/>
+  <text x="800" y="116" font-size="13.5" fill="#E8590C" text-anchor="middle" font-weight="700">🏷 景氣循環股 · 太陽能</text>
+  <!-- 資料可信度燈號(低=紅) -->
+  <rect x="916" y="96" width="160" height="30" rx="15" fill="#FDECEC" stroke="#F5C2C2"/>
+  <circle cx="936" cy="111" r="5" fill="#E03131"/>
+  <text x="1066" y="116" font-size="13.5" fill="#C92A2A" text-anchor="end" font-weight="700">資料可信度 低</text>
+
+  <!-- 第一層 30秒看懂 -->
+  <text x="24" y="180" font-size="13" font-weight="700" fill="#46535F">【第一層 · 30 秒看懂】</text>
+  <rect x="24" y="190" width="1152" height="84" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s4)"/>
+  <rect x="24" y="190" width="5" height="84" rx="2" fill="#E8590C"/>
+  <text x="48" y="220" font-size="14.5" fill="#33404C">太陽能、景氣循環、近年才從虧損轉機。近期股價走強、單月營收回升，但今年累計營收仍年減，</text>
+  <text x="48" y="244" font-size="14.5" fill="#33404C">獲利要確認是否一次性因素。</text>
+  <text x="48" y="266" font-size="14" fill="#C92A2A" font-weight="700">⚠️ 這檔不適合用股利法估價。</text>
+
+  <!-- 估值 · 不適用卡(主視覺給「為什麼+改看什麼」，不是便宜價) -->
+  <rect x="24" y="290" width="1152" height="158" rx="12" fill="#FFFFFF" stroke="#F5C2C2" filter="url(#s4)"/>
+  <rect x="24" y="290" width="5" height="158" rx="2" fill="#E03131"/>
+  <circle cx="60" cy="320" r="6" fill="#E03131"/>
+  <text x="76" y="325" font-size="15" font-weight="800" fill="#C92A2A">估值 · 此檔不適合用股利法估價</text>
+  <text x="48" y="354" font-size="13.5" fill="#33404C">• 殖利率不到 1%（估計年現金股利僅 0.1 元）→ 便宜價不具參考性</text>
+  <text x="48" y="378" font-size="13.5" fill="#33404C">• 屬景氣循環股，歷史平均股利在循環高／低點都會嚴重誤導</text>
+  <text x="48" y="402" font-size="13.5" fill="#33404C">• 公司近年曾虧損，沒有穩定獲利支撐配息</text>
+  <text x="48" y="430" font-size="14" fill="#1C3D5A" font-weight="700">建議改看 👉 本淨比（PB）區間 · 營收動能 · 毛利率趨勢</text>
+  <!-- 收合的「仍要看」 -->
+  <rect x="720" y="414" width="432" height="22" rx="11" fill="#F1F4F8"/>
+  <text x="736" y="429" font-size="11.5" fill="#6B7785">▸ 仍要看股利法試算（便宜1.6/合理2/昂貴3.2，參考性低）〔點開〕</text>
+
+  <!-- 改看：三張替代方法卡(接手主視覺) -->
+  <text x="24" y="474" font-size="13" font-weight="700" fill="#46535F">【改看適配的方法】</text>
+  <!-- PB -->
+  <rect x="24" y="484" width="366" height="120" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s4)"/>
+  <text x="44" y="510" font-size="13" fill="#6B7785">本淨比（PB）</text>
+  <rect x="318" y="498" width="52" height="20" rx="10" fill="#FFF9DB"/>
+  <text x="344" y="512" font-size="11" fill="#B38600" text-anchor="middle">🟡 中</text>
+  <text x="44" y="540" font-size="19" font-weight="800" fill="#1A1F26">PB 1.8 倍</text>
+  <text x="44" y="566" font-size="12.5" fill="#46535F">近 5 年區間 0.9 – 2.4 倍</text>
+  <text x="44" y="588" font-size="12.5" fill="#46535F">目前處於區間中上緣（不便宜）</text>
+  <!-- 營收動能 -->
+  <rect x="414" y="484" width="366" height="120" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s4)"/>
+  <text x="434" y="510" font-size="13" fill="#6B7785">營收動能</text>
+  <rect x="708" y="498" width="52" height="20" rx="10" fill="#FFF9DB"/>
+  <text x="734" y="512" font-size="11" fill="#B38600" text-anchor="middle">🟡 中</text>
+  <text x="434" y="540" font-size="16" font-weight="800" fill="#E03131">單月 YoY +12%</text>
+  <text x="434" y="564" font-size="14" font-weight="700" fill="#2F9E44">累計 YoY −8% ⚠️</text>
+  <text x="434" y="588" font-size="12" fill="#46535F">「單月回升，但整年還沒追回來」</text>
+  <!-- 獲利能力 -->
+  <rect x="804" y="484" width="366" height="120" rx="12" fill="#FFFFFF" stroke="#E9EDF2" filter="url(#s4)"/>
+  <text x="824" y="510" font-size="13" fill="#6B7785">獲利能力</text>
+  <rect x="1098" y="498" width="52" height="20" rx="10" fill="#FDECEC"/>
+  <text x="1124" y="512" font-size="11" fill="#C92A2A" text-anchor="middle">🔴 低</text>
+  <text x="824" y="540" font-size="17" font-weight="800" fill="#1A1F26">EPS 0.4（轉正）</text>
+  <text x="824" y="564" font-size="12.5" fill="#46535F">業外損益占比偏高 ⚠️</text>
+  <text x="824" y="588" font-size="12.5" fill="#46535F">「需確認是否為一次性因素」</text>
+
+  <!-- 免責 -->
+  <text x="24" y="640" font-size="11.5" fill="#9AA6B2">ⓘ 以上為資料解讀，不構成投資建議，也不預測股價。名詞可點開白話解釋。</text>
+  <!-- 第三層提示 -->
+  <text x="24" y="668" font-size="12" fill="#1C3D5A">＋ 展開完整資料（月營收 · 財報 · 股利歷史 · 日線圖 · 事件線 · 原始資料表）</text>
+</svg>
