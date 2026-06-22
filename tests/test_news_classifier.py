@@ -109,6 +109,32 @@ class NewsClassifierTest(unittest.TestCase):
         verdict = classify_headline("公司宣布全新計畫", positive={"全新計畫": 1}, negative={})
         self.assertEqual(verdict.label, LABEL_POSITIVE)
 
+    def test_supply_chain_keyword_expansion(self):
+        verdict = classify_headline("公司取得長約 新品放量 產能利用率提升")
+        self.assertEqual(verdict.label, LABEL_POSITIVE)
+        self.assertGreater(verdict.score, 0)
+        self.assertIn("取得長約", verdict.matched_positive)
+        events = detect_events("公司取得長約 新品放量 產能利用率提升")
+        self.assertIn("合作訂單", events)
+        self.assertIn("供需價格", events)
+
+    def test_reporting_control_and_cybersecurity_expansion(self):
+        reporting = "公司未如期公告財報 內控缺失"
+        reporting_verdict = classify_headline(reporting)
+        self.assertEqual(reporting_verdict.label, LABEL_NEGATIVE)
+        self.assertIn("財報內控", detect_events(reporting))
+
+        cyber = "公司遭勒索軟體攻擊 資料外洩"
+        cyber_verdict = classify_headline(cyber)
+        self.assertEqual(cyber_verdict.label, LABEL_NEGATIVE)
+        self.assertIn("資安事件", detect_events(cyber))
+
+    def test_payload_sanitizes_generated_reason_words(self):
+        raw = _rss(["某公司目標價上調 加碼投資 - 報"])
+        payload = build_news_payload("9999", "測試公司", raw)
+        reason = str(payload["items"][0]["reason"])  # type: ignore[index]
+        self.assertEqual(contains_forbidden(reason), [])
+
     def test_major_event_tags_catch_delisting_warning_path(self):
         early = "森崴能源因重大訊息待公布 5/13暫停交易"
         early_verdict = classify_headline(early)

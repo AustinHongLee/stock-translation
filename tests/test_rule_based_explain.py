@@ -4,6 +4,7 @@ import unittest
 from datetime import date, timedelta
 
 from app.explain.rule_based import build_rule_based_health_report
+from app.news.classifier import contains_forbidden
 from app.analyze.suitability import ValuationSuitability
 from app.analyze.valuation import DividendSummary, ValuationResult
 from app.models import DailyPrice, FinancialStatement, StockProfile
@@ -148,6 +149,32 @@ class RuleBasedExplainTests(unittest.TestCase):
         self.assertIn("valuation_suitability", section_ids)
         self.assertIn("本益比敏感度", str(report))
         self.assertIn("股利資料信心", str(report))
+
+    def test_reason_specific_guidance_is_in_valuation_section(self) -> None:
+        suitability = ValuationSuitability(
+            company_type="growth",
+            company_type_label="成長股",
+            state="low_confidence",
+            reasons=["growth_stock", "low_yield"],
+            recommended_primary="pe_band",
+            recommended_secondary=["revenue_momentum"],
+            recommended_avoid=["yield"],
+            data_confidence="medium",
+            headline="股利法參考性偏低，需搭配其他方法",
+        )
+        report = build_rule_based_health_report(
+            profile=None,
+            prices=[],
+            suitability=suitability,
+        )
+        valuation_section = [
+            item for item in report["sections"] if item["id"] == "valuation_suitability"  # type: ignore[index]
+        ][0]
+        text = str(valuation_section)
+
+        self.assertIn("營收動能", text)
+        self.assertIn("股利不是主軸", text)
+        self.assertEqual(contains_forbidden(text), [])
 
 
 if __name__ == "__main__":

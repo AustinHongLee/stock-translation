@@ -22,6 +22,7 @@ from app.catalog.stocks import StockCatalogEntry, search_stock_catalog
 from app.chips import build_institutional_summary
 from app.analyze.assessment import build_assessment
 from app.analyze.levels import compute_support_resistance
+from app.analyze.local_data import SORT_STOCK_ID, filter_sort_local_data_items
 from app.models import DailyPrice, FinancialStatement, IntradayQuote, MonthlyRevenue, StockProfile
 from app.portfolio import PriceSnapshot, calculate_portfolio
 from app.portfolio.performance import PortfolioPerformance, calculate_portfolio_performance
@@ -59,6 +60,7 @@ def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
             "support": sr.get("support"),
             "resistance": sr.get("resistance"),
         })
+    items = filter_sort_local_data_items(items, sort_key=SORT_STOCK_ID)
     near = [it for it in items if it["sr_status"] in ("接近波撐", "接近波壓")]
     return {"generated_at": today.isoformat(), "count": len(items), "items": items, "near": near}
 
@@ -646,9 +648,12 @@ def stock_brief_to_json(
     )
     risk_tags = _risk_tags(suitability)
     valuation_sentence = _brief_valuation_sentence(suitability)
+    beginner_sentence = _brief_beginner_sentence(suitability)
     return {
         "company_sentence": company_sentence,
         "valuation_sentence": valuation_sentence,
+        "beginner_sentence": beginner_sentence,
+        "watch_items": _brief_watch_items(suitability),
         "risk_tags": risk_tags,
         "non_advice": "這是資料翻譯，不是買賣建議，也不預測股價。",
     }
@@ -668,6 +673,45 @@ def _brief_valuation_sentence(suitability: ValuationSuitability) -> str:
     if suitability.company_type == "mature_dividend":
         return "配息資料較完整，股利法可作為其中一把尺。"
     return "先看適用方法與資料信心，再展開數字情境。"
+
+
+def _brief_beginner_sentence(suitability: ValuationSuitability) -> str:
+    if suitability.recommended_primary == "none":
+        return "新手先不要急著套公式，先確認資料是否足夠、獲利是否穩定、風險標籤有沒有亮起。"
+    if suitability.company_type == "etf":
+        return "ETF 先看追蹤標的、費用、折溢價與配息紀錄，不用單一公司獲利邏輯。"
+    if suitability.company_type == "cyclical":
+        return "循環股先看景氣位置、毛利率與庫存，再把倍數情境當成輔助。"
+    if suitability.company_type == "growth":
+        return "成長型公司先看營收動能、毛利率與投入成長是否反映在獲利。"
+    if suitability.company_type == "construction":
+        return "營建或資產型公司先看建案認列、資產負債與現金流節奏。"
+    if "low_yield" in suitability.reasons or "yield_too_low" in suitability.reasons:
+        return "股利占比不高時，先把本業獲利與成長資料看完，再看股利情境。"
+    return "先看資料信心與主要方法，再往下看營收、獲利、估值位階與消息風險。"
+
+
+def _brief_watch_items(suitability: ValuationSuitability) -> list[str]:
+    items: list[str] = []
+    reason_set = set(suitability.reasons)
+    if reason_set & {"insufficient_data", "short_history", "newly_listed"}:
+        items.append("資料年數偏短，先確認樣本期間。")
+    if reason_set & {"loss_history"}:
+        items.append("近年曾虧損，先看虧損來源與是否改善。")
+    if reason_set & {"unstable_dividend", "one_off_dividend"}:
+        items.append("配息波動較大，平均數容易失真。")
+    if reason_set & {"cyclical"}:
+        items.append("景氣循環明顯，留意毛利率與庫存變化。")
+    if reason_set & {"growth_stock", "yield_too_low", "low_yield"}:
+        items.append("股利不是主軸，回到營收與獲利成長檢查。")
+    if reason_set & {"high_payout"}:
+        items.append("配息率偏高，確認獲利是否足以支撐。")
+    if reason_set & {"etf"}:
+        items.append("ETF 先看成分、費用與折溢價。")
+    if not items:
+        items.append("資料信心較完整，但仍要搭配營收、獲利與波動一起看。")
+    items.append("所有情境都只是資料整理，不是操作指令。")
+    return items[:4]
 
 
 def _risk_tags(suitability: ValuationSuitability) -> list[str]:

@@ -15,6 +15,8 @@ from app.models import (
     MonthlyRevenue,
     StockProfile,
 )
+from app.analyze.suitability import ValuationSuitability
+from app.news.classifier import contains_forbidden
 from app.store.sqlite_store import SQLiteStore
 from app.glossary.service import glossary_payload
 from app.portfolio.models import PortfolioTransaction
@@ -23,6 +25,7 @@ from app.web.api import (
     build_search_payload,
     build_stock_payload,
     build_watchlist_payload,
+    stock_brief_to_json,
 )
 
 
@@ -223,6 +226,54 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertFalse(payload["results"][0]["is_local"])  # type: ignore[index]
         self.assertEqual(synced_payload["results"][0]["stock_id"], "2330")  # type: ignore[index]
         self.assertTrue(synced_payload["results"][0]["is_local"])  # type: ignore[index]
+
+    def test_stock_brief_adds_beginner_sentence_and_watch_items(self) -> None:
+        suitability = ValuationSuitability(
+            company_type="growth",
+            company_type_label="成長股",
+            state="low_confidence",
+            reasons=["growth_stock", "low_yield"],
+            recommended_primary="pe_band",
+            recommended_secondary=["revenue_momentum"],
+            recommended_avoid=["yield"],
+            data_confidence="medium",
+            headline="股利法參考性偏低，需搭配其他方法",
+        )
+        brief = stock_brief_to_json(
+            StockProfile(
+                stock_id="2330",
+                name="台灣積體電路製造股份有限公司",
+                short_name="台積電",
+                industry_code="24",
+            ),
+            suitability,
+        )
+        text = json.dumps(brief, ensure_ascii=False)
+
+        self.assertIn("beginner_sentence", brief)
+        self.assertIn("watch_items", brief)
+        self.assertIn("營收動能", text)
+        self.assertIn("股利不是主軸", text)
+        self.assertEqual(contains_forbidden(text), [])
+
+    def test_stock_brief_etf_route_uses_etf_language(self) -> None:
+        suitability = ValuationSuitability(
+            company_type="etf",
+            company_type_label="ETF",
+            state="not_applicable",
+            reasons=["etf"],
+            recommended_primary="distribution_yield_band",
+            recommended_secondary=["premium_discount"],
+            recommended_avoid=["yield"],
+            data_confidence="medium",
+            headline="ETF 不適用個股股利法",
+        )
+        brief = stock_brief_to_json(None, suitability)
+        text = json.dumps(brief, ensure_ascii=False)
+
+        self.assertIn("ETF", text)
+        self.assertIn("折溢價", text)
+        self.assertEqual(contains_forbidden(text), [])
 
 
 class FakeQuoteProvider:

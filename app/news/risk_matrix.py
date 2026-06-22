@@ -73,11 +73,14 @@ RISK_TERMS: tuple[RiskTerm, ...] = (
     RiskTerm("累積虧損", "財務危機", 2, SEVERITY_LOW, ("累計虧損", "虧損累累")),
     RiskTerm("資金缺口", "財務危機", 3, SEVERITY_MEDIUM, ("資金壓力", "周轉不靈", "周轉困難", "資金吃緊")),
     RiskTerm("償債壓力", "財務危機", 3, SEVERITY_MEDIUM, ("債務違約", "無力償還", "債務壓力")),
+    RiskTerm("存貨跌價損失", "財務危機", 2, SEVERITY_LOW, ("存貨跌價", "庫存跌價損失")),
     # ── 財務誠信 ──
     RiskTerm("財報不實", "財務誠信", 5, SEVERITY_HIGH, ("財務報表不實", "不實財報", "財報造假")),
     RiskTerm("假帳", "財務誠信", 5, SEVERITY_HIGH, ("做假帳", "美化帳目", "虛增營收", "虛灌營收")),
     RiskTerm("掏空", "財務誠信", 5, SEVERITY_HIGH, ("淘空", "掏空資產", "掏空公司")),
     RiskTerm("重編財報", "財務誠信", 4, SEVERITY_MEDIUM, ("財報重編", "更正財報")),
+    RiskTerm("財報延遲", "財務誠信", 3, SEVERITY_MEDIUM, ("延後公告財報", "未如期公告財報", "未如期申報財報", "財報遲交")),
+    RiskTerm("內控缺失", "財務誠信", 3, SEVERITY_MEDIUM, ("重大內控缺失", "內部控制缺失", "內控異常")),
     RiskTerm("更換會計師", "財務誠信", 3, SEVERITY_MEDIUM, ("更換簽證會計師", "改聘會計師", "改聘簽證")),
     RiskTerm("會計師請辭", "財務誠信", 4, SEVERITY_MEDIUM, ("簽證會計師請辭", "會計師辭任", "會計師拒絕簽證")),
     RiskTerm("財務長請辭", "財務誠信", 3, SEVERITY_MEDIUM, ("財務主管請辭", "會計主管異動", "財務長異動", "財務長離職")),
@@ -88,7 +91,7 @@ RISK_TERMS: tuple[RiskTerm, ...] = (
     RiskTerm("起訴", "法律監管", 4, SEVERITY_HIGH, ("提起公訴", "遭起訴", "起訴求刑")),
     RiskTerm("函送", "法律監管", 3, SEVERITY_MEDIUM, ("函送檢調", "移送檢調", "移送法辦")),
     RiskTerm("裁罰", "法律監管", 2, SEVERITY_LOW, ("開罰", "處分書", "罰鍰", "遭罰")),
-    RiskTerm("違反證交法", "法律監管", 3, SEVERITY_MEDIUM, ("違反證券交易法", "重大內控缺失")),
+    RiskTerm("違反證交法", "法律監管", 3, SEVERITY_MEDIUM, ("違反證券交易法",)),
     # ── 董監治理 ──
     RiskTerm("內線交易", "董監治理", 5, SEVERITY_HIGH, ("內線交易疑雲",)),
     RiskTerm("董事請辭", "董監治理", 3, SEVERITY_MEDIUM, ("董事長請辭", "董事辭任", "獨董請辭", "獨立董事辭任", "獨董集體請辭")),
@@ -104,6 +107,8 @@ RISK_TERMS: tuple[RiskTerm, ...] = (
     RiskTerm("召回", "營運異常", 3, SEVERITY_MEDIUM, ("瑕疵召回", "產品回收")),
     RiskTerm("裁員", "營運異常", 2, SEVERITY_LOW, ("資遣", "大裁員", "人力精簡")),
     RiskTerm("無薪假", "營運異常", 3, SEVERITY_MEDIUM, ("放無薪假", "減班休息")),
+    RiskTerm("資安事件", "營運異常", 3, SEVERITY_MEDIUM, ("資安攻擊", "勒索軟體", "駭客攻擊", "資料外洩", "個資外洩", "系統遭入侵")),
+    RiskTerm("訂單取消", "營運異常", 3, SEVERITY_MEDIUM, ("取消訂單", "客戶取消訂單", "客戶延後拉貨", "交期遞延", "出貨遞延")),
     # ── 工程履約 ──
     RiskTerm("履約爭議", "工程履約", 3, SEVERITY_MEDIUM, ("履約糾紛", "履約保證金遭沒收")),
     RiskTerm("合意解約", "工程履約", 3, SEVERITY_MEDIUM, ("終止合約", "解除契約", "遭解約", "中止合約")),

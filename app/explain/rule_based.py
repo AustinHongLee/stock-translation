@@ -276,6 +276,7 @@ def _valuation_suitability_section(
     secondary = "、".join(_method_name(item) for item in suitability.recommended_secondary) or "暫無"
     avoid = "、".join(_method_name(item) for item in suitability.recommended_avoid) or "暫無"
     position_note = _position_cross_note(metrics, suitability)
+    reason_note = _reason_guidance_sentence(suitability.reasons)
     return _section(
         "valuation_suitability",
         "估值適用性",
@@ -287,7 +288,7 @@ def _valuation_suitability_section(
             ),
             f"白話：主要先看「{primary}」，輔助看「{secondary}」。",
             f"為什麼：系統依照獲利穩定、配息穩定、產業特性與上市時間分流；目前不適合強看的方法是「{avoid}」。",
-            f"要注意：{position_note}",
+            f"要注意：{position_note} {reason_note}",
         ],
     )
 
@@ -360,6 +361,27 @@ def _reason_sentence(reasons: list[str]) -> str:
     }
     text = "、".join(labels.get(item, item) for item in reasons[:4])
     return f"目前主要限制：{text}。"
+
+
+def _reason_guidance_sentence(reasons: list[str]) -> str:
+    reason_set = set(reasons)
+    if not reason_set:
+        return "數字情境只是把假設整理清楚，不要單獨當成結論。"
+    if reason_set & {"loss_history"}:
+        return "近年有虧損時，先分清楚是本業、一次性項目，還是景氣循環造成。"
+    if reason_set & {"insufficient_data", "short_history", "newly_listed"}:
+        return "樣本年數短時，單一年份資料容易把平均拉偏。"
+    if reason_set & {"unstable_dividend", "one_off_dividend"}:
+        return "配息忽高忽低時，平均數容易被特別年度影響。"
+    if reason_set & {"cyclical"}:
+        return "循環股要把景氣位置、毛利率趨勢與庫存變化一起看。"
+    if reason_set & {"growth_stock", "yield_too_low", "low_yield"}:
+        return "股利不是主軸時，先看營收動能、毛利率與投入成長的效果。"
+    if reason_set & {"high_payout"}:
+        return "配息率偏高時，要看獲利是否跟得上配息。"
+    if reason_set & {"etf"}:
+        return "ETF 要回到成分、費用與折溢價，不用個股獲利邏輯。"
+    return "先把限制原因看懂，再決定哪些數字值得多看。"
 
 
 def _method_name(method: str) -> str:

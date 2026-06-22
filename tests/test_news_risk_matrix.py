@@ -53,6 +53,22 @@ class RiskMatrixTest(unittest.TestCase):
         self.assertEqual(r["risk_score"], 0)
         self.assertEqual(r["risk_level"], "無")
 
+    def test_reporting_control_and_cybersecurity_risks(self):
+        reporting = score_news("公司未如期公告財報 內控缺失")
+        self.assertIn("財務誠信", reporting["dimensions"])
+        self.assertIn("財報延遲", reporting["matched_terms"])
+        self.assertIn("內控缺失", reporting["matched_terms"])
+
+        cyber = score_news("公司遭勒索軟體攻擊 資料外洩")
+        self.assertIn("營運異常", cyber["dimensions"])
+        self.assertIn("資安事件", cyber["matched_terms"])
+
+    def test_order_delay_risk_is_capped_per_term(self):
+        once = score_news("客戶延後拉貨 交期遞延")
+        repeated = score_news("客戶延後拉貨 客戶延後拉貨 交期遞延")
+        self.assertIn("訂單取消", once["matched_terms"])
+        self.assertEqual(once["risk_score"], repeated["risk_score"])
+
     def test_summary_escalates_on_critical(self):
         risks = [score_news("終止上市"), score_news("淨值轉負"), score_news("法說會")]
         summary = build_risk_summary(risks)

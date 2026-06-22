@@ -25,6 +25,7 @@ from app.news.classifier import (
     build_overall_sentence,
     classify_headline,
     detect_events,
+    sanitize_summary,
 )
 from app.news.risk_matrix import build_risk_summary, rolling_risk, score_news
 
@@ -208,7 +209,7 @@ def _assemble_payload(
                 "provider": item.get("provider", ""),
                 "published": item["published"],
                 "label": verdict.label,
-                "reason": verdict.reason,
+                "reason": sanitize_summary(verdict.reason),
                 "events": detect_events(item["title"]),
                 "risk": risk,
             }
