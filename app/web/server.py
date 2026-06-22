@@ -42,6 +42,7 @@ from app.web.api import (
     enrich_screener_with_levels,
     build_watchlist_payload,
 )
+from app.web.sync_batch import normalize_sync_targets
 
 STATIC_DIR = static_dir()
 DEFAULT_DB = data_path("stock_translator.sqlite3", writable=True)
@@ -65,6 +66,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/":
                 self._send_static_file(STATIC_DIR / "index.html")
+            elif parsed.path == "/manifest.webmanifest":
+                self._send_static_file(STATIC_DIR / "manifest.webmanifest")
+            elif parsed.path == "/sw.js":
+                self._send_static_file(STATIC_DIR / "sw.js")
             elif parsed.path.startswith("/static/"):
                 requested = unquote(parsed.path.removeprefix("/static/"))
                 self._send_static_file((STATIC_DIR / requested).resolve())
@@ -194,6 +199,57 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "finished_at": result.finished_at.isoformat(timespec="seconds"),
                     }
                     self._send_json(payload)
+            elif parsed.path == "/api/sync/batch":
+                body = self._read_json_body()
+                stock_ids = normalize_sync_targets(body.get("stock_ids", body.get("stock_id", [])))
+                lookback_days = int(body.get("lookback_days", HISTORICAL_VALUATION_DAYS))
+                if lookback_days < 1:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "lookback_days must be positive")
+                    return
+
+                results: list[dict[str, object]] = []
+                with SQLiteStore(self.server.db_path) as store:
+                    service = StockSyncService(
+                        client=TwseClient(request_interval=0.2),
+                        store=store,
+                    )
+                    for stock_id in stock_ids:
+                        try:
+                            result = service.sync_stock_history(
+                                stock_id,
+                                lookback_days=lookback_days,
+                            )
+                        except Exception as exc:
+                            results.append(
+                                {
+                                    "stock_id": stock_id,
+                                    "ok": False,
+                                    "error": str(exc),
+                                }
+                            )
+                        else:
+                            results.append(
+                                {
+                                    "stock_id": result.stock_id,
+                                    "ok": True,
+                                    "rows_written": result.rows_written,
+                                    "message": result.message,
+                                    "finished_at": result.finished_at.isoformat(timespec="seconds"),
+                                }
+                            )
+
+                succeeded = sum(1 for item in results if item["ok"])
+                failed = len(results) - succeeded
+                rows_written = sum(int(item.get("rows_written", 0)) for item in results)
+                self._send_json(
+                    {
+                        "requested": len(stock_ids),
+                        "succeeded": succeeded,
+                        "failed": failed,
+                        "rows_written": rows_written,
+                        "results": results,
+                    }
+                )
             elif parsed.path == "/api/institutional/sync":
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()

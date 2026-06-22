@@ -1,0 +1,26 @@
+{
+  "name": "股票翻譯機",
+  "short_name": "股票翻譯機",
+  "description": "本地優先的台股資料翻譯與投資作業系統。",
+  "lang": "zh-Hant",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EEF1F5",
+  "theme_color": "#1C3D5A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/assets/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/assets/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

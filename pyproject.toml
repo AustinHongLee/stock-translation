@@ -12,6 +12,9 @@ build = [
     "pillow>=10",
     "pyinstaller>=6",
 ]
+web = [
+    "uvicorn>=0.30",
+]
 
 [tool.unittest]
 start-dir = "tests"

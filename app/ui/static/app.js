@@ -7,6 +7,9 @@ const state = {
   watchlist: [],
   screener: null,
   screenerFilter: "value",
+  localDataSort: "stock_id",
+  localDataFilter: "all",
+  levelsSyncing: false,
   syncing: false,
   syncStepTimer: null,
   searchTimer: null,
@@ -22,6 +25,9 @@ const state = {
 };
 
 const STOCK_SYNC_LOOKBACK_DAYS = 365 * 5;
+const LEVEL_SYNC_CONCURRENCY = 2;
+const NEWBIE_GUIDE_STORAGE_KEY = "stockTranslator.newbieGuideDismissed";
+const THEME_STORAGE_KEY = "stockTranslator.theme";
 const SYNC_STEPS = [
   ["公司資料", "確認股票代號、名稱與市場。"],
   ["股利資料", "抓最近股利與歷史除息紀錄。"],
@@ -39,8 +45,12 @@ const elements = {
   searchForm: document.querySelector("#searchForm"),
   searchInput: document.querySelector("#searchInput"),
   searchSuggestions: document.querySelector("#searchSuggestions"),
+  themeToggle: document.querySelector("#themeToggle"),
+  themeColorMeta: document.querySelector('meta[name="theme-color"]'),
   localStocks: document.querySelector("#localStocks"),
   refreshLocalButton: document.querySelector("#refreshLocalButton"),
+  localDataSort: document.querySelector("#localDataSort"),
+  localDataFilters: document.querySelectorAll("[data-local-filter]"),
   dashboardSheet: document.querySelector("#dashboardSheet"),
   dashboardGreeting: document.querySelector("#dashboardGreeting"),
   dashboardTotalValue: document.querySelector("#dashboardTotalValue"),
@@ -56,6 +66,8 @@ const elements = {
   localDataRows: document.querySelector("#localDataRows"),
   localDataSummary: document.querySelector("#localDataSummary"),
   levelsRadarList: document.querySelector("#levelsRadarList"),
+  levelsSyncButton: document.querySelector("#levelsSyncButton"),
+  levelsSyncStatus: document.querySelector("#levelsSyncStatus"),
   screenerIllustration: document.querySelector("#screenerIllustration"),
   screenerRadarImage: document.querySelector("#screenerRadarImage"),
   screenerStatus: document.querySelector("#screenerStatus"),
@@ -123,6 +135,7 @@ const elements = {
   portfolioPanel: document.querySelector("#portfolioPanel"),
   emptyState: document.querySelector("#emptyState"),
   stockView: document.querySelector("#stockView"),
+  stockFocus: document.querySelector("#stockFocus"),
   stockMarket: document.querySelector("#stockMarket"),
   stockTitle: document.querySelector("#stockTitle"),
   stockHeaderPrice: document.querySelector("#stockHeaderPrice"),
@@ -139,6 +152,9 @@ const elements = {
   watchlistButton: document.querySelector("#watchlistButton"),
   buyStockButton: document.querySelector("#buyStockButton"),
   stockExportButton: document.querySelector("#stockExportButton"),
+  newbieGuideButton: document.querySelector("#newbieGuideButton"),
+  newbieGuideCard: document.querySelector("#newbieGuideCard"),
+  newbieGuideClose: document.querySelector("#newbieGuideClose"),
   quoteStatus: document.querySelector("#quoteStatus"),
   quotePriceLabel: document.querySelector("#quotePriceLabel"),
   quotePrice: document.querySelector("#quotePrice"),
@@ -178,6 +194,9 @@ const elements = {
   financialRows: document.querySelector("#financialRows"),
   priceChartTitle: document.querySelector("#priceChartTitle"),
   dateRange: document.querySelector("#dateRange"),
+  chartRangeBtn: document.querySelector("#chartRangeBtn"),
+  chartClearRangeBtn: document.querySelector("#chartClearRangeBtn"),
+  rangeStatsPanel: document.querySelector("#rangeStatsPanel"),
   validationItems: document.querySelector("#validationItems"),
   reportEngine: document.querySelector("#reportEngine"),
   healthReport: document.querySelector("#healthReport"),
@@ -216,6 +235,10 @@ const elements = {
   glossaryGuide: document.querySelector("#glossaryGuide"),
 };
 
+applyTheme(getInitialTheme(), { persist: false, redraw: false });
+setupStockFocusLayout();
+registerServiceWorker();
+
 elements.searchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const query = elements.searchInput.value.trim();
@@ -229,6 +252,7 @@ elements.sheetTriggers.forEach((button) => {
 elements.searchInput.addEventListener("input", handleSearchInput);
 elements.searchInput.addEventListener("focus", handleSearchInput);
 elements.searchSuggestions.addEventListener("click", handleSearchSuggestionClick);
+elements.themeToggle?.addEventListener("click", toggleTheme);
 elements.refreshLocalButton.addEventListener("click", loadWatchlist);
 elements.dashboardRefreshButton.addEventListener("click", loadWatchlist);
 elements.dashboardWatchlist.addEventListener("click", handleDashboardStockClick);
@@ -236,6 +260,18 @@ elements.dashboardHoldings.addEventListener("click", handleDashboardStockClick);
 elements.quickSyncButton.addEventListener("click", () => syncStock("2330"));
 elements.refreshScreenerButton.addEventListener("click", refreshValueScreener);
 elements.screenerExportButton?.addEventListener("click", exportScreenerExcel);
+elements.levelsSyncButton?.addEventListener("click", syncLevelsTargets);
+elements.localDataSort?.addEventListener("change", () => {
+  state.localDataSort = elements.localDataSort.value || "stock_id";
+  renderLocalDataTable(state.localData);
+});
+elements.localDataFilters?.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.localDataFilter = button.dataset.localFilter || "all";
+    updateLocalDataFilterButtons();
+    renderLocalDataTable(state.localData);
+  });
+});
 // 雷達中心：列表項目點擊（事件委派）
 document.querySelector("#screenerSheet").addEventListener("click", handleScreenerAction);
 document.querySelector("#dataSheet")?.addEventListener("click", handleScreenerAction);
@@ -273,12 +309,13 @@ elements.stockExportButton.addEventListener("click", exportStockExcel);
 elements.priceChart.addEventListener("mousemove", handleChartPointerMove);
 elements.priceChart.addEventListener("mouseleave", () => {
   state.chartHoverIndex = null;
-  state.chartDragging = false;
+  if (!state.chartSelectingRange) state.chartDragging = false;
   drawChart();
 });
 elements.priceChart.addEventListener("wheel", handleChartWheel, { passive: false });
 elements.priceChart.addEventListener("mousedown", handleChartMouseDown);
 window.addEventListener("mouseup", handleChartMouseUp);
+elements.newbieGuideClose?.addEventListener("click", () => hideNewbieGuide(true));
 elements.glossaryClose.addEventListener("click", hideGlossary);
 elements.glossaryOverlay.addEventListener("click", (event) => {
   if (event.target === elements.glossaryOverlay) hideGlossary();
@@ -312,6 +349,92 @@ async function init() {
   await loadWatchlist();
   await loadValueScreener();
   renderDashboard();
+}
+
+function setupStockFocusLayout() {
+  if (!elements.stockFocus) return;
+  [".focus-assess", ".focus-chart", ".focus-chips"].forEach((selector) => {
+    const card = document.querySelector(selector);
+    if (card && card.parentElement !== elements.stockFocus) {
+      elements.stockFocus.appendChild(card);
+    }
+  });
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => {
+      console.warn("Service worker registration failed", error);
+    });
+  });
+}
+
+function getInitialTheme() {
+  try {
+    const stored = window.localStorage?.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+  } catch (error) {}
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+}
+
+function applyTheme(theme, options = {}) {
+  const normalized = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = normalized;
+  document.body.dataset.theme = normalized;
+  if (elements.themeColorMeta) {
+    elements.themeColorMeta.setAttribute("content", normalized === "dark" ? "#0D141C" : "#1C3D5A");
+  }
+  if (elements.themeToggle) {
+    const label = normalized === "dark" ? "切換淺色模式" : "切換深色模式";
+    elements.themeToggle.setAttribute("aria-pressed", normalized === "dark" ? "true" : "false");
+    elements.themeToggle.setAttribute("aria-label", label);
+    elements.themeToggle.setAttribute("title", label);
+    elements.themeToggle.classList.toggle("is-dark", normalized === "dark");
+  }
+  if (options.persist !== false) {
+    try { window.localStorage?.setItem(THEME_STORAGE_KEY, normalized); } catch (error) {}
+  }
+  if (options.redraw !== false) refreshThemeCanvases();
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+}
+
+function refreshThemeCanvases() {
+  drawChart();
+  const valuation = state.activePayload?.valuation;
+  if (valuation?.bands) renderValuationBands(valuation.bands);
+  if (state.activeChips) renderChipsCard(state.activeChips);
+}
+
+function cssVar(name, fallback) {
+  try {
+    const value = window.getComputedStyle?.(document.documentElement)?.getPropertyValue(name)?.trim();
+    return value || fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function chartThemeColors() {
+  return {
+    canvasBg: cssVar("--chart-bg", "#ffffff"),
+    grid: cssVar("--chart-grid", "#e8ece8"),
+    line: cssVar("--line", "#dce2e8"),
+    muted: cssVar("--muted", "#6B7785"),
+    muted2: cssVar("--muted-2", "#9AA6B2"),
+    ink2: cssVar("--ink-2", "#33404C"),
+    brand: cssVar("--brand", "#1C3D5A"),
+    brand2: cssVar("--brand-2", "#2C5475"),
+    warn: cssVar("--warn", "#B0820B"),
+    rangeFill: cssVar("--chart-range-fill", "rgba(28, 61, 90, 0.10)"),
+    rangeStroke: cssVar("--chart-range-stroke", "rgba(28, 61, 90, 0.42)"),
+    tooltipBg: cssVar("--chart-tooltip-bg", "rgba(23,32,27,0.93)"),
+    tooltipText: cssVar("--chart-tooltip-text", "#eef2f0"),
+    tooltipAccent: cssVar("--chart-tooltip-accent", "#ffd9b0"),
+  };
 }
 
 async function loadGlossary() {
@@ -359,6 +482,39 @@ function showSheet(sheet, options = {}) {
 
   if (!options.preserveScroll) {
     window.scrollTo({ top: 0, behavior: options.smooth ? "smooth" : "auto" });
+  }
+}
+
+function newbieGuideDismissed() {
+  try {
+    return window.localStorage?.getItem(NEWBIE_GUIDE_STORAGE_KEY) === "1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function maybeShowNewbieGuide() {
+  if (!elements.newbieGuideCard) return;
+  if (newbieGuideDismissed()) {
+    elements.newbieGuideCard.classList.add("hidden");
+    return;
+  }
+  showNewbieGuide(false);
+}
+
+function showNewbieGuide(force = false) {
+  if (!elements.newbieGuideCard) return;
+  elements.newbieGuideCard.classList.remove("hidden");
+  if (force) {
+    try { window.localStorage?.removeItem(NEWBIE_GUIDE_STORAGE_KEY); } catch (error) {}
+  }
+}
+
+function hideNewbieGuide(persist = false) {
+  if (!elements.newbieGuideCard) return;
+  elements.newbieGuideCard.classList.add("hidden");
+  if (persist) {
+    try { window.localStorage?.setItem(NEWBIE_GUIDE_STORAGE_KEY, "1"); } catch (error) {}
   }
 }
 
@@ -473,7 +629,10 @@ async function loadWatchlist() {
     elements.localStocks.innerHTML = "";
     elements.dataStatus.textContent = `${payload.items.length} 支自選股`;
     if (payload.items.length === 0) {
-      elements.localStocks.innerHTML = `<div class="empty-local"><strong>尚未加入</strong><span>查到股票後加入自選</span></div>`;
+      elements.localStocks.innerHTML = stateMessageHTML("empty", "尚未加入自選股", "查到股票後可以加入觀察。", {
+        compact: true,
+        className: "empty-local",
+      });
       renderDashboard();
       return;
     }
@@ -553,7 +712,10 @@ function renderScreener(payload) {
 
   // 左欄：資料較完整的股利情境候選
   if (!highConf.length) {
-    elements.screenerHighConfList.innerHTML = `<p class="screener-empty">尚未更新，或目前沒有資料較完整的股利情境候選。</p>`;
+    elements.screenerHighConfList.innerHTML = stateMessageHTML("empty", "尚未更新", "目前沒有資料較完整的股利情境候選。", {
+      compact: true,
+      className: "screener-empty",
+    });
   } else {
     elements.screenerHighConfList.innerHTML = highConf.slice(0, 20).map((item, i) =>
       renderScreenerCheapRow(item, i + 1, "value")
@@ -582,7 +744,10 @@ function renderScreener(payload) {
 
   // 右欄：高殖利率（正常）
   if (!yieldNormal.length) {
-    elements.screenerYieldList.innerHTML = `<p class="screener-empty">尚未更新。</p>`;
+    elements.screenerYieldList.innerHTML = stateMessageHTML("empty", "尚未更新", "更新雷達後會顯示高殖利率觀察清單。", {
+      compact: true,
+      className: "screener-empty",
+    });
   } else {
     elements.screenerYieldList.innerHTML = yieldNormal.slice(0, 20).map((item, i) =>
       renderScreenerYieldRow(item, i + 1)
@@ -602,10 +767,10 @@ function renderScreener(payload) {
   // 下方：漲跌榜
   elements.screenerGainersList.innerHTML = gainers.slice(0, 10).map((item, i) =>
     renderScreenerMoverRow(item, i + 1, true)
-  ).join("") || `<p class="screener-empty">無資料</p>`;
+  ).join("") || stateMessageHTML("empty", "無資料", "目前沒有可顯示的上漲榜資料。", { compact: true, className: "screener-empty" });
   elements.screenerLosersList.innerHTML = losers.slice(0, 10).map((item, i) =>
     renderScreenerMoverRow(item, i + 1, false)
-  ).join("") || `<p class="screener-empty">無資料</p>`;
+  ).join("") || stateMessageHTML("empty", "無資料", "目前沒有可顯示的下跌榜資料。", { compact: true, className: "screener-empty" });
 }
 
 function renderScreenerCheapRow(item, _rank, _mode) {
@@ -704,6 +869,12 @@ function renderScreenerMoverRow(item, rank, isGainer) {
 }
 
 async function handleScreenerAction(event) {
+  const levelSyncButton = event.target.closest("[data-level-sync-stock]");
+  if (levelSyncButton) {
+    await syncLevelTarget(levelSyncButton.dataset.levelSyncStock);
+    return;
+  }
+
   const button = event.target.closest("[data-screener-stock]");
   if (!button) return;
   await syncStock(button.dataset.screenerStock);
@@ -716,6 +887,7 @@ async function loadStock(stockId, options = {}) {
     const payload = await getJson(`/api/stocks/${encodeURIComponent(stockId)}?days=365`);
     renderStock(payload, stockId);
     if (!options.keepSheet) showSheet("stock");
+    if (!options.quiet) maybeShowNewbieGuide();
     hideMessage();
     markActiveStock();
   } catch (error) {
@@ -738,6 +910,7 @@ async function syncStock(stockId, options = {}) {
     state.activeStockId = stockId;
     renderStock(payload, stockId);
     showSheet("stock");
+    maybeShowNewbieGuide();
     elements.searchInput.value = "";
     await loadWatchlist();
     showMessage(payload.sync?.message || "同步完成");
@@ -1244,10 +1417,16 @@ function renderDashboard() {
     .join("");
   elements.dashboardHoldings.innerHTML = positions.length
     ? positions.slice(0, 5).map(renderDashboardPosition).join("")
-    : `<div class="dashboard-empty">尚未新增交易。到持倉頁記一筆買進，這裡就會顯示組合摘要。</div>`;
+    : stateMessageHTML("empty", "尚未新增交易", "到持倉頁記一筆交易，這裡就會顯示組合摘要。", {
+      compact: true,
+      className: "dashboard-empty",
+    });
   elements.dashboardWatchlist.innerHTML = watchlist.length
     ? watchlist.slice(0, 6).map(renderDashboardWatchlistItem).join("")
-    : `<div class="dashboard-empty">尚未加入自選股。搜尋股票後可以加入觀察。</div>`;
+    : stateMessageHTML("empty", "尚未加入自選股", "搜尋股票後可以加入觀察。", {
+      compact: true,
+      className: "dashboard-empty",
+    });
 }
 
 function dashboardGreetingText() {
@@ -1867,8 +2046,13 @@ function renderValuationSuitability(suitability) {
 function renderCompanyBrief(brief) {
   if (!elements.companyBriefTitle) return;
   elements.companyBriefTitle.textContent = brief?.company_sentence || "公司資料待補";
-  elements.companyBriefText.textContent = brief?.valuation_sentence || "同步後會顯示這檔股票適合先看哪一把尺。";
-  elements.companyBriefAdvice.textContent = brief?.non_advice || "這是資料翻譯，不是買賣建議，也不預測股價。";
+  const briefParts = [brief?.valuation_sentence, brief?.beginner_sentence].filter(Boolean);
+  const briefText = briefParts.length
+    ? briefParts.join(" ")
+    : "同步後會顯示這檔股票適合先看哪一把尺。";
+  elements.companyBriefText.innerHTML = renderGlossaryText(briefText);
+  const watchItems = Array.isArray(brief?.watch_items) ? brief.watch_items : [];
+  elements.companyBriefAdvice.textContent = [watchItems[0], brief?.non_advice || "這是資料翻譯，不是買賣建議，也不預測股價。"].filter(Boolean).join(" ");
   const tags = brief?.risk_tags || [];
   elements.companyRiskTags.innerHTML = tags.length
     ? tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")
@@ -1997,6 +2181,7 @@ function renderBandBar(band) {
 function drawValuationRiver(canvas, band) {
   const series = Array.isArray(band.series) ? band.series : [];
   if (series.length < 2) return;
+  const colors = chartThemeColors();
   const values = series.map((p) => Number(p.value));
   const scale = window.devicePixelRatio || 1;
   const cssWidth = canvas.clientWidth || canvas.parentElement?.clientWidth || 600;
@@ -2015,17 +2200,17 @@ function drawValuationRiver(canvas, band) {
   const yAt = (v) => pad.top + innerH - ((v - lo) / range) * innerH;
 
   ctx.clearRect(0, 0, cssWidth, cssHeight);
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = colors.canvasBg;
   ctx.fillRect(0, 0, cssWidth, cssHeight);
 
   if (band.p20 != null && band.p80 != null) {
     const yTop = yAt(Number(band.p80));
     const yBot = yAt(Number(band.p20));
-    ctx.fillStyle = "rgba(28, 61, 90, 0.12)";
+    ctx.fillStyle = colors.rangeFill;
     ctx.fillRect(pad.left, yTop, innerW, Math.max(1, yBot - yTop));
   }
   if (band.p50 != null) {
-    ctx.strokeStyle = "#9AA6B2";
+    ctx.strokeStyle = colors.muted2;
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -2042,17 +2227,17 @@ function drawValuationRiver(canvas, band) {
     if (i === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   });
-  ctx.strokeStyle = "#1C3D5A";
+  ctx.strokeStyle = colors.brand;
   ctx.lineWidth = 1.8;
   ctx.stroke();
 
   const lastIndex = series.length - 1;
-  ctx.fillStyle = "#1C3D5A";
+  ctx.fillStyle = colors.brand;
   ctx.beginPath();
   ctx.arc(xAt(lastIndex), yAt(values[lastIndex]), 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#9AA6B2";
+  ctx.fillStyle = colors.muted2;
   ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
   ctx.fillText(formatNumber(hi), cssWidth - pad.right + 6, pad.top + 4);
   ctx.fillText(formatNumber(lo), cssWidth - pad.right + 6, cssHeight - pad.bottom);
@@ -2332,7 +2517,10 @@ function showGlossary(term) {
   elements.glossaryTitle.textContent = entry.term;
   elements.glossaryPlain.textContent = entry.plain;
   elements.glossaryHow.textContent = entry.how_to_read;
-  if (elements.glossaryGuide) { elements.glossaryGuide.innerHTML = ""; elements.glossaryGuide.classList.add("hidden"); }
+  if (elements.glossaryGuide) {
+    elements.glossaryGuide.innerHTML = entry.reminder ? `<p class="guide-note">${escapeHtml(entry.reminder)}</p>` : "";
+    elements.glossaryGuide.classList.toggle("hidden", !entry.reminder);
+  }
   elements.glossaryOverlay.classList.remove("hidden");
   elements.glossaryOverlay.setAttribute("aria-hidden", "false");
   elements.glossaryClose.focus();
@@ -2567,6 +2755,89 @@ function calculateMovingAverage(prices, windowSize) {
   return result;
 }
 
+function computeRangeStats(prices, startIdx, endIdx) {
+  const rows = Array.isArray(prices) ? prices : [];
+  if (!rows.length) return { available: false, reason: "no_prices" };
+  let start = Math.max(0, Math.min(rows.length - 1, Math.trunc(Number(startIdx))));
+  let end = Math.max(0, Math.min(rows.length - 1, Math.trunc(Number(endIdx))));
+  if (!Number.isFinite(start)) start = 0;
+  if (!Number.isFinite(end)) end = rows.length - 1;
+  if (start > end) [start, end] = [end, start];
+  const selected = rows.slice(start, end + 1);
+  if (!selected.length) return { available: false, reason: "empty_range" };
+  const numberOf = (item, key) => {
+    const value = Number(item && item[key]);
+    return Number.isFinite(value) ? value : null;
+  };
+  const startPrice = numberOf(selected[0], "close");
+  const endPrice = numberOf(selected[selected.length - 1], "close");
+  const highs = selected.map((item) => numberOf(item, "high")).filter((v) => v != null);
+  const lows = selected.map((item) => numberOf(item, "low")).filter((v) => v != null);
+  const volumes = selected.map((item) => numberOf(item, "volume")).filter((v) => v != null);
+  const closes = selected.map((item) => numberOf(item, "close"));
+  const highest = highs.length ? Math.max(...highs) : null;
+  const lowest = lows.length ? Math.min(...lows) : null;
+  const averageVolume = volumes.length ? volumes.reduce((sum, value) => sum + value, 0) / volumes.length : null;
+  const priceChange = startPrice != null && endPrice != null ? endPrice - startPrice : null;
+  const priceChangePercent = priceChange != null && startPrice ? (priceChange / startPrice) * 100 : null;
+  const amplitudePercent = highest != null && lowest != null && startPrice ? ((highest - lowest) / startPrice) * 100 : null;
+  const returns = [];
+  for (let i = 1; i < closes.length; i += 1) {
+    const prev = closes[i - 1], curr = closes[i];
+    if (prev && curr != null) returns.push((curr / prev) - 1);
+  }
+  const annualizedVolatilityPercent = returns.length >= 2
+    ? sampleStdev(returns) * Math.sqrt(252) * 100
+    : null;
+  return {
+    available: true,
+    start_index: start,
+    end_index: end,
+    start_date: selected[0]?.date,
+    end_date: selected[selected.length - 1]?.date,
+    trading_days: selected.length,
+    start_price: startPrice,
+    end_price: endPrice,
+    price_change: priceChange,
+    price_change_percent: priceChangePercent,
+    highest,
+    lowest,
+    amplitude_percent: amplitudePercent,
+    average_volume: averageVolume,
+    annualized_volatility_percent: annualizedVolatilityPercent,
+    vwap: rangeVwap(selected),
+  };
+}
+
+function sampleStdev(values) {
+  if (!Array.isArray(values) || values.length < 2) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
+function rangeVwap(rows) {
+  let tradeValueSum = 0, tradeVolumeSum = 0, hasTradeValue = false;
+  let fallbackValueSum = 0, fallbackVolumeSum = 0;
+  (rows || []).forEach((item) => {
+    const volume = Number(item && item.volume);
+    const close = Number(item && item.close);
+    const tradeValue = Number(item && item.trade_value);
+    if (Number.isFinite(volume) && volume > 0 && Number.isFinite(close)) {
+      fallbackValueSum += close * volume;
+      fallbackVolumeSum += volume;
+    }
+    if (Number.isFinite(volume) && volume > 0 && Number.isFinite(tradeValue) && tradeValue > 0) {
+      hasTradeValue = true;
+      tradeValueSum += tradeValue;
+      tradeVolumeSum += volume;
+    }
+  });
+  if (hasTradeValue && tradeVolumeSum) return tradeValueSum / tradeVolumeSum;
+  if (fallbackVolumeSum) return fallbackValueSum / fallbackVolumeSum;
+  return null;
+}
+
 // ---- 設定整合圖（價格 + 三大法人 + 事件），預設顯示全部，可滾輪縮放、拖曳平移 ----
 function setupChart(prices, chipsSeries, localEvents) {
   const valid = (prices || []).filter(isTradingRow);
@@ -2584,7 +2855,11 @@ function setupChart(prices, chipsSeries, localEvents) {
   state.chartView = { start: 0, end: Math.max(0, n - 1) };
   state.chartHoverIndex = null;
   state.chartDragging = false;
+  state.chartSelectingRange = false;
+  state.chartRangeSelection = null;
+  state.chartRangeDraft = null;
   drawChart();
+  renderRangeStatsPanel();
   updateChartLegendState();
 }
 
@@ -2669,6 +2944,7 @@ function chartXOf(i, view, layout) {
 function drawChart() {
   const canvas = elements.priceChart;
   if (!canvas) return;
+  const colors = chartThemeColors();
   const all = state.chartAll || [];
   const rect = canvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
@@ -2678,10 +2954,10 @@ function drawChart() {
   ctx.scale(scale, scale);
   const layout = chartLayout(canvas);
   ctx.clearRect(0, 0, layout.width, layout.height);
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = colors.canvasBg;
   ctx.fillRect(0, 0, layout.width, layout.height);
   if (all.length < 2) {
-    ctx.fillStyle = "#657068";
+    ctx.fillStyle = colors.muted;
     ctx.font = "13px Microsoft JhengHei, Segoe UI, Arial";
     ctx.fillText("尚無足夠資料", layout.padding.left, layout.price.top + 24);
     return;
@@ -2693,11 +2969,13 @@ function drawChart() {
   if (!(state.chartSeriesHidden && state.chartSeriesHidden.sr)) drawSupportResistance(ctx, layout, view);
   if (layout.vol) drawVolPanel(ctx, layout, view, slot);
   drawEventMarkers(ctx, layout, view);
+  drawRangeSelection(ctx, layout, view, slot);
   drawCrosshairTooltip(ctx, layout, view);
 }
 
 function drawPricePanel(ctx, layout, view, slot) {
   const all = state.chartAll;
+  const colors = chartThemeColors();
   const panel = layout.price;
   const hidden = state.chartSeriesHidden || {};
   const mas = state.chartMA.filter((s) => !hidden[s.key]);
@@ -2712,15 +2990,15 @@ function drawPricePanel(ctx, layout, view, slot) {
   const yOf = (v) => panel.top + panel.height - ((v - min) / range) * panel.height;
   state._priceYOf = yOf;
 
-  ctx.strokeStyle = "#e8ece8"; ctx.lineWidth = 1;
-  ctx.fillStyle = "#8a93a0"; ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.strokeStyle = colors.grid; ctx.lineWidth = 1;
+  ctx.fillStyle = colors.muted; ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
   for (let g = 0; g <= 4; g += 1) {
     const y = panel.top + (panel.height * g) / 4;
     ctx.beginPath(); ctx.moveTo(layout.padding.left, y); ctx.lineTo(layout.width - layout.padding.right, y); ctx.stroke();
     ctx.fillText(formatNumber(max - (range * g) / 4), layout.width - layout.padding.right + 6, y + 4);
   }
   // 日期軸（首尾）
-  ctx.fillStyle = "#8a93a0";
+  ctx.fillStyle = colors.muted;
   ctx.fillText(all[view.start].date, layout.padding.left, layout.height - 8);
   const lastLabel = all[view.end].date;
   ctx.fillText(lastLabel, layout.width - layout.padding.right - ctx.measureText(lastLabel).width, layout.height - 8);
@@ -2753,9 +3031,10 @@ function drawPricePanel(ctx, layout, view, slot) {
 
 function drawVolPanel(ctx, layout, view, slot) {
   const all = state.chartAll, panel = layout.vol;
+  const colors = chartThemeColors();
   let vmax = 1;
   for (let i = view.start; i <= view.end; i += 1) vmax = Math.max(vmax, Number(all[i].volume) || 0);
-  ctx.fillStyle = "#9aa4ad"; ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = colors.muted2; ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
   ctx.fillText("量", layout.padding.left, panel.top - 2);
   const bw = Math.max(1, Math.min(11, slot * 0.68));
   for (let i = view.start; i <= view.end; i += 1) {
@@ -2770,6 +3049,7 @@ function drawVolPanel(ctx, layout, view, slot) {
 
 function drawChipsPanel(ctx, layout, view, slot) {
   const all = state.chartAll, chips = state.chartChips, panel = layout.chips;
+  const colors = chartThemeColors();
   const mid = panel.top + panel.height / 2;
   const keys = ["foreign_net", "trust_net", "dealer_net"];
   const grouped = slot >= 9; // 夠寬才畫三家，否則畫合計
@@ -2780,17 +3060,17 @@ function drawChipsPanel(ctx, layout, view, slot) {
     else maxAbs = Math.max(maxAbs, Math.abs(Number(c.total_net) || 0));
   }
   // 零軸
-  ctx.strokeStyle = "#dce2e8"; ctx.lineWidth = 1;
+  ctx.strokeStyle = colors.line; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(layout.padding.left, mid); ctx.lineTo(layout.width - layout.padding.right, mid); ctx.stroke();
   // 標題 + 小圖例
   ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
-  ctx.fillStyle = "#6B7785";
+  ctx.fillStyle = colors.muted;
   ctx.fillText("三大法人買賣超（上買下賣，張）", layout.padding.left, panel.top - 2);
   if (grouped) {
     let lx = layout.width - layout.padding.right - 168;
-    keys.forEach((k) => { ctx.fillStyle = INST_COLORS[k]; ctx.fillRect(lx, panel.top - 9, 9, 8); ctx.fillStyle = "#6B7785"; ctx.fillText(INST_LABELS[k], lx + 12, panel.top - 2); lx += 56; });
+    keys.forEach((k) => { ctx.fillStyle = INST_COLORS[k]; ctx.fillRect(lx, panel.top - 9, 9, 8); ctx.fillStyle = colors.muted; ctx.fillText(INST_LABELS[k], lx + 12, panel.top - 2); lx += 56; });
   }
-  ctx.fillStyle = "#8a93a0"; ctx.font = "10px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = colors.muted; ctx.font = "10px Microsoft JhengHei, Segoe UI, Arial";
   ctx.fillText(Math.round(maxAbs / 1000).toLocaleString("zh-TW"), layout.width - layout.padding.right + 6, panel.top + 9);
   const half = panel.height / 2 - 4;
   const barOf = (v) => (Math.abs(v) / maxAbs) * half;
@@ -2814,7 +3094,7 @@ function drawChipsPanel(ctx, layout, view, slot) {
       const c = chips[all[i].date]; if (!c) continue;
       const v = Number(c.total_net) || 0; if (!v) continue;
       const x = chartXOf(i, view, layout), bh = barOf(v);
-      ctx.fillStyle = v > 0 ? "rgba(28,61,90,0.8)" : "rgba(199,125,17,0.85)";
+      ctx.fillStyle = v > 0 ? colors.brand : colors.warn;
       if (v > 0) ctx.fillRect(x - bw / 2, mid - bh, bw, bh); else ctx.fillRect(x - bw / 2, mid, bw, bh);
     }
   }
@@ -2835,6 +3115,40 @@ function drawEventMarkers(ctx, layout, view) {
   });
 }
 
+function activeChartRangeSelection() {
+  return state.chartRangeDraft || state.chartRangeSelection || null;
+}
+
+function normalizeChartRange(start, end) {
+  const all = state.chartAll || [];
+  if (!all.length) return null;
+  let a = Math.max(0, Math.min(all.length - 1, Number(start)));
+  let b = Math.max(0, Math.min(all.length - 1, Number(end)));
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  if (a > b) [a, b] = [b, a];
+  return { start: a, end: b };
+}
+
+function drawRangeSelection(ctx, layout, view, slot) {
+  const range = activeChartRangeSelection();
+  if (!range) return;
+  const colors = chartThemeColors();
+  const start = Math.max(range.start, view.start);
+  const end = Math.min(range.end, view.end);
+  if (start > end) return;
+  const left = Math.max(layout.padding.left, chartXOf(start, view, layout) - slot / 2);
+  const right = Math.min(layout.width - layout.padding.right, chartXOf(end, view, layout) + slot / 2);
+  const top = layout.price.top;
+  const bottom = layout.vol ? layout.vol.top + layout.vol.height : layout.price.top + layout.price.height;
+  ctx.save();
+  ctx.fillStyle = colors.rangeFill;
+  ctx.strokeStyle = colors.rangeStroke;
+  ctx.lineWidth = 1;
+  ctx.fillRect(left, top, Math.max(2, right - left), bottom - top);
+  ctx.strokeRect(left + 0.5, top + 0.5, Math.max(1, right - left - 1), bottom - top - 1);
+  ctx.restore();
+}
+
 function chartIndexAtClientX(clientX) {
   const canvas = elements.priceChart;
   const rect = canvas.getBoundingClientRect();
@@ -2850,10 +3164,11 @@ function chartIndexAtClientX(clientX) {
 function drawCrosshairTooltip(ctx, layout, view) {
   const idx = state.chartHoverIndex;
   if (idx == null || idx < view.start || idx > view.end) return;
+  const colors = chartThemeColors();
   const all = state.chartAll, item = all[idx];
   const x = chartXOf(idx, view, layout);
   ctx.save();
-  ctx.strokeStyle = "rgba(47,99,163,0.5)"; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = colors.rangeStroke; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
   ctx.beginPath(); ctx.moveTo(x, layout.price.top); ctx.lineTo(x, layout.height - layout.padding.bottom); ctx.stroke();
   ctx.setLineDash([]);
 
@@ -2881,19 +3196,83 @@ function drawCrosshairTooltip(ctx, layout, view) {
   const hgt = pad * 2 + 20 + lines.length * lh;
   let tx = x + 12; if (tx + w > layout.width - 6) tx = x - w - 12;
   let ty = layout.price.top + 6;
-  ctx.fillStyle = "rgba(23,32,27,0.93)"; ctx.beginPath(); roundedRect(ctx, tx, ty, w, hgt, 8); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.font = "13px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = colors.tooltipBg; ctx.beginPath(); roundedRect(ctx, tx, ty, w, hgt, 8); ctx.fill();
+  ctx.fillStyle = colors.tooltipText; ctx.font = "13px Microsoft JhengHei, Segoe UI, Arial";
   ctx.fillText(head, tx + pad, ty + pad + 12);
   ctx.font = "12px Microsoft JhengHei, Segoe UI, Arial";
   lines.forEach((ln, i) => {
-    if (ln.startsWith("◆")) ctx.fillStyle = "#ffd9b0"; else ctx.fillStyle = "#eef2f0";
+    if (ln.startsWith("◆")) ctx.fillStyle = colors.tooltipAccent; else ctx.fillStyle = colors.tooltipText;
     ctx.fillText(ln, tx + pad, ty + pad + 20 + (i + 1) * lh - 4);
   });
   ctx.restore();
 }
 
+function renderRangeStatsPanel(range = state.chartRangeSelection || state.chartRangeDraft) {
+  updateRangeControlState();
+  const panel = elements.rangeStatsPanel;
+  if (!panel) return;
+  const normalized = range ? normalizeChartRange(range.start, range.end) : null;
+  if (!normalized) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+  const stats = computeRangeStats(state.chartAll || [], normalized.start, normalized.end);
+  if (!stats.available) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+  const changeClass = toneClass(stats.price_change);
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="range-stats-head">
+      <strong>${escapeHtml(stats.start_date || "--")} 至 ${escapeHtml(stats.end_date || "--")}</strong>
+      <span>${formatInteger(stats.trading_days)} 個交易日</span>
+    </div>
+    <div class="range-stats-grid">
+      ${rangeStatItem("起訖收盤", `${formatNumber(stats.start_price)} → ${formatNumber(stats.end_price)}`)}
+      ${rangeStatItem("期間漲跌幅", `<span class="${changeClass}">${formatSignedPercent(stats.price_change_percent)}</span>`, true)}
+      ${rangeStatItem("區間高低", `${formatNumber(stats.highest)} / ${formatNumber(stats.lowest)}`)}
+      ${rangeStatItem("振幅", formatPercent(stats.amplitude_percent))}
+      ${rangeStatItem("區間均量", formatAverageLots(stats.average_volume))}
+      ${rangeStatItem("年化波動度", formatPercent(stats.annualized_volatility_percent))}
+      ${rangeStatItem("區間 VWAP", formatNumber(stats.vwap))}
+      ${rangeStatItem("漲跌點數", `<span class="${changeClass}">${formatSignedNumber(stats.price_change)}</span>`, true)}
+    </div>
+    <p class="range-stats-note">區間統計只整理框選期間已發生的價量資料，不是預測，也不是買賣建議。</p>
+  `;
+}
+
+function rangeStatItem(label, value, raw = false) {
+  return `<div class="range-stat"><span>${escapeHtml(label)}</span><strong>${raw ? value : escapeHtml(value)}</strong></div>`;
+}
+
+function formatSignedNumber(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  const n = Number(value);
+  return `${n > 0 ? "+" : ""}${formatNumber(n)}`;
+}
+
+function formatSignedPercent(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  const n = Number(value);
+  return `${n > 0 ? "+" : ""}${formatNumber(n)}%`;
+}
+
+function formatAverageLots(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  return `${formatInteger(Math.round(Number(value) / 1000))} 張`;
+}
+
+function updateRangeControlState() {
+  elements.chartRangeBtn?.classList.toggle("is-active", Boolean(state.chartRangeMode));
+  elements.chartClearRangeBtn?.classList.toggle("hidden", !state.chartRangeSelection && !state.chartRangeDraft);
+}
+
 // ---- 互動：滾輪縮放 / 拖曳平移 / hover ----
 function handleChartPointerMove(event) {
+  if (state.chartSelectingRange) { doChartRangeSelect(event); return; }
   if (state.chartDragging) { doChartPan(event); return; }
   const all = state.chartAll || [];
   if (all.length < 2) return;
@@ -2923,10 +3302,34 @@ function handleChartWheel(event) {
 }
 
 function handleChartMouseDown(event) {
+  if (event.button != null && event.button !== 0) return;
+  const all = state.chartAll || [];
+  if (all.length < 2) return;
+  if (state.chartRangeMode || event.shiftKey) {
+    event.preventDefault();
+    const idx = chartIndexAtClientX(event.clientX);
+    state.chartSelectingRange = true;
+    state.chartDragging = false;
+    state.chartRangeDraft = { start: idx, end: idx };
+    state.chartHoverIndex = null;
+    if (elements.priceChart) elements.priceChart.style.cursor = "crosshair";
+    renderRangeStatsPanel(state.chartRangeDraft);
+    drawChart();
+    return;
+  }
   state.chartDragging = true;
   state.chartDragStartX = event.clientX;
   state.chartDragStartView = chartView();
   if (elements.priceChart) elements.priceChart.style.cursor = "grabbing";
+}
+
+function doChartRangeSelect(event) {
+  const idx = chartIndexAtClientX(event.clientX);
+  const draft = state.chartRangeDraft || { start: idx, end: idx };
+  state.chartRangeDraft = { start: draft.start, end: idx };
+  state.chartHoverIndex = null;
+  renderRangeStatsPanel(state.chartRangeDraft);
+  drawChart();
 }
 
 function doChartPan(event) {
@@ -2945,14 +3348,38 @@ function doChartPan(event) {
 }
 
 function handleChartMouseUp() {
+  if (state.chartSelectingRange) {
+    state.chartRangeSelection = normalizeChartRange(
+      state.chartRangeDraft?.start,
+      state.chartRangeDraft?.end,
+    );
+    state.chartRangeDraft = null;
+    state.chartSelectingRange = false;
+    renderRangeStatsPanel(state.chartRangeSelection);
+  }
   state.chartDragging = false;
   if (elements.priceChart) elements.priceChart.style.cursor = "crosshair";
+  drawChart();
 }
 
 function resetChartZoom() {
   const n = (state.chartAll || []).length;
   state.chartView = { start: 0, end: Math.max(0, n - 1) };
   state.chartHoverIndex = null;
+  drawChart();
+}
+
+function toggleChartRangeMode() {
+  state.chartRangeMode = !state.chartRangeMode;
+  updateRangeControlState();
+  if (elements.priceChart) elements.priceChart.style.cursor = state.chartRangeMode ? "crosshair" : "default";
+}
+
+function clearChartRange() {
+  state.chartRangeSelection = null;
+  state.chartRangeDraft = null;
+  state.chartSelectingRange = false;
+  renderRangeStatsPanel();
   drawChart();
 }
 
@@ -3059,6 +3486,15 @@ function showMessage(text, isError = false) {
 
 function hideMessage() {
   elements.message.classList.add("hidden");
+}
+
+function stateMessageHTML(kind, title, body, options = {}) {
+  const safeKind = ["loading", "empty", "error"].includes(kind) ? kind : "empty";
+  const classes = ["state-message", `is-${safeKind}`];
+  if (options.compact) classes.push("compact");
+  if (options.className) classes.push(options.className);
+  const bodyHtml = body ? `<p>${escapeHtml(body)}</p>` : "";
+  return `<div class="${classes.join(" ")}"><div><strong>${escapeHtml(title)}</strong>${bodyHtml}</div></div>`;
 }
 
 function formatNumber(value) {
@@ -3234,7 +3670,10 @@ function renderChipsCard(chips) {
   if (!el) return;
   if (!chips || !chips.available) {
     el.className = "chips-card chips-empty";
-    el.innerHTML = `<p class="chips-empty-text">${escapeHtml((chips && chips.headline) || "尚未同步三大法人買賣超資料。")}</p>`;
+    el.innerHTML = stateMessageHTML("empty", "等待法人資料", (chips && chips.headline) || "按「讀取三大法人」後，這裡會顯示近 20 日買賣超。", {
+      compact: true,
+      className: "chips-empty-text",
+    });
     return;
   }
   const tone = chipsLevelTone(chips.level);
@@ -3285,6 +3724,7 @@ function drawChipsSparkline(canvas, trend) {
   ctx.scale(scale, scale);
   const width = w / scale;
   const height = h / scale;
+  const colors = chartThemeColors();
   ctx.clearRect(0, 0, width, height);
   const vals = (trend || []).map((t) => Number(t.value) || 0);
   if (!vals.length) return;
@@ -3293,7 +3733,7 @@ function drawChipsSparkline(canvas, trend) {
   const n = vals.length;
   const slot = width / n;
   const bw = Math.max(2, slot * 0.62);
-  ctx.strokeStyle = "#d3dae0";
+  ctx.strokeStyle = colors.line;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, mid);
@@ -3302,7 +3742,7 @@ function drawChipsSparkline(canvas, trend) {
   vals.forEach((v, i) => {
     const x = slot * i + slot / 2;
     const barH = (Math.abs(v) / maxAbs) * (mid - 5);
-    ctx.fillStyle = v >= 0 ? "rgba(44,84,117,0.78)" : "rgba(176,130,11,0.82)";
+    ctx.fillStyle = v >= 0 ? colors.brand : colors.warn;
     if (v >= 0) ctx.fillRect(x - bw / 2, mid - barH, bw, barH);
     else ctx.fillRect(x - bw / 2, mid, bw, barH);
   });
@@ -3371,7 +3811,10 @@ function renderAssessment(a) {
   if (!el) return;
   if (!a || !a.available) {
     el.className = "assess-card assess-empty";
-    el.innerHTML = `<p class="assess-empty-text">${escapeHtml((a && a.summary) || "日線資料不足，先同步後再看體質總評。")}</p>`;
+    el.innerHTML = stateMessageHTML("empty", "等待體質總評", (a && a.summary) || "日線資料不足，先同步後再看體質總評。", {
+      compact: true,
+      className: "assess-empty-text",
+    });
     return;
   }
   const counts = a.counts || {};
@@ -3633,6 +4076,17 @@ const INDICATOR_GUIDES = {
     ],
     note: "只描述價位參考，不預測股價、不構成買賣建議。",
   },
+  range: {
+    title: "區間統計",
+    intro: "把你框選的一段 K 線整理成已發生的價量統計，方便比較不同時間段的波動與量能。",
+    points: [
+      { h: "期間漲跌幅", b: "用區間最後一天收盤和第一天收盤比較，只描述這段期間已發生的價格變化。" },
+      { h: "振幅", b: "區間最高價減最低價，再除以起始收盤價；數字越大，代表這段期間上下震盪越寬。" },
+      { h: "年化波動度", b: "用區間內每日收盤報酬的標準差換算成年化尺度，樣本短時容易不穩。" },
+      { h: "VWAP", b: "用成交量加權後的平均價格；若資料沒有成交金額，系統用收盤價與成交量近似。" },
+    ],
+    note: "區間統計只整理歷史資料，不預測股價、不構成買賣建議。",
+  },
   chips: {
     title: "三大法人（籌碼）",
     intro: "三大法人＝外資、投信（國內基金）、自營商（券商自有部位）。買賣超＝當天買進減賣出的張數，正值買超、負值賣超。",
@@ -3772,8 +4226,13 @@ function renderLevelsRadar(payload) {
   const el = elements.levelsRadarList;
   if (!el) return;
   const near = (payload && payload.near) || [];
+  state.levelTargets = uniqueStockIds(near.map((item) => item.stock_id)).slice(0, 20);
+  updateLevelsSyncControls();
   if (!near.length) {
-    el.innerHTML = `<p class="levels-empty">目前本地資料中沒有接近波撐/波壓的股票（同步個股、或在雷達中心完成全市場下載後會出現）。</p>`;
+    el.innerHTML = stateMessageHTML("empty", "目前沒有接近關卡", "同步個股、或在雷達中心完成全市場下載後，這裡會列出接近波撐/波壓的股票。", {
+      compact: true,
+      className: "levels-empty",
+    });
     return;
   }
   el.innerHTML = near.map((it) => {
@@ -3783,25 +4242,259 @@ function renderLevelsRadar(payload) {
     const stale = it.stale_days > 7
       ? `<span class="sr-date stale">過期 ${it.stale_days} 天</span>`
       : `<span class="sr-date">資料 ${escapeHtml(it.last_date)}</span>`;
-    return `<div class="levels-row" data-screener-stock="${escapeHtml(it.stock_id)}">
+    return `<div class="levels-row" data-level-row="${escapeHtml(it.stock_id)}">
       <span class="levels-name"><strong>${escapeHtml(it.stock_id)} ${escapeHtml(it.name || "")}</strong></span>
       <span class="sr-badge ${cls}">${escapeHtml(it.sr_status)}・${level}</span>
       ${stale}
-      <button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button>
+      <span class="levels-row-actions">
+        <button class="table-action level-sync-action" type="button" data-level-sync-stock="${escapeHtml(it.stock_id)}">${refreshIconMarkup()} 更新</button>
+        <button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button>
+      </span>
     </div>`;
   }).join("");
+}
+
+async function syncLevelsTargets() {
+  if (state.levelsSyncing) return;
+  const targets = uniqueStockIds(state.levelTargets || []);
+  if (!targets.length) {
+    showMessage("目前沒有可更新的波段提醒目標。", true);
+    return;
+  }
+  state.levelsSyncing = true;
+  updateLevelsSyncControls({ text: `更新中 0/${targets.length}` });
+  showMessage(`開始更新 ${targets.length} 檔波段提醒資料...`);
+  try {
+    const payload = await syncTargetsBatch(targets);
+    const succeeded = Number(payload.succeeded || 0);
+    const failed = Number(payload.failed || 0);
+    const message = failed
+      ? `波段提醒資料更新完成：${succeeded}/${payload.requested || targets.length} 檔成功，${failed} 檔失敗。`
+      : `波段提醒資料更新完成：${succeeded} 檔已更新。`;
+    showMessage(message, failed > 0);
+    await loadLocalData();
+    if (state.activeStockId && targets.includes(state.activeStockId)) {
+      await loadStock(state.activeStockId, { quiet: true, keepSheet: true });
+    }
+    window.setTimeout(hideMessage, failed > 0 ? 4200 : 2200);
+  } catch (error) {
+    showMessage(`更新波段提醒資料失敗：${error.message}`, true);
+  } finally {
+    state.levelsSyncing = false;
+    updateLevelsSyncControls();
+  }
+}
+
+async function syncLevelTarget(stockId) {
+  const target = String(stockId || "").trim();
+  if (!target || state.levelsSyncing) return;
+  state.levelsSyncing = true;
+  updateLevelsSyncControls({ text: `更新 ${target}` });
+  updateLevelRowSyncState(target, true);
+  showMessage(`開始更新 ${target} 的資料...`);
+  try {
+    const payload = await syncTargetsBatch([target]);
+    const ok = Number(payload.succeeded || 0) > 0;
+    if (ok) {
+      showMessage(`${target} 資料已更新。`);
+      await loadLocalData();
+      if (state.activeStockId === target) {
+        await loadStock(target, { quiet: true, keepSheet: true });
+      }
+      window.setTimeout(hideMessage, 1800);
+    } else {
+      const firstError = (payload.results || []).find((item) => !item.ok)?.error;
+      showMessage(`${target} 更新失敗：${firstError || "資料源暫時沒有回應"}`, true);
+    }
+  } catch (error) {
+    showMessage(`${target} 更新失敗：${error.message}`, true);
+  } finally {
+    state.levelsSyncing = false;
+    updateLevelRowSyncState(target, false);
+    updateLevelsSyncControls();
+  }
+}
+
+async function syncTargetsBatch(targets) {
+  return syncTargetsConcurrently(targets, Math.min(LEVEL_SYNC_CONCURRENCY, Math.max(1, targets.length)));
+}
+
+async function syncTargetsSequentially(targets) {
+  return syncTargetsConcurrently(targets, 1);
+}
+
+async function syncTargetsConcurrently(targets, concurrency = LEVEL_SYNC_CONCURRENCY) {
+  const safeTargets = uniqueStockIds(targets);
+  const results = [];
+  let rowsWritten = 0;
+  let nextIndex = 0;
+  let finished = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), safeTargets.length || 1);
+  const updateProgress = () => {
+    const prefix = workerCount > 1 ? `同時 ${workerCount} 檔` : "單檔";
+    updateLevelsSyncControls({ text: `更新中 ${finished}/${safeTargets.length}・${prefix}` });
+  };
+  updateProgress();
+
+  const runOne = async () => {
+    while (nextIndex < safeTargets.length) {
+      const stockId = safeTargets[nextIndex];
+      nextIndex += 1;
+      updateLevelRowSyncState(stockId, true);
+      try {
+        const payload = await postJson("/api/sync", {
+          stock_id: stockId,
+          lookback_days: STOCK_SYNC_LOOKBACK_DAYS,
+        });
+        const rows = Number(payload.sync?.rows_written || 0);
+        rowsWritten += rows;
+        results.push({
+          stock_id: stockId,
+          ok: true,
+          rows_written: rows,
+          message: payload.sync?.message || "",
+        });
+      } catch (error) {
+        results.push({
+          stock_id: stockId,
+          ok: false,
+          error: error.message,
+        });
+      } finally {
+        finished += 1;
+        updateLevelRowSyncState(stockId, false);
+        updateProgress();
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, () => runOne()));
+  const succeeded = results.filter((item) => item.ok).length;
+  return {
+    requested: safeTargets.length,
+    succeeded,
+    failed: safeTargets.length - succeeded,
+    rows_written: rowsWritten,
+    results,
+    concurrency: workerCount,
+  };
+}
+
+async function syncTargetsViaBatchEndpoint(targets) {
+  try {
+    return await postJson("/api/sync/batch", {
+      stock_ids: targets,
+      lookback_days: STOCK_SYNC_LOOKBACK_DAYS,
+    });
+  } catch (error) {
+    if (!/not found|HTTP 404/i.test(error.message || "")) throw error;
+    return syncTargetsSequentially(targets);
+  }
+}
+
+function uniqueStockIds(values) {
+  const ids = [];
+  const seen = new Set();
+  (values || []).forEach((value) => {
+    const id = String(value || "").trim();
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    ids.push(id);
+  });
+  return ids;
+}
+
+function updateLevelsSyncControls(options = {}) {
+  const count = (state.levelTargets || []).length;
+  if (elements.levelsSyncButton) {
+    elements.levelsSyncButton.disabled = state.levelsSyncing || count === 0;
+    elements.levelsSyncButton.classList.toggle("is-active", state.levelsSyncing);
+    elements.levelsSyncButton.innerHTML = `${refreshIconMarkup()} ${state.levelsSyncing ? "更新中" : "更新資料"}`;
+  }
+  if (elements.levelsSyncStatus) {
+    elements.levelsSyncStatus.textContent = options.text || (count ? `本地資料・${count} 檔目標` : "本地資料・接近波撐/波壓");
+  }
+}
+
+function updateLevelRowSyncState(stockId, syncing) {
+  const safeId = attrSelectorValue(String(stockId || ""));
+  const row = safeId ? document.querySelector(`[data-level-row="${safeId}"]`) : null;
+  const button = safeId ? document.querySelector(`[data-level-sync-stock="${safeId}"]`) : null;
+  if (row) row.classList.toggle("is-syncing", Boolean(syncing));
+  if (button) {
+    button.disabled = Boolean(syncing);
+    button.innerHTML = `${refreshIconMarkup()} ${syncing ? "更新中" : "更新"}`;
+  }
+}
+
+function attrSelectorValue(value) {
+  return value.replace(/["\\]/g, "\\$&");
+}
+
+function filterAndSortLocalDataItems(items, options = {}) {
+  const filterMode = options.filter || "all";
+  const sortKey = options.sort || "stock_id";
+  const levelRank = { "接近波壓": 0, "接近波撐": 1, "正常": 2, "資料不足": 3, "": 4 };
+  const keep = (item) => {
+    if (filterMode === "stale") return Number(item.stale_days || 0) > 7;
+    if (filterMode === "near_resistance") return item.sr_status === "接近波壓";
+    if (filterMode === "near_support") return item.sr_status === "接近波撐";
+    return true;
+  };
+  const value = (item) => {
+    const stockId = String(item.stock_id || "");
+    if (sortKey === "price_rows_desc") return [-Number(item.price_rows || 0), stockId];
+    if (sortKey === "last_date_desc") return [String(item.last_date || "").split("").map((ch) => -ch.charCodeAt(0)), stockId];
+    if (sortKey === "last_date_asc") return [String(item.last_date || ""), stockId];
+    if (sortKey === "level_status") return [levelRank[item.sr_status || ""] ?? 4, stockId];
+    return [stockId];
+  };
+  return (items || [])
+    .filter(keep)
+    .slice()
+    .sort((a, b) => compareLocalDataSortValue(value(a), value(b)));
+}
+
+function compareLocalDataSortValue(a, b) {
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i += 1) {
+    const av = a[i], bv = b[i];
+    if (Array.isArray(av) || Array.isArray(bv)) {
+      const nested = compareLocalDataSortValue(av || [], bv || []);
+      if (nested) return nested;
+      continue;
+    }
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+  }
+  return 0;
+}
+
+function updateLocalDataFilterButtons() {
+  elements.localDataFilters?.forEach((button) => {
+    button.classList.toggle("is-active", (button.dataset.localFilter || "all") === state.localDataFilter);
+  });
+  if (elements.localDataSort && elements.localDataSort.value !== state.localDataSort) {
+    elements.localDataSort.value = state.localDataSort;
+  }
 }
 
 function renderLocalDataTable(payload) {
   const tbody = elements.localDataRows;
   if (!tbody) return;
-  const items = (payload && payload.items) || [];
+  updateLocalDataFilterButtons();
+  const allItems = (payload && payload.items) || [];
+  const items = filterAndSortLocalDataItems(allItems, {
+    filter: state.localDataFilter,
+    sort: state.localDataSort,
+  });
   if (elements.localDataSummary) {
-    elements.localDataSummary.textContent = items.length
-      ? `本地共有 ${items.length} 檔有日線資料（資料日 ${payload.generated_at}）。過期會以紅字標示。`
+    const countText = items.length === allItems.length ? `${allItems.length} 檔` : `${items.length} / ${allItems.length} 檔`;
+    elements.localDataSummary.textContent = allItems.length
+      ? `本地共有 ${countText} 有日線資料（資料日 ${payload.generated_at}）。過期會以紅字標示。`
       : "本地還沒有任何已下載的日線資料；到雷達中心按『開始下載』，或開個股按『同步』。";
   }
-  tbody.innerHTML = items.map((it) => {
+  tbody.innerHTML = items.length ? items.map((it) => {
     const stale = it.stale_days > 7;
     const dateCell = `<span class="${stale ? "ld-stale" : ""}">${escapeHtml(it.last_date)}${stale ? `（過期${it.stale_days}天）` : ""}</span>`;
     const sr = it.sr_status && it.sr_status !== "資料不足" ? escapeHtml(it.sr_status) : "—";
@@ -3814,5 +4507,5 @@ function renderLocalDataTable(payload) {
       <td>${sr}</td>
       <td><button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button></td>
     </tr>`;
-  }).join("");
+  }).join("") : `<tr><td colspan="7">${stateMessageHTML("empty", "目前沒有符合條件的資料", "換一個篩選條件，或先同步更多股票。", { compact: true })}</td></tr>`;
 }

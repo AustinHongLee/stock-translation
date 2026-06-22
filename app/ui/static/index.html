@@ -3,10 +3,25 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1C3D5A">
+    <script>
+      (function () {
+        try {
+          var stored = window.localStorage && window.localStorage.getItem("stockTranslator.theme");
+          var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var theme = stored === "dark" || stored === "light" ? stored : (prefersDark ? "dark" : "light");
+          document.documentElement.dataset.theme = theme;
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+        }
+      }());
+    </script>
     <title>股票翻譯機 · 投資作業系統</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/assets/app-icon-192.png">
     <link rel="stylesheet" href="/static/app.css">
   </head>
-  <body data-sheet="dashboard">
+  <body data-sheet="dashboard" data-theme="light">
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
@@ -31,6 +46,11 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v6c0 4 3 6.5 7 9 4-2.5 7-5 7-9V6l-7-3Z"/></svg>
           <span>本地優先 · 不上傳</span>
         </div>
+
+        <button id="themeToggle" class="icon-button theme-toggle" type="button" title="切換深色模式" aria-label="切換深色模式" aria-pressed="false">
+          <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.7A8 8 0 0 1 8.3 4 7 7 0 1 0 20 15.7Z"/></svg>
+          <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
       </header>
 
       <div class="app-body">
@@ -211,7 +231,13 @@
             <section class="surface levels-card" id="levelsCard">
               <div class="surface-head compact">
                 <h3>波段關卡提醒</h3>
-                <span class="muted-tag">本地資料・接近波撐/波壓</span>
+                <div class="levels-head-actions">
+                  <span id="levelsSyncStatus" class="muted-tag">本地資料・接近波撐/波壓</span>
+                  <button id="levelsSyncButton" class="chart-size-btn levels-sync-btn" type="button" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>
+                    更新資料
+                  </button>
+                </div>
               </div>
               <div id="levelsRadarList" class="levels-list">
                 <p class="levels-empty">同步個股或完成全市場下載後，這裡會列出目前接近波撐/波壓的股票。</p>
@@ -294,6 +320,23 @@
             </header>
             <p id="localDataSummary" class="screener-status-text">尚未載入。</p>
             <section class="surface">
+              <div class="local-data-controls">
+                <label>排序
+                  <select id="localDataSort">
+                    <option value="stock_id">代號</option>
+                    <option value="price_rows_desc">日線筆數多到少</option>
+                    <option value="last_date_desc">最後資料新到舊</option>
+                    <option value="last_date_asc">最後資料舊到新</option>
+                    <option value="level_status">波段關卡</option>
+                  </select>
+                </label>
+                <div class="local-data-filters" aria-label="本地資料快速篩選">
+                  <button type="button" class="is-active" data-local-filter="all">全部</button>
+                  <button type="button" data-local-filter="stale">只看過期</button>
+                  <button type="button" data-local-filter="near_resistance">接近波壓</button>
+                  <button type="button" data-local-filter="near_support">接近波撐</button>
+                </div>
+              </div>
               <div class="table-wrap">
                 <table class="local-data-table">
                   <thead>
@@ -531,14 +574,32 @@
             </section>
 
             <nav class="layer-nav" aria-label="個股頁分層">
+              <a href="#stockFocus">重點卡</a>
               <a href="#layerOverview">第一層 · 30 秒看懂</a>
               <a href="#layerHealth">第二層 · 體質與估值情境</a>
               <a href="#layerData">第三層 · 完整資料</a>
+              <button id="newbieGuideButton" type="button" onclick="showNewbieGuide(true)">新手須知</button>
             </nav>
+
+            <section id="stockFocus" class="stock-focus-area" aria-label="個股重點卡"></section>
 
             <!-- 第一層 -->
             <section id="layerOverview" class="layer">
               <div class="layer-tag"><span class="layer-num">1</span><div><h3>30 秒看懂</h3><p>先給白話結論、公司在做什麼、現價與風險，以及這檔適不適合用股利法估價。</p></div></div>
+
+              <section id="newbieGuideCard" class="surface newbie-guide hidden">
+                <div class="surface-head compact">
+                  <h3>新手須知</h3>
+                  <button id="newbieGuideClose" type="button" class="chart-size-btn">收起</button>
+                </div>
+                <div class="newbie-guide-grid">
+                  <div><strong>1. 先看 30 秒</strong><p>先讀公司簡述、報價、消息面與明牌驗證工作台。</p></div>
+                  <div><strong>2. 再看體質</strong><p>體質總評把價量、基本面、籌碼與估值位階整理在一起。</p></div>
+                  <div><strong>3. 最後看完整資料</strong><p>K 線、區間統計、日期事件與原始表格都放在第三層。</p></div>
+                  <div><strong>4. 記得看資料日期</strong><p>資料過期或樣本不足時，先同步或降低解讀力道。</p></div>
+                </div>
+                <p class="disclaimer">這張卡只是閱讀順序提醒，不是買賣建議，也不預測股價。</p>
+              </section>
 
               <section class="surface quote-panel">
                 <div class="surface-head">
@@ -604,7 +665,7 @@
             <section id="layerHealth" class="layer">
               <div class="layer-tag"><span class="layer-num">2</span><div><h3>體質與估值情境</h3><p>白話健檢六卡、資料卡、營收、財報，以及自適應的估值情境（不適用就明說）。</p></div></div>
 
-              <section class="surface assess-panel">
+              <section class="surface assess-panel focus-card focus-assess">
                 <div class="surface-head">
                   <h3>體質總評（多因子研究）</h3>
                   <span class="muted-tag">事實＋傳統解讀</span>
@@ -617,18 +678,23 @@
                   </div>
                 </details>
                 <div id="assessmentCard" class="assess-card assess-empty">
-                  <p class="assess-empty-text">同步後這裡會出現多因子體質總評；再按法人卡片的「讀取三大法人」，會把籌碼面也納入。</p>
+                  <div class="state-message is-empty compact assess-empty-text">
+                    <div>
+                      <strong>等待體質總評</strong>
+                      <p>同步後這裡會出現多因子體質總評；再按法人卡片的「讀取三大法人」，會把籌碼面也納入。</p>
+                    </div>
+                  </div>
                 </div>
               </section>
 
-              <section class="surface report-block">
-                <div class="surface-head">
+              <details class="surface report-block collapsible-card">
+                <summary class="surface-head collapsible-summary">
                   <h3>白話健檢報告</h3>
                   <span id="reportEngine">規則式解說</span>
-                </div>
+                </summary>
                 <div id="healthReport" class="report-grid"></div>
                 <p id="reportDisclaimer" class="disclaimer"></p>
-              </section>
+              </details>
 
               <div class="metric-grid">
                 <div class="metric">
@@ -748,11 +814,11 @@
                 <p class="disclaimer">新聞由公開來源（Google News）整理、關鍵字粗略歸類，僅供快速了解，非投資建議、不預測股價。</p>
               </section>
 
-              <section class="surface valuation-panel">
-                <div class="surface-head">
+              <details class="surface valuation-panel collapsible-card">
+                <summary class="surface-head collapsible-summary">
                   <h3>估值情境與股利試算</h3>
                   <span class="muted-tag">情境 · 敏感度 · 參考</span>
-                </div>
+                </summary>
                 <div id="etfNote" class="etf-note" hidden></div>
                 <div id="valuationSuitability" class="suitability-banner" hidden></div>
                 <div id="valuationBands" class="valuation-bands" hidden></div>
@@ -803,17 +869,19 @@
                     </table>
                   </div>
                 </details>
-              </section>
+              </details>
             </section>
 
             <!-- 第三層 -->
             <section id="layerData" class="layer">
-              <div class="layer-tag"><span class="layer-num">3</span><div><h3>完整資料</h3><p>走勢圖、日期事件線、原始日線資料表，以及資料來源與匯出。</p></div></div>
+              <div class="layer-tag"><span class="layer-num">3</span><div><h3>完整資料</h3><p>原始日線資料表、資料來源與匯出；K 線與日期事件已提升到重點卡。</p></div></div>
 
-              <section class="surface chart-panel">
+              <section class="surface chart-panel focus-card focus-chart">
                 <div class="surface-head">
                   <h3 id="priceChartTitle">近一年收盤價（日線）</h3>
                   <div class="chart-head-right">
+                    <button id="chartRangeBtn" type="button" class="chart-size-btn" onclick="toggleChartRangeMode()">框選區間</button>
+                    <button id="chartClearRangeBtn" type="button" class="chart-size-btn hidden" onclick="clearChartRange()">清除區間</button>
                     <button id="chartResetBtn" type="button" class="chart-size-btn" onclick="resetChartZoom()">重設縮放</button>
                     <span id="dateRange">--</span>
                   </div>
@@ -841,10 +909,12 @@
                       <button type="button" class="guide-link" onclick="openIndicatorGuide('candle')">📖 K 線</button>
                       <button type="button" class="guide-link" onclick="openIndicatorGuide('ma')">📖 均線</button>
                       <button type="button" class="guide-link" onclick="openIndicatorGuide('sr')">📖 支撐壓力</button>
+                      <button type="button" class="guide-link" onclick="openIndicatorGuide('range')">📖 區間統計</button>
                     </div>
                   </div>
                 </details>
                 <canvas id="priceChart" width="960" height="360"></canvas>
+                <div id="rangeStatsPanel" class="range-stats-panel hidden" aria-live="polite"></div>
                 <div class="date-event-panel" aria-live="polite">
                   <div class="date-event-main">
                     <div>
@@ -865,7 +935,7 @@
                 </div>
               </section>
 
-              <section class="surface chips-panel">
+              <section class="surface chips-panel focus-card focus-chips">
                 <div class="surface-head">
                   <h3>法人籌碼（三大法人）</h3>
                   <button id="loadChipsButton" type="button" class="chart-size-btn" onclick="loadInstitutional()">讀取三大法人（近一年）</button>
@@ -882,7 +952,12 @@
                   </div>
                 </details>
                 <div id="chipsCard" class="chips-card chips-empty">
-                  <p class="chips-empty-text">開啟個股並按「同步」後，這裡會顯示近 20 日三大法人買賣超與連續賣超天數。</p>
+                  <div class="state-message is-empty compact chips-empty-text">
+                    <div>
+                      <strong>等待法人資料</strong>
+                      <p>開啟個股並按「同步」後，這裡會顯示近 20 日三大法人買賣超與連續賣超天數。</p>
+                    </div>
+                  </div>
                 </div>
               </section>
 
