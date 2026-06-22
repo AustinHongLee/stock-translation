@@ -9,10 +9,11 @@
 
 你目前 `git status` 還有一批 modified/untracked。先把它存起來，別讓一整輪成果只躺在工作區。
 
-- [ ] 看 `git status` / `git diff`，**分 2–4 個有意義的 commit**（依功能群組，例如「K線區間統計」「教學/名詞擴充」「新聞字典擴充」「PWA/評估文件」），message 寫清楚做了什麼。
-- [ ] 確認 `.gitignore` 有生效：`dist/`、`build/`、`data/*.sqlite3`、`data/value_screener.json` **不在** diff 內。
-- [ ] 若已設 `origin` 就 push；沒設或沒權杖就停在 commit、留給人工 push（不要硬塞憑證）。
+- [x] 看 `git status` / `git diff`，**分 2–4 個有意義的 commit**（依功能群組，例如「K線區間統計」「教學/名詞擴充」「新聞字典擴充」「PWA/評估文件」），message 寫清楚做了什麼。
+- [x] 確認 `.gitignore` 有生效：`dist/`、`build/`、`data/*.sqlite3`、`data/value_screener.json` **不在** diff 內。
+- [x] 若已設 `origin` 就 push；沒設或沒權杖就停在 commit、留給人工 push（不要硬塞憑證）。
 - **驗收**：`git status` 乾淨、`git log --oneline` 有清楚紀錄；GitHub 上沒有 `dist/`、`.sqlite3`。
+  - 2026-06-22 驗證：第一輪已拆成 `f374ac9 Add analysis and glossary coverage`、`3a9dcb1 Add PWA UI and sync workflow`、`c8d706f Document Codex handoffs`，並成功 `git push origin main`；`git rev-parse HEAD origin/main` 相同。`git diff --name-status` 未包含 `dist/`、`build/`、`data/*.sqlite3`、`data/value_screener.json`。
 
 ---
 
@@ -54,12 +55,13 @@ python -m compileall app tests              # 編譯掃描
 
 > 前面踩過 RSI（簡單平均 vs Wilder）、支撐壓力（被單一漲停綁架）兩個算錯的雷。本組目的是**讓所有計算都被測試鎖死、壞資料不會污染**。
 
-- [ ] **指標黃金測試補滿**：RSI(Wilder)、KD(9,3,3)、乖離、SMA、價格位階、體質等級門檻——各用固定數列 + 對照值（含外部參考，如 StockCharts RSI≈70.5）鎖死。
-- [ ] **levels（波撐/波壓）黃金測試**：固定 OHLC → 固定樞紐與「接近波撐/波壓/區間中/資料不足」；務必含「孤立漲停不被當壓力」案例。
-- [ ] **valuation_bands**：固定輸入 → 固定百分位/區間/位階。
-- [ ] **壞資料防護**：收盤 0、缺漏日、整列相同（漲跌停）、停牌列，**不可污染** MA/RSI/KD/河流圖/支撐壓力；各補一個「丟壞資料也算對」的測試。
-- [ ] **單位/格式稽核**：張 vs 股、百分比 vs 小數，在 UI、tooltip、Excel 匯出一致；不一致就修並加測試。
+- [x] **指標黃金測試補滿**：RSI(Wilder)、KD(9,3,3)、乖離、SMA、價格位階、體質等級門檻——各用固定數列 + 對照值（含外部參考，如 StockCharts RSI≈70.5）鎖死。
+- [x] **levels（波撐/波壓）黃金測試**：固定 OHLC → 固定樞紐與「接近波撐/波壓/區間中/資料不足」；務必含「孤立漲停不被當壓力」案例。
+- [x] **valuation_bands**：固定輸入 → 固定百分位/區間/位階。
+- [x] **壞資料防護**：收盤 0、缺漏日、整列相同（漲跌停）、停牌列，**不可污染** MA/RSI/KD/河流圖/支撐壓力；各補一個「丟壞資料也算對」的測試。
+- [x] **單位/格式稽核**：張 vs 股、百分比 vs 小數，在 UI、tooltip、Excel 匯出一致；不一致就修並加測試。
 - **驗收**：unittest 全綠且**明顯多出 golden 測試**；紅線掃描空。
+  - 2026-06-22 驗證：新增/強化 `tests/test_assessment.py`、`tests/test_levels.py`、`tests/test_valuation_bands.py`、`tests/test_health_analysis.py`、`tests/test_chips_institutional.py`，總測試由 171 增至 180。已跑 `python -m unittest discover -s tests`（180 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`，紅線掃描 `app/ui app/analyze app/chips app/news app/explain` 為 `NO_MATCHES`。本次只改純函數與測試，無前端視覺變更。
 
 ### B. 穩固、錯誤處理、效能
 

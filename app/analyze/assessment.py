@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import math
 from typing import Any, Sequence
 
 LEAN_BULL = "偏多解讀"
@@ -39,7 +40,7 @@ DISCLAIMER = (
 )
 
 
-def _to_floats(prices: Sequence[Any], key: str) -> list[float]:
+def _to_floats(prices: Sequence[Any], key: str, *, positive: bool = False) -> list[float]:
     out: list[float] = []
     for p in prices:
         v = p.get(key) if isinstance(p, dict) else getattr(p, key, None)
@@ -47,11 +48,16 @@ def _to_floats(prices: Sequence[Any], key: str) -> list[float]:
             f = float(v)
         except (TypeError, ValueError):
             continue
+        if not math.isfinite(f):
+            continue
+        if positive and f <= 0:
+            continue
         out.append(f)
     return out
 
 
 def sma(values: Sequence[float], n: int) -> float | None:
+    values = [float(v) for v in values if _is_positive_number(v)]
     if len(values) < n or n <= 0:
         return None
     return sum(values[-n:]) / n
@@ -62,6 +68,7 @@ def rsi(closes: Sequence[float], period: int = RSI_PERIOD) -> float | None:
 
     先用前 period 根變動的平均當種子，之後逐根用 (前值×(period-1)+本根)/period 平滑。
     """
+    closes = [float(v) for v in closes if _is_positive_number(v)]
     if len(closes) <= period:
         return None
     gains = [max(closes[i] - closes[i - 1], 0.0) for i in range(1, len(closes))]
@@ -80,9 +87,10 @@ def rsi(closes: Sequence[float], period: int = RSI_PERIOD) -> float | None:
 
 
 def kd(prices: Sequence[Any], period: int = KD_PERIOD) -> tuple[float, float] | None:
-    highs = _to_floats(prices, "high")
-    lows = _to_floats(prices, "low")
-    closes = _to_floats(prices, "close")
+    rows = _valid_price_rows(prices)
+    highs = [row["high"] for row in rows]
+    lows = [row["low"] for row in rows]
+    closes = [row["close"] for row in rows]
     n = min(len(highs), len(lows), len(closes))
     if n < period:
         return None
@@ -98,6 +106,7 @@ def kd(prices: Sequence[Any], period: int = KD_PERIOD) -> tuple[float, float] | 
 
 
 def _percentile_position(closes: Sequence[float], window: int = 240) -> float | None:
+    closes = [float(v) for v in closes if _is_positive_number(v)]
     sample = closes[-window:]
     if len(sample) < 20:
         return None
@@ -192,7 +201,7 @@ def _kd_factor(prices: Sequence[Any]) -> dict[str, Any]:
 
 
 def _volume_factor(prices: Sequence[Any]) -> dict[str, Any]:
-    vols = _to_floats(prices, "volume")
+    vols = _to_floats(prices, "volume", positive=True)
     if len(vols) < 20:
         return _factor("volume", "量能", "資料不足。", LEAN_NEUTRAL)
     avg20 = sum(vols[-20:]) / 20
@@ -300,7 +309,8 @@ def build_assessment(
     financial_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """回傳體質總評 dict。固定輸入→固定輸出，純函數、可單元測試。"""
-    closes = _to_floats(prices, "close")
+    rows = _valid_price_rows(prices)
+    closes = [row["close"] for row in rows]
     if len(closes) < 20:
         return {"available": False, "summary": "日線資料不足（需約 20 個交易日），先同步更多資料再做體質總評。",
                 "counts": {"bull": 0, "bear": 0, "neutral": 0}, "factors": [], "disclaimer": DISCLAIMER}
@@ -309,8 +319,8 @@ def build_assessment(
         _ma_factor(closes),
         _bias_factor(closes),
         _rsi_factor(closes),
-        _kd_factor(prices),
-        _volume_factor(prices),
+        _kd_factor(rows),
+        _volume_factor(rows),
         _position_factor(closes),
     ]
     for extra in (_chips_factor(chips), _valuation_factor(valuation), _fundamental_factor(revenue_summary, financial_summary)):
@@ -337,3 +347,59 @@ def build_assessment(
         "factors": factors,
         "disclaimer": DISCLAIMER,
     }
+
+
+def _is_positive_number(value: Any) -> bool:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(number) and number > 0
+
+
+def _valid_price_rows(prices: Sequence[Any]) -> list[dict[str, float]]:
+    rows: list[dict[str, float]] = []
+    for item in prices or []:
+        high = _field_float(item, "high")
+        low = _field_float(item, "low")
+        close = _field_float(item, "close")
+        if high is None or low is None or close is None:
+            continue
+        if high <= 0 or low <= 0 or close <= 0 or high < low:
+            continue
+        if close < low or close > high:
+            continue
+        open_price = _field_float(item, "open")
+        volume = _field_float(item, "volume")
+        if _looks_like_halt_row(open_price, high, low, close, volume):
+            continue
+        rows.append({
+            "open": open_price if open_price is not None else close,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume if volume is not None else 0.0,
+        })
+    return rows
+
+
+def _field_float(item: Any, key: str) -> float | None:
+    value = item.get(key) if isinstance(item, dict) else getattr(item, key, None)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _looks_like_halt_row(
+    open_price: float | None,
+    high: float,
+    low: float,
+    close: float,
+    volume: float | None,
+) -> bool:
+    if volume != 0:
+        return False
+    o = close if open_price is None else open_price
+    return o == high == low == close

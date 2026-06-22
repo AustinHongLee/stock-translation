@@ -1,4 +1,5 @@
 import unittest
+import math
 from datetime import date, timedelta
 
 from app.analyze.valuation_bands import (
@@ -41,6 +42,34 @@ def _prices():
     return rows
 
 
+def _golden_financials():
+    return [
+        {
+            "year": 2024,
+            "quarter": quarter,
+            "eps": 1.0,
+            "book_value_per_share": 20.0,
+            "source_updated_at": date(2024, 12, 31),
+        }
+        for quarter in range(1, 5)
+    ]
+
+
+def _golden_prices():
+    start = date(2025, 1, 1)
+    return [
+        {
+            "date": start + timedelta(days=index),
+            "open": float(index + 1),
+            "high": float(index + 1),
+            "low": float(index + 1),
+            "close": float(index + 1),
+            "volume": 1000,
+        }
+        for index in range(60)
+    ]
+
+
 class ValuationBandsTest(unittest.TestCase):
     def setUp(self):
         self.result = compute_valuation_bands(
@@ -80,6 +109,58 @@ class ValuationBandsTest(unittest.TestCase):
             self.assertIsInstance(phrase, str)
             for forbidden in ("便宜", "昂貴", "該買", "會漲", "會跌"):
                 self.assertNotIn(forbidden, phrase)
+
+    def test_fixed_percentiles_and_current_position(self):
+        result = compute_valuation_bands(
+            _golden_prices(),
+            _golden_financials(),
+            today=date(2025, 3, 31),
+            years=1,
+        )
+
+        pe = result["pe"]
+        pb = result["pb"]
+        self.assertTrue(pe["available"], pe)
+        self.assertEqual(pe["sample_size"], 60)
+        self.assertEqual(pe["low"], 0.25)
+        self.assertEqual(pe["high"], 15.0)
+        self.assertEqual(pe["current"], 15.0)
+        self.assertEqual(pe["current_percentile"], 100)
+        self.assertEqual(pe["p20"], 3.2)
+        self.assertEqual(pe["p50"], 7.62)
+        self.assertEqual(pe["p80"], 12.05)
+        self.assertEqual(pb["p50"], 1.52)
+
+    def test_bad_price_rows_do_not_pollute_bands(self):
+        clean = compute_valuation_bands(
+            _golden_prices(),
+            _golden_financials(),
+            today=date(2025, 3, 31),
+            years=1,
+        )
+        dirty_prices = _golden_prices()[:10] + [
+            {"date": date(2025, 1, 12), "close": 0},
+            {"date": date(2025, 1, 13), "close": math.nan},
+            {
+                "date": date(2025, 1, 14),
+                "open": 500,
+                "high": 500,
+                "low": 500,
+                "close": 500,
+                "volume": 0,
+            },
+        ] + _golden_prices()[10:]
+
+        dirty = compute_valuation_bands(
+            dirty_prices,
+            _golden_financials(),
+            today=date(2025, 3, 31),
+            years=1,
+        )
+
+        self.assertEqual(dirty["pe"]["sample_size"], clean["pe"]["sample_size"])
+        self.assertEqual(dirty["pe"]["current"], clean["pe"]["current"])
+        self.assertEqual(dirty["pe"]["p50"], clean["pe"]["p50"])
 
 
 if __name__ == "__main__":

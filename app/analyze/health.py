@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from statistics import pstdev
 
 from app.models import DailyPrice
@@ -45,7 +46,7 @@ class HealthMetrics:
 
 
 def calculate_health_metrics(prices: list[DailyPrice]) -> HealthMetrics:
-    sorted_prices = sorted(prices, key=lambda item: item.date)
+    sorted_prices = sorted(_valid_prices(prices), key=lambda item: item.date)
     return HealthMetrics(
         trend=_calculate_trend(sorted_prices),
         price_position=_calculate_price_position(sorted_prices),
@@ -120,3 +121,23 @@ def _percent_change(start: float | None, end: float | None) -> float | None:
         return None
     return ((end / start) - 1) * 100
 
+
+def _valid_prices(prices: list[DailyPrice]) -> list[DailyPrice]:
+    valid: list[DailyPrice] = []
+    for item in prices or []:
+        if not all(_positive_number(value) for value in (item.open, item.high, item.low, item.close)):
+            continue
+        if item.high < item.low or item.close < item.low or item.close > item.high:
+            continue
+        if item.volume == 0 and item.open == item.high == item.low == item.close:
+            continue
+        valid.append(item)
+    return valid
+
+
+def _positive_number(value: float | int | None) -> bool:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(number) and number > 0

@@ -7,11 +7,13 @@
 """
 from __future__ import annotations
 
+import math
 from typing import Any, Sequence
 
 SR_WINDOW = 60       # 波段：近 60 個交易日
 SR_PIVOT_K = 3       # 樞紐強度：前後各 3 天
 SR_TOLERANCE = 2.0   # 接近門檻（%）
+_LIMIT_LOCK_GAP = 0.07
 
 
 def _get(obj: Any, key: str) -> Any:
@@ -32,7 +34,7 @@ def _f(value: Any) -> float | None:
         f = float(value)
     except (TypeError, ValueError):
         return None
-    return f if f == f else None  # 排除 NaN
+    return f if math.isfinite(f) else None
 
 
 def swing_pivots(highs: Sequence[float], lows: Sequence[float], k: int) -> tuple[list[float], list[float]]:
@@ -63,18 +65,15 @@ def compute_support_resistance(
     status: 接近波撐 / 接近波壓 / 區間中 / 資料不足。固定輸入→固定輸出。
     prices 由舊到新（chronological），可為 dict 或物件（有 high/low/close）。
     """
-    rows = [p for p in prices if p is not None]
+    rows = _valid_price_rows(prices)
     if len(rows) < 2 * k + 2:
         return {"available": False, "status": "資料不足", "support": None, "resistance": None,
                 "dist_support_pct": None, "dist_resistance_pct": None}
-    seg = rows[-window:]
-    highs = [_f(_get(p, "high")) for p in seg]
-    lows = [_f(_get(p, "low")) for p in seg]
-    if any(h is None for h in highs) or any(l is None for l in lows):
-        highs = [h for h in highs if h is not None]
-        lows = [l for l in lows if l is not None]
-    close = _f(_get(rows[-1], "close"))
-    if close is None or len(highs) < 2 * k + 2 or len(lows) < 2 * k + 2:
+    seg = _drop_isolated_limit_locks(rows[-window:])
+    highs = [p["high"] for p in seg]
+    lows = [p["low"] for p in seg]
+    close = rows[-1]["close"]
+    if len(highs) < 2 * k + 2 or len(lows) < 2 * k + 2:
         return {"available": False, "status": "資料不足", "support": None, "resistance": None,
                 "dist_support_pct": None, "dist_resistance_pct": None}
 
@@ -104,3 +103,57 @@ def compute_support_resistance(
         "status": status,
         "as_of": _date_str(_get(rows[-1], "date")),
     }
+
+
+def _valid_price_rows(prices: Sequence[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in prices or []:
+        high = _f(_get(item, "high"))
+        low = _f(_get(item, "low"))
+        close = _f(_get(item, "close"))
+        if high is None or low is None or close is None:
+            continue
+        if high <= 0 or low <= 0 or close <= 0 or high < low:
+            continue
+        if close < low or close > high:
+            continue
+        open_price = _f(_get(item, "open"))
+        volume = _f(_get(item, "volume"))
+        if volume == 0 and (close if open_price is None else open_price) == high == low == close:
+            continue
+        rows.append({
+            "date": _get(item, "date"),
+            "open": open_price if open_price is not None else close,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        })
+    return rows
+
+
+def _drop_isolated_limit_locks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if len(rows) < 3:
+        return rows
+    kept: list[dict[str, Any]] = [rows[0]]
+    for previous, current, nxt in zip(rows, rows[1:], rows[2:]):
+        if not _is_isolated_limit_lock(previous, current, nxt):
+            kept.append(current)
+    kept.append(rows[-1])
+    return kept
+
+
+def _is_isolated_limit_lock(previous: dict[str, Any], current: dict[str, Any], nxt: dict[str, Any]) -> bool:
+    o = current["open"]
+    h = current["high"]
+    l = current["low"]
+    c = current["close"]
+    if not (o == h == l == c):
+        return False
+    prev_close = previous["close"]
+    next_close = nxt["close"]
+    if prev_close <= 0 or next_close <= 0:
+        return False
+    above_neighbors = c > prev_close * (1 + _LIMIT_LOCK_GAP) and c > next_close * (1 + _LIMIT_LOCK_GAP)
+    below_neighbors = c < prev_close * (1 - _LIMIT_LOCK_GAP) and c < next_close * (1 - _LIMIT_LOCK_GAP)
+    return above_neighbors or below_neighbors

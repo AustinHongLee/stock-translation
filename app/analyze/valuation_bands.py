@@ -137,19 +137,14 @@ def compute_valuation_bands(
 
     pe_pairs: list[tuple[date, float]] = []
     pb_pairs: list[tuple[date, float]] = []
-    sorted_prices = sorted(
-        (p for p in prices if _get(p, "date") is not None and _get(p, "close")),
-        key=lambda p: _get(p, "date"),
-    )
-    for price in sorted_prices:
-        pdate = _get(price, "date")
+    sorted_prices = _valid_price_points(prices)
+    for pdate, close in sorted_prices:
         if pdate < start:
             continue
         idx = bisect_right(avail_dates, pdate) - 1
         if idx < 0:
             continue
         _, ttm_eps, bvps = points[idx]
-        close = float(_get(price, "close"))
         if ttm_eps and ttm_eps > 0:
             pe_pairs.append((pdate, close / ttm_eps))
         if bvps and bvps > 0:
@@ -177,6 +172,44 @@ def _downsample_series(pairs: list[tuple[date, float]], max_points: int = 140) -
     if sampled[-1][0] != pairs[-1][0]:
         sampled.append(pairs[-1])
     return [{"date": d.isoformat(), "value": round(v, 2)} for d, v in sampled]
+
+
+def _valid_price_points(prices: Sequence[Any]) -> list[tuple[date, float]]:
+    points: list[tuple[date, float]] = []
+    for item in prices or []:
+        pdate = _get(item, "date")
+        if not isinstance(pdate, date):
+            continue
+        close = _positive_float(_get(item, "close"))
+        if close is None:
+            continue
+        open_price = _positive_float(_get(item, "open"))
+        high = _positive_float(_get(item, "high"))
+        low = _positive_float(_get(item, "low"))
+        volume = _finite_float(_get(item, "volume"))
+        if (
+            volume == 0
+            and high is not None
+            and low is not None
+            and open_price is not None
+            and open_price == high == low == close
+        ):
+            continue
+        points.append((pdate, close))
+    return sorted(points, key=lambda item: item[0])
+
+
+def _positive_float(value: Any) -> float | None:
+    number = _finite_float(value)
+    return number if number is not None and number > 0 else None
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _band_to_dict(band: MetricBand) -> dict[str, Any]:

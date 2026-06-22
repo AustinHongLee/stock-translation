@@ -50,6 +50,12 @@ class ChipsSummaryTest(unittest.TestCase):
         self.assertEqual(s["sum_20"]["foreign_net"], 250)
         self.assertEqual(len(s["trend"]), 3)
 
+    def test_share_inputs_are_reported_as_lots(self):
+        s = build_institutional_summary(_series([(-123456, 0, 0)]))
+        text = " ".join([s["headline"], *s["reasons"], *s["analysis"]])
+        self.assertIn("123 張", text)
+        self.assertEqual(s["latest"]["foreign_net"], -123456)
+
     def test_no_forbidden_words(self):
         s = build_institutional_summary(_series([(-50000, -3000, -1000)] * 5))
         blob = " ".join(s["reasons"] + [s["headline"], s["disclaimer"]] + list(s["proxy_notes"].values()))
