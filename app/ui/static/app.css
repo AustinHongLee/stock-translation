@@ -484,6 +484,74 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .watchlist-board-tag.board-tone-caution { border-color: var(--warn-line); background: var(--warn-bg); }
 .watchlist-board-tag.board-tone-caution b { color: var(--warn); }
 .watchlist-board-tag.board-tone-unknown { border-style: dashed; background: var(--bg-soft); }
+.compare-card { margin-top: 16px; }
+.compare-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.compare-form input {
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--ink);
+  padding: 9px 12px;
+  font-size: 13.5px;
+}
+.compare-form input:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3px var(--brand-soft-2); }
+.compare-results { min-height: 58px; }
+.compare-table-wrap { border: 1px solid var(--line); border-radius: 10px; overflow: auto; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 760px; }
+.compare-table th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.compare-table td {
+  vertical-align: top;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.compare-table tr:last-child td { border-bottom: 0; }
+.compare-table strong { display: block; color: var(--ink); font-variant-numeric: tabular-nums; }
+.compare-stock-link {
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--brand-2);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.compare-stock-link:hover { color: var(--brand); text-decoration: underline; }
+.compare-meta { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.compare-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.compare-pill.tone-positive { border-color: var(--brand-soft-line); background: var(--brand-soft); color: var(--brand); }
+.compare-pill.tone-caution { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn); }
+.compare-pill.tone-unknown { border-style: dashed; color: var(--muted); }
+.compare-table .tone-positive { color: var(--brand); }
+.compare-table .tone-caution { color: var(--warn); }
+.compare-table .tone-unknown { color: var(--muted); }
 
 /* ============================================================
    雷達中心
@@ -1468,6 +1536,47 @@ td.down { color: var(--down); font-weight: 600; }
   }
   .app-sheet { max-width: 100%; }
   .dash-grid { grid-template-columns: 1fr; }
+  .compare-form { grid-template-columns: 1fr; }
+  .compare-form .primary-button,
+  .compare-form .secondary-button { width: 100%; }
+  .compare-table-wrap { overflow: visible; }
+  .compare-table { min-width: 0; }
+  .compare-table thead { display: none; }
+  .compare-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .compare-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 12px;
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .compare-table tr:last-child { border-bottom: 0; }
+  .compare-table td {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-bottom: 0;
+    padding: 0;
+  }
+  .compare-table td::before {
+    content: attr(data-label);
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+  }
+  .compare-table td[data-label="股票"],
+  .compare-table td[data-label="操作"] {
+    grid-column: 1 / -1;
+  }
+  .compare-table td[data-label="操作"] .table-action {
+    width: 100%;
+    min-height: 34px;
+  }
 
   .layer-nav {
     top: 0;

@@ -73,6 +73,19 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn(".watchlist-board-tags", css)
         self.assertIn(".watchlist-board-tag", css)
 
+    def test_dashboard_compare_view_has_form_and_table(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn("compareForm", html)
+        self.assertIn("compareResults", html)
+        self.assertIn("async function loadComparison", js)
+        self.assertIn("function renderComparisonRow", js)
+        self.assertIn("/api/compare", js)
+        self.assertIn(".compare-table", css)
+        self.assertIn(".compare-pill", css)
+
 
 if __name__ == "__main__":
     unittest.main()

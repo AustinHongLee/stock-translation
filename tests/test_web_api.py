@@ -11,6 +11,7 @@ from app.models import (
     DividendRecord,
     FinancialStatement,
     IntradayQuote,
+    InstitutionalTrade,
     MarketValuation,
     MonthlyRevenue,
     StockProfile,
@@ -22,6 +23,7 @@ from app.glossary.service import glossary_payload
 from app.portfolio.models import PortfolioTransaction
 from app.web.api import (
     LOCAL_DATA_CACHE_KEY,
+    build_compare_payload,
     build_cached_local_data_payload,
     build_portfolio_payload,
     build_search_payload,
@@ -221,6 +223,55 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertTrue(second["cache"]["hit"])  # type: ignore[index]
         self.assertEqual(second["count"], 1)
         self.assertEqual(refreshed["count"], 2)
+
+    def test_build_compare_payload_reads_two_or_three_local_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_profiles(
+                    [
+                        StockProfile("2330", "台灣積體電路製造股份有限公司", "台積電"),
+                        StockProfile("2317", "鴻海精密工業股份有限公司", "鴻海"),
+                        StockProfile("2454", "聯發科技股份有限公司", "聯發科"),
+                        StockProfile("3008", "大立光電股份有限公司", "大立光"),
+                    ]
+                )
+                for stock_id, start_close in [("2330", 100), ("2317", 200), ("2454", 300), ("3008", 400)]:
+                    store.upsert_daily_prices(
+                        [
+                            DailyPrice(
+                                stock_id=stock_id,
+                                date=date(2026, 6, 1 + index),
+                                open=start_close + index - 1,
+                                high=start_close + index + 1,
+                                low=start_close + index - 2,
+                                close=start_close + index,
+                                volume=1000 + index,
+                            )
+                            for index in range(20)
+                        ]
+                    )
+                    store.upsert_institutional_trades(
+                        [
+                            InstitutionalTrade(
+                                stock_id=stock_id,
+                                date=date(2026, 6, 1 + index),
+                                foreign_net=1000,
+                                trust_net=0,
+                                dealer_net=0,
+                                total_net=1000,
+                            )
+                            for index in range(20)
+                        ]
+                    )
+
+                payload = build_compare_payload(store, "2330,2317,2454,3008")
+
+        self.assertEqual(payload["requested"], ["2330", "2317", "2454"])
+        self.assertEqual(payload["count"], 3)
+        self.assertEqual(payload["items"][0]["profile"]["short_name"], "台積電")  # type: ignore[index]
+        self.assertIn("assessment", payload["items"][0])  # type: ignore[index]
+        self.assertEqual(payload["items"][0]["chips"]["sum_20_lots"], 20)  # type: ignore[index]
 
     def test_build_search_payload_uses_catalog_for_unsynced_stock(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

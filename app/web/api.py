@@ -13,6 +13,11 @@ from app.analyze.fundamental_trends import build_fundamental_trends
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
 from app.analyze.summary import PriceSummary, calculate_price_summary
+from app.analyze.stock_compare import (
+    MIN_COMPARE_STOCKS,
+    build_stock_comparison,
+    normalize_compare_stock_ids,
+)
 from app.analyze.valuation import ValuationResult, calculate_dividend_valuation
 from app.analyze.suitability import ValuationSuitability, assess_valuation_suitability
 from app.analyze.vital_signs import VitalSignsReport, build_vital_signs_report
@@ -163,6 +168,27 @@ def build_watchlist_payload(store: SQLiteStore) -> dict[str, object]:
             }
         )
     return {"items": items}
+
+
+def build_compare_payload(store: SQLiteStore, stock_ids: str | list[str]) -> dict[str, object]:
+    ids = normalize_compare_stock_ids(stock_ids)
+    if len(ids) < MIN_COMPARE_STOCKS:
+        raise ValueError("請輸入 2–3 檔股票代號。")
+    items: list[dict[str, object]] = []
+    for stock_id in ids:
+        items.append(
+            {
+                "stock_id": stock_id,
+                "profile": store.get_profile(stock_id),
+                "prices": store.get_daily_prices(stock_id, limit=260),
+                "institutional_trades": store.get_institutional_trades(stock_id, limit=60),
+                "monthly_revenues": store.get_monthly_revenues(stock_id, limit=3),
+                "financial_statements": store.get_financial_statements(stock_id, limit=4),
+            }
+        )
+    payload = build_stock_comparison(items)
+    payload["requested"] = ids
+    return payload
 
 
 def build_search_payload(

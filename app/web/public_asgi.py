@@ -11,6 +11,7 @@ from app.news import fetch_company_news
 from app.runtime_paths import data_path, static_dir
 from app.store.sqlite_store import SQLiteStore
 from app.web.api import (
+    build_compare_payload,
     build_daily_price_payload,
     build_local_data_payload,
     build_local_stocks_payload,
@@ -101,6 +102,8 @@ class PublicReadOnlyASGIApp:
                 await self._send_json(send, build_local_stocks_payload(store))
             elif path == "/api/local-data":
                 await self._send_json(send, build_local_data_payload(store))
+            elif path == "/api/compare":
+                await self._send_json(send, build_compare_payload(store, _first(query, "stock_ids")))
             elif path == "/api/value-screener":
                 await self._send_json(send, enrich_screener_with_levels(build_value_screener_payload(), store))
             elif path == "/api/search":

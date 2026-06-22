@@ -8,6 +8,7 @@ const state = {
   activePayload: null,
   portfolio: null,
   watchlist: [],
+  comparison: null,
   screener: null,
   screenerFilter: "value",
   localDataSort: "stock_id",
@@ -63,6 +64,12 @@ const elements = {
   dashboardHoldings: document.querySelector("#dashboardHoldings"),
   dashboardWatchlist: document.querySelector("#dashboardWatchlist"),
   dashboardRefreshButton: document.querySelector("#dashboardRefreshButton"),
+  compareForm: document.querySelector("#compareForm"),
+  compareInput: document.querySelector("#compareInput"),
+  compareSubmitButton: document.querySelector("#compareSubmitButton"),
+  compareWatchlistButton: document.querySelector("#compareWatchlistButton"),
+  compareStatus: document.querySelector("#compareStatus"),
+  compareResults: document.querySelector("#compareResults"),
   quickSyncButton: document.querySelector("#quickSyncButton"),
   screenerSheet: document.querySelector("#screenerSheet"),
   dataSheet: document.querySelector("#dataSheet"),
@@ -262,6 +269,9 @@ elements.refreshLocalButton.addEventListener("click", loadWatchlist);
 elements.dashboardRefreshButton.addEventListener("click", loadWatchlist);
 elements.dashboardWatchlist.addEventListener("click", handleDashboardStockClick);
 elements.dashboardHoldings.addEventListener("click", handleDashboardStockClick);
+elements.compareForm?.addEventListener("submit", handleCompareSubmit);
+elements.compareWatchlistButton?.addEventListener("click", loadComparisonFromWatchlist);
+elements.compareResults?.addEventListener("click", handleDashboardStockClick);
 elements.quickSyncButton.addEventListener("click", () => syncStock("2330"));
 elements.refreshScreenerButton.addEventListener("click", refreshValueScreener);
 elements.screenerExportButton?.addEventListener("click", exportScreenerExcel);
@@ -353,6 +363,7 @@ async function init() {
   showSheet("dashboard", { preserveScroll: true });
   await loadPortfolio();
   await loadWatchlist();
+  await loadDefaultComparison();
   await loadValueScreener();
   renderDashboard();
 }
@@ -666,6 +677,181 @@ async function loadWatchlist() {
   } catch (error) {
     showMessage(error.message, true);
   }
+}
+
+async function loadDefaultComparison() {
+  if (!elements.compareResults) return;
+  const ids = comparisonIdsFromWatchlist();
+  if (ids.length >= 2) {
+    if (elements.compareInput && !elements.compareInput.value.trim()) {
+      elements.compareInput.value = ids.join(", ");
+    }
+    await loadComparison(ids, { quiet: true });
+    return;
+  }
+  renderComparisonPlaceholder();
+}
+
+async function loadComparisonFromWatchlist() {
+  const ids = comparisonIdsFromWatchlist();
+  if (ids.length < 2) {
+    renderComparisonMessage("empty", "自選股不足", "至少需要 2 檔自選股才能做多股比較。");
+    return;
+  }
+  if (elements.compareInput) elements.compareInput.value = ids.join(", ");
+  await loadComparison(ids);
+}
+
+async function handleCompareSubmit(event) {
+  event.preventDefault();
+  const ids = comparisonInputIds();
+  if (ids.length < 2) {
+    renderComparisonMessage("empty", "目標不足", "請輸入 2–3 檔股票代號。");
+    return;
+  }
+  await loadComparison(ids);
+}
+
+async function loadComparison(ids, options = {}) {
+  const targets = uniqueStockIds(ids).slice(0, 3);
+  if (targets.length < 2) {
+    renderComparisonPlaceholder();
+    return;
+  }
+  if (elements.compareSubmitButton) elements.compareSubmitButton.disabled = true;
+  if (elements.compareWatchlistButton) elements.compareWatchlistButton.disabled = true;
+  if (elements.compareStatus) elements.compareStatus.textContent = `比較中 ${targets.length} 檔`;
+  if (!options.quiet) {
+    renderComparisonMessage("loading", "比較中", targets.join(" / "));
+  }
+  try {
+    const payload = await getJson(`/api/compare?stock_ids=${encodeURIComponent(targets.join(","))}`);
+    state.comparison = payload;
+    if (elements.compareInput) {
+      elements.compareInput.value = (payload.requested || targets).join(", ");
+    }
+    renderComparison(payload);
+  } catch (error) {
+    renderComparisonMessage("error", "比較失敗", error.message || "請稍後再試。");
+    if (elements.compareStatus) elements.compareStatus.textContent = "讀取失敗";
+  } finally {
+    if (elements.compareSubmitButton) elements.compareSubmitButton.disabled = false;
+    if (elements.compareWatchlistButton) elements.compareWatchlistButton.disabled = false;
+  }
+}
+
+function comparisonIdsFromWatchlist() {
+  return uniqueStockIds(
+    (state.watchlist || []).map((item) => item.profile?.stock_id || item.stock_id)
+  ).slice(0, 3);
+}
+
+function comparisonInputIds() {
+  const raw = elements.compareInput?.value || "";
+  return uniqueStockIds(raw.split(/[\s,，、/|]+/)).slice(0, 3);
+}
+
+function renderComparisonPlaceholder() {
+  if (elements.compareStatus) elements.compareStatus.textContent = "輸入 2–3 檔";
+  renderComparisonMessage("empty", "等待比較目標", "加入至少 2 檔自選股，或輸入股票代號。");
+}
+
+function renderComparisonMessage(kind, title, body) {
+  if (!elements.compareResults) return;
+  elements.compareResults.innerHTML = stateMessageHTML(kind, title, body, {
+    compact: true,
+    className: "compare-empty",
+  });
+}
+
+function renderComparison(payload) {
+  if (!elements.compareResults) return;
+  const items = payload?.items || [];
+  if (items.length < 2) {
+    renderComparisonPlaceholder();
+    return;
+  }
+  if (elements.compareStatus) {
+    elements.compareStatus.textContent = `${items.length} 檔 · 本地資料`;
+  }
+  elements.compareResults.innerHTML = `
+    <div class="table-wrap compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>股票</th>
+            <th>價格</th>
+            <th>三大法人</th>
+            <th>體質</th>
+            <th>財報點</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${items.map(renderComparisonRow).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderComparisonRow(item) {
+  const profile = item.profile || { stock_id: item.stock_id, short_name: item.stock_id };
+  const price = item.price || {};
+  const chips = item.chips || {};
+  const assessment = item.assessment || {};
+  const financial = item.financial || {};
+  const stockId = profile.stock_id || item.stock_id || "";
+  const label = `${stockId} ${profile.short_name || profile.name || ""}`.trim();
+  const priceText = price.latest_close == null ? "--" : formatNumber(price.latest_close);
+  const changeText = price.change_percent == null ? "--" : formatPercent(price.change_percent);
+  const positionText = price.window_position_percent == null
+    ? "區間位置 --"
+    : `區間位置 ${formatPlainPercent(price.window_position_percent)}`;
+  const chipsText = chips.sum_20_lots == null ? "待同步" : `${formatSignedLots(chips.sum_20_lots)} / 20日`;
+  const chipsMeta = chips.as_of ? `${chips.level || "無"} · ${chips.as_of}` : "法人資料待補";
+  const assessMeta = assessment.available
+    ? `多 ${assessment.bull || 0} / 空 ${assessment.bear || 0} / 中 ${assessment.neutral || 0}`
+    : "日線不足";
+  const financialText = financial.available
+    ? `EPS ${formatNumber(financial.eps)} · ROE ${formatPercent(financial.roe_percent)}`
+    : "財報待補";
+  const financialMeta = financial.quarter || financial.title || "--";
+  return `
+    <tr>
+      <td data-label="股票">
+        <button class="compare-stock-link" type="button" data-stock-id="${escapeHtml(stockId)}">${escapeHtml(label)}</button>
+        <span class="compare-meta">${price.date ? `資料日 ${escapeHtml(price.date)}` : "日線待補"}</span>
+      </td>
+      <td data-label="價格">
+        <strong class="${toneClass(price.change_percent)}">${escapeHtml(priceText)}</strong>
+        <span class="compare-meta ${toneClass(price.change_percent)}">${escapeHtml(changeText)}</span>
+        <span class="compare-meta">${escapeHtml(positionText)}</span>
+      </td>
+      <td data-label="三大法人">
+        <strong class="${toneClass(chips.sum_20_lots)}">${escapeHtml(chipsText)}</strong>
+        <span class="compare-meta">${escapeHtml(chipsMeta)}</span>
+      </td>
+      <td data-label="體質">
+        <span class="compare-pill tone-${escapeHtml(assessment.tone || "unknown")}">${escapeHtml(assessment.label || "--")}</span>
+        <span class="compare-meta">${escapeHtml(assessMeta)}</span>
+      </td>
+      <td data-label="財報點">
+        <strong class="tone-${escapeHtml(financial.tone || "unknown")}">${escapeHtml(financialText)}</strong>
+        <span class="compare-meta">${escapeHtml(financialMeta)}</span>
+      </td>
+      <td data-label="操作">
+        <button class="table-action" type="button" data-stock-id="${escapeHtml(stockId)}">看個股</button>
+      </td>
+    </tr>
+  `;
+}
+
+function formatSignedLots(value) {
+  if (value == null) return "--";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "--";
+  if (number === 0) return "0 張";
+  const sign = number > 0 ? "+" : "-";
+  return `${sign}${formatInteger(Math.abs(number))} 張`;
 }
 
 async function loadValueScreener() {

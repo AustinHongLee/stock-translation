@@ -33,6 +33,7 @@ from app.quote.providers import TwseMisQuoteProvider
 from app.web.api import (
     HISTORICAL_VALUATION_DAYS,
     LOCAL_DATA_CACHE_KEY,
+    build_compare_payload,
     build_daily_price_payload,
     build_portfolio_payload,
     build_quote_payload,
@@ -86,6 +87,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/portfolio":
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(build_portfolio_payload(store))
+            elif parsed.path == "/api/compare":
+                params = parse_qs(parsed.query)
+                stock_ids = (params.get("stock_ids") or params.get("ids") or [""])[0]
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(build_compare_payload(store, stock_ids))
             elif parsed.path == "/api/export/portfolio.xlsx":
                 with SQLiteStore(self.server.db_path) as store:
                     content = build_portfolio_workbook_bytes(build_portfolio_payload(store))
@@ -184,6 +190,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "Not found")
+        except ValueError as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except Exception as exc:
             self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
 
