@@ -196,6 +196,7 @@ const elements = {
   roeValue: document.querySelector("#roeValue"),
   roaValue: document.querySelector("#roaValue"),
   financialRows: document.querySelector("#financialRows"),
+  fundamentalTrends: document.querySelector("#fundamentalTrends"),
   priceChartTitle: document.querySelector("#priceChartTitle"),
   dateRange: document.querySelector("#dateRange"),
   chartRangeBtn: document.querySelector("#chartRangeBtn"),
@@ -1681,7 +1682,7 @@ function renderStock(payload, fallbackStockId) {
   renderQuote(payload.quote, summary);
   renderCompanyBrief(payload.brief);
   renderRevenue(payload.revenue_summary, payload.monthly_revenues || []);
-  renderFinancial(payload.financial_summary, payload.financial_statements || []);
+  renderFinancial(payload.financial_summary, payload.financial_statements || [], payload.fundamental_trends);
   renderValidation(payload.validation);
   renderHealthReport(payload.report);
   renderValuation(payload.valuation, payload.dividends || [], summary, payload.quote || {});
@@ -1836,7 +1837,7 @@ function renderRevenue(summary, records) {
     : `<tr><td colspan="6">尚無每月營收資料，請按同步更新。</td></tr>`;
 }
 
-function renderFinancial(summary, records) {
+function renderFinancial(summary, records, trends) {
   const latest = records[0];
   elements.financialStatus.textContent = latest?.source_updated_at
     ? `資料日 ${latest.source_updated_at}`
@@ -1867,6 +1868,99 @@ function renderFinancial(summary, records) {
       </tr>
     `).join("")
     : `<tr><td colspan="8">尚無最新季財報資料，請按同步更新。</td></tr>`;
+  renderFundamentalTrends(trends);
+}
+
+function renderFundamentalTrends(trends) {
+  if (!elements.fundamentalTrends) return;
+  const series = Array.isArray(trends?.series) ? trends.series : [];
+  if (!series.length || !trends?.sample_quarters) {
+    elements.fundamentalTrends.innerHTML = stateMessageHTML("empty", "多季趨勢待補", "同步多季財報後會顯示毛利率、營益率、淨利率與 ROE。", {
+      compact: true,
+      className: "fundamental-empty",
+    });
+    return;
+  }
+  const sourceDate = trends.source_updated_at ? `資料日 ${trends.source_updated_at}` : `${trends.sample_quarters} 季資料`;
+  elements.fundamentalTrends.innerHTML = `
+    <div class="fundamental-trends-head">
+      <strong>多季基本面趨勢</strong>
+      <span>${escapeHtml(sourceDate)}</span>
+    </div>
+    <div class="fundamental-trend-grid">
+      ${series.map(renderFundamentalTrendCard).join("")}
+    </div>
+    <p class="disclaimer">${escapeHtml(trends.disclaimer || "只呈現已同步財報的歷史百分比，不預測未來。")}</p>
+  `;
+}
+
+function renderFundamentalTrendCard(item) {
+  const points = Array.isArray(item.points) ? item.points : [];
+  const latest = item.latest == null ? "--" : formatPlainPercent(item.latest);
+  const change = item.change == null ? "前季變動 --" : `前季變動 ${formatSignedPercent(item.change)}`;
+  const validPoints = points.filter((point) => Number.isFinite(Number(point.value)));
+  const quarterRange = validPoints.length
+    ? `${validPoints[0].quarter_label || "--"} → ${validPoints[validPoints.length - 1].quarter_label || "--"}`
+    : "資料不足";
+  const trendClass = fundamentalTrendClass(item.key);
+  return `
+    <article class="fundamental-trend-card ${trendClass}">
+      <div class="fundamental-trend-card-head">
+        <strong>${escapeHtml(item.label || "--")}</strong>
+        <span>${escapeHtml(quarterRange)}</span>
+      </div>
+      <div class="fundamental-trend-value">
+        <b>${escapeHtml(latest)}</b>
+        <span>${escapeHtml(change)}</span>
+      </div>
+      ${renderMiniTrendSvg(points, item.label || "")}
+    </article>
+  `;
+}
+
+function fundamentalTrendClass(key) {
+  return {
+    gross_margin_percent: "trend-gross",
+    operating_margin_percent: "trend-operating",
+    net_margin_percent: "trend-net",
+    roe_percent: "trend-roe",
+  }[key] || "trend-neutral";
+}
+
+function renderMiniTrendSvg(points, label) {
+  const valid = (points || [])
+    .filter((point) => Number.isFinite(Number(point.value)))
+    .map((point) => ({
+      quarter: String(point.quarter_label || ""),
+      value: Number(point.value),
+    }));
+  if (valid.length < 2) {
+    return `<div class="mini-trend-empty">至少需要 2 季資料</div>`;
+  }
+  const width = 160;
+  const height = 56;
+  const padX = 8;
+  const padY = 7;
+  const values = valid.map((point) => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const coords = valid.map((point, index) => {
+    const x = padX + (index / Math.max(1, valid.length - 1)) * (width - padX * 2);
+    const y = height - padY - ((point.value - min) / span) * (height - padY * 2);
+    return { ...point, x, y };
+  });
+  const polyline = coords.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const dots = coords.map((point) => `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="2.4"><title>${escapeHtml(point.quarter)} ${formatPlainPercent(point.value)}</title></circle>`).join("");
+  const title = `${label} ${valid[0].quarter} 至 ${valid[valid.length - 1].quarter}`;
+  return `
+    <svg class="mini-trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
+      <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${height - padY}" class="mini-axis"></line>
+      <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" class="mini-axis"></line>
+      <polyline points="${polyline}" class="mini-trend-line"></polyline>
+      ${dots}
+    </svg>
+  `;
 }
 
 function renderValidation(validation) {

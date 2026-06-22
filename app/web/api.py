@@ -9,6 +9,7 @@ from app.analyze.financial import (
     financial_title,
     financial_tone,
 )
+from app.analyze.fundamental_trends import build_fundamental_trends
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
 from app.analyze.summary import PriceSummary, calculate_price_summary
@@ -426,6 +427,7 @@ def build_stock_payload(
             financial_statement_to_json(item) for item in financial_statements
         ],
         "financial_summary": financial_summary_payload,
+        "fundamental_trends": build_fundamental_trends(financial_statements),
         "valuation": valuation_payload,
         "brief": stock_brief_to_json(profile, suitability),
         "chips": chips_summary,

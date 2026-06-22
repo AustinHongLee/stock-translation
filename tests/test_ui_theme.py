@@ -52,6 +52,17 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function exportStockReport", js)
         self.assertIn(".html", js)
 
+    def test_stock_page_exposes_fundamental_trend_cards(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="fundamentalTrends"', html)
+        self.assertIn("payload.fundamental_trends", js)
+        self.assertIn("function renderFundamentalTrends", js)
+        self.assertIn("function renderMiniTrendSvg", js)
+        self.assertIn(".fundamental-trend-grid", css)
+
 
 if __name__ == "__main__":
     unittest.main()
