@@ -42,6 +42,16 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function renderLocalDataError", js)
         self.assertIn('stateMessageHTML("error", "讀取失敗"', js)
 
+    def test_stock_page_exposes_html_report_export(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="stockReportButton"', html)
+        self.assertIn("匯出研究報告", html)
+        self.assertIn("stockReportButton", js)
+        self.assertIn("function exportStockReport", js)
+        self.assertIn(".html", js)
+
 
 if __name__ == "__main__":
     unittest.main()

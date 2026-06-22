@@ -6,7 +6,7 @@ import mimetypes
 import sys
 import threading
 import webbrowser
-from datetime import date
+from datetime import date, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,6 +17,7 @@ from app.exporters.excel import (
     build_screener_workbook_bytes,
     build_stock_workbook_bytes,
 )
+from app.exporters.html_report import assert_report_has_no_forbidden, build_stock_report_html
 from app.news import fetch_company_news
 from app.runtime_paths import data_path, ensure_seeded_data_file, static_dir
 from app.portfolio import PortfolioCalculationError, calculate_portfolio
@@ -105,6 +106,24 @@ class RequestHandler(BaseHTTPRequestHandler):
                     short_name = profile.get("short_name") or stock_id
                     content = build_stock_workbook_bytes(payload)
                 self._send_xlsx(content, f"{stock_id}-{short_name}.xlsx")
+            elif parsed.path.startswith("/api/export/stocks/") and parsed.path.endswith(".html"):
+                stock_id = unquote(parsed.path.removeprefix("/api/export/stocks/")[:-5]).strip()
+                if not stock_id:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "stock_id is required")
+                    return
+                with SQLiteStore(self.server.db_path) as store:
+                    payload = build_stock_payload(
+                        store,
+                        stock_id,
+                        days=CHART_DAYS,
+                        quote_provider=_quote_provider(),
+                    )
+                    profile = payload.get("profile") or {}
+                    short_name = str(profile.get("short_name") or stock_id)
+                news_payload = _report_news_payload(stock_id, short_name)
+                content = build_stock_report_html(payload, news_payload=news_payload)
+                assert_report_has_no_forbidden(content)
+                self._send_html(content, f"{stock_id}-{short_name}-個股研究報告.html")
             elif parsed.path == "/api/value-screener":
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(enrich_screener_with_levels(build_value_screener_payload(), store))
@@ -454,6 +473,20 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _send_html(self, content: str, filename: str) -> None:
+        raw = content.encode("utf-8")
+        safe_filename = quote(filename)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header(
+            "Content-Disposition",
+            f"inline; filename*=UTF-8''{safe_filename}",
+        )
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
     def _send_error(self, status: HTTPStatus, message: str) -> None:
         self._send_json({"error": message}, status=status)
 
@@ -615,6 +648,34 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
         status["failed_count"] = persisted.get("failed_count", 0)
 
     return status
+
+
+def _report_news_payload(stock_id: str, short_name: str) -> dict[str, object]:
+    try:
+        return fetch_company_news(stock_id, short_name, days=14, limit=8, timeout=3.0)
+    except Exception as exc:  # noqa: BLE001 - report export should degrade, not fail
+        return {
+            "status": "unavailable",
+            "stock_id": stock_id,
+            "name": short_name,
+            "days": 14,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "overall": f"目前無法取得新聞（{exc}），報告先保留已同步資料。",
+            "overall_label": "無消息",
+            "counts": {"利多": 0, "利空": 0, "中性": 0},
+            "top": [],
+            "items": [],
+            "risk_summary": {
+                "score": 0,
+                "level": "無",
+                "top_dimensions": [],
+                "reasons": [],
+                "windows": {"d7": 0, "d14": 0, "d45": 0},
+                "heating": False,
+            },
+            "sources": {},
+            "disclaimer": "消息整理為多來源公開新聞的關鍵字歸類，僅供快速了解，非投資建議、不預測股價。",
+        }
 
 
 if __name__ == "__main__":

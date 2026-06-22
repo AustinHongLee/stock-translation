@@ -86,9 +86,10 @@ python -m compileall app tests              # 編譯掃描
 
 > 高價值、把現有東西整合成一份能丟給測試者/同事看的報告。
 
-- [ ] 把 **體質總評 + 三大法人 + 估值情境 + 消息/地雷雷達 + 價量摘要（含區間統計）+ 重點名詞教學** 整理成一份乾淨報告（HTML 優先，可選 PDF）。
-- [ ] 個股頁一鍵匯出；**每段標資料日期，整份附免責，全程不得有買賣建議**。
+- [x] 把 **體質總評 + 三大法人 + 估值情境 + 消息/地雷雷達 + 價量摘要（含區間統計）+ 重點名詞教學** 整理成一份乾淨報告（HTML 優先，可選 PDF）。
+- [x] 個股頁一鍵匯出；**每段標資料日期，整份附免責，全程不得有買賣建議**。
 - **驗收**：報告產出成功、版面乾淨；內容無紅線字；數字與頁面一致。
+  - 2026-06-22 驗證：新增 `app/exporters/html_report.py` 純函數產 HTML 報告，後端 `/api/export/stocks/{id}.html` 會整合個股 payload 與新聞 payload；新聞來源失敗時降級但不讓報告失敗。個股頁 header 與資料來源區新增「研究報告 / 匯出研究報告」入口。已跑 `python -m unittest discover -s tests`（188 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證：桌面個股頁 `C:/Users/a0976/AppData/Local/Temp/stock-report-desktop.png`；手機個股頁 `C:/Users/a0976/AppData/Local/Temp/stock-report-mobile.png`；HTML 報告頁 `C:/Users/a0976/AppData/Local/Temp/stock-report-html.png`。截圖驗證時修正 `price_position` 0~1 顯示成 1.0% 的口徑問題，報告頁現在與個股頁一致顯示約 98%。
 
 ### E.（可選、務必謹慎）事實頻率回測
 

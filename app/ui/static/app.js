@@ -155,6 +155,7 @@ const elements = {
   watchlistButton: document.querySelector("#watchlistButton"),
   buyStockButton: document.querySelector("#buyStockButton"),
   stockExportButton: document.querySelector("#stockExportButton"),
+  stockReportButton: document.querySelector("#stockReportButton"),
   newbieGuideButton: document.querySelector("#newbieGuideButton"),
   newbieGuideCard: document.querySelector("#newbieGuideCard"),
   newbieGuideClose: document.querySelector("#newbieGuideClose"),
@@ -309,6 +310,7 @@ elements.buyStockButton.addEventListener("click", () => {
   }, 0);
 });
 elements.stockExportButton.addEventListener("click", exportStockExcel);
+elements.stockReportButton.addEventListener("click", exportStockReport);
 elements.priceChart.addEventListener("mousemove", handleChartPointerMove);
 elements.priceChart.addEventListener("mouseleave", () => {
   state.chartHoverIndex = null;
@@ -1075,6 +1077,16 @@ function exportStockExcel() {
     return;
   }
   window.location.href = `/api/export/stocks/${encodeURIComponent(state.activeStockId)}.xlsx`;
+}
+
+function exportStockReport() {
+  if (!state.activeStockId) {
+    showMessage("請先開啟一檔股票再匯出。", true);
+    return;
+  }
+  const url = `/api/export/stocks/${encodeURIComponent(state.activeStockId)}.html`;
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) window.location.href = url;
 }
 
 function exportScreenerExcel() {
