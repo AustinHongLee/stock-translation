@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from app.analyze.financial import (
@@ -33,6 +33,8 @@ from app.store.sqlite_store import SQLiteStore
 
 
 HISTORICAL_VALUATION_DAYS = 365 * 5
+LOCAL_DATA_CACHE_KEY = "local_data_v1"
+LOCAL_DATA_CACHE_TTL_SECONDS = 300
 
 
 def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
@@ -63,6 +65,37 @@ def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
     items = filter_sort_local_data_items(items, sort_key=SORT_STOCK_ID)
     near = [it for it in items if it["sr_status"] in ("接近波撐", "接近波壓")]
     return {"generated_at": today.isoformat(), "count": len(items), "items": items, "near": near}
+
+
+def build_cached_local_data_payload(
+    store: SQLiteStore,
+    *,
+    max_age_seconds: int = LOCAL_DATA_CACHE_TTL_SECONDS,
+) -> dict[str, object]:
+    cached = store.get_json_cache(LOCAL_DATA_CACHE_KEY)
+    if cached is not None:
+        payload, updated_at = cached
+        age = (datetime.now() - updated_at).total_seconds()
+        if age <= max_age_seconds and isinstance(payload, dict):
+            result = dict(payload)
+            result["cache"] = {
+                "hit": True,
+                "updated_at": updated_at.isoformat(timespec="seconds"),
+                "age_seconds": round(age),
+                "ttl_seconds": max_age_seconds,
+            }
+            return result
+
+    payload = build_local_data_payload(store)
+    store.set_json_cache(LOCAL_DATA_CACHE_KEY, payload)
+    result = dict(payload)
+    result["cache"] = {
+        "hit": False,
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+        "age_seconds": 0,
+        "ttl_seconds": max_age_seconds,
+    }
+    return result
 
 
 def enrich_screener_with_levels(payload: dict[str, object], store: SQLiteStore) -> dict[str, object]:

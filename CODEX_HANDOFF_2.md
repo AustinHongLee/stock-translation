@@ -65,12 +65,13 @@ python -m compileall app tests              # 編譯掃描
 
 ### B. 穩固、錯誤處理、效能
 
-- [ ] **一鍵下載：續傳持久化**——把進度（已完成股票清單、已抓 T86 日期）寫進 DB/檔，**重啟程式後真正接續**（目前靠資料存在與否間接續傳，做成顯式記錄更可靠）。
-- [ ] **下載：只重試失敗清單**——後端端點 + 前端按鈕，針對 `failed` 清單重跑，不必整批重來。並加 **ETA 估計**（用已完成速率推估）。
-- [ ] **`/api/local-data` 效能**：全市場上千檔時不要每次請求重算所有 sr。改成在**下載完成時算一次並快取**（或加 TTL 快取），UI 只讀；大量資料下不可卡。
-- [ ] **狀態一致化**：載入中/無資料/抓取失敗/離線，全站用同一套元件與文案；TWSE 失敗要優雅降級並明示「資料可能不完整」。
-- [ ] **`app.js` 體質**（單檔約 3800+ 行）：先「**分區註解 + 評估能否安全模組化**」（拆成多個 `<script>` 檔、無打包器）；有把握再拆，每步 `node --check` + harness。沒把握就只整理分區、別硬拆。
+- [x] **一鍵下載：續傳持久化**——把進度（已完成股票清單、已抓 T86 日期）寫進 DB/檔，**重啟程式後真正接續**（目前靠資料存在與否間接續傳，做成顯式記錄更可靠）。
+- [x] **下載：只重試失敗清單**——後端端點 + 前端按鈕，針對 `failed` 清單重跑，不必整批重來。並加 **ETA 估計**（用已完成速率推估）。
+- [x] **`/api/local-data` 效能**：全市場上千檔時不要每次請求重算所有 sr。改成在**下載完成時算一次並快取**（或加 TTL 快取），UI 只讀；大量資料下不可卡。
+- [x] **狀態一致化**：載入中/無資料/抓取失敗/離線，全站用同一套元件與文案；TWSE 失敗要優雅降級並明示「資料可能不完整」。
+- [x] **`app.js` 體質**（單檔約 3800+ 行）：先「**分區註解 + 評估能否安全模組化**」（拆成多個 `<script>` 檔、無打包器）；有把握再拆，每步 `node --check` + harness。沒把握就只整理分區、別硬拆。
 - **驗收**：關掉重開能續傳（可驗）；只重試失敗可運作；local-data 大量資料下順；harness 過。
+  - 2026-06-22 驗證：新增 SQLite `bulk_progress`（股票/T86 日期）與 `app_cache`，`/api/bulk-download/status` 會合併 persisted progress；`/api/bulk-download/retry-failed` 只重跑 failed 清單；bulk status 回傳 `eta_seconds/items_per_minute`。`/api/local-data` 改 TTL cache，個股同步與批次完成會清 cache。`app.js` 加分區地圖，暫不拆檔，並讓本地資料讀取失敗走 `stateMessageHTML("error")`。已跑 `python -m unittest discover -s tests`（185 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證：桌面 `C:/Users/a0976/AppData/Local/Temp/stock-bulk-desktop.png`；手機 `C:/Users/a0976/AppData/Local/Temp/stock-bulk-mobile.png`，並修正手機換行後 bulk 小按鈕高度一致。
 
 ### C. 深化既有功能（挑著做，研究型先出文件）
 

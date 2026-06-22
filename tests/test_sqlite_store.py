@@ -147,6 +147,32 @@ class SQLiteStoreTests(unittest.TestCase):
                 store.remove_from_watchlist("2330")
                 self.assertFalse(store.is_watchlisted("2330"))
 
+    def test_bulk_progress_and_json_cache_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.ensure_bulk_items("full_market", "stock", ["2330", "2303"])
+                store.mark_bulk_item("full_market", "stock", "2330", "done")
+                store.mark_bulk_item("full_market", "stock", "2303", "failed", error="no network")
+
+                summary = store.get_bulk_progress_summary("full_market")
+                failed = store.get_bulk_item_keys_by_status("full_market", "stock", "failed")
+                statuses = store.get_bulk_item_statuses("full_market", "stock")
+
+                store.set_json_cache("local_data_v1", {"count": 2, "items": [{"stock_id": "2330"}]})
+                cached = store.get_json_cache("local_data_v1")
+                store.delete_json_cache("local_data_v1")
+
+            self.assertEqual(summary["total"], 2)
+            self.assertEqual(summary["done"], 1)
+            self.assertEqual(summary["failed_count"], 1)
+            self.assertEqual(failed, ["2303"])
+            self.assertEqual(statuses["2330"], "done")
+            self.assertIsNotNone(cached)
+            self.assertEqual(cached[0]["count"], 2)  # type: ignore[index]
+            with SQLiteStore(db_path) as store:
+                self.assertIsNone(store.get_json_cache("local_data_v1"))
+
     def test_portfolio_transactions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"

@@ -52,6 +52,19 @@ class BulkManagerTest(unittest.TestCase):
         self.assertEqual(st["skipped"], 2)
         self.assertEqual(sorted(synced), ["A", "D"])
 
+    def test_status_reports_eta_when_running(self):
+        m = BulkDownloadManager()
+        plan = BulkPlan(list_stocks=lambda: [str(i) for i in range(20)],
+                        sync_one=lambda sid: time.sleep(0.03))
+        m.start(plan)
+        self.assertTrue(_wait(lambda: (m.status()["done"] or 0) >= 2))
+        st = m.status()
+        self.assertIsNotNone(st["elapsed_seconds"])
+        self.assertIsNotNone(st["eta_seconds"])
+        self.assertIsNotNone(st["items_per_minute"])
+        m.stop()
+        m.join(2)
+
     def test_stop(self):
         m = BulkDownloadManager()
         plan = BulkPlan(list_stocks=lambda: [str(i) for i in range(80)],

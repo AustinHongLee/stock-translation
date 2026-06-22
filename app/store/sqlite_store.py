@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterable
 from datetime import date, datetime
@@ -182,6 +183,25 @@ CREATE TABLE IF NOT EXISTS institutional_trades (
 
 CREATE INDEX IF NOT EXISTS idx_institutional_trades_stock_date
     ON institutional_trades(stock_id, date);
+
+CREATE TABLE IF NOT EXISTS bulk_progress (
+    run_key TEXT NOT NULL,
+    item_type TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_key, item_type, item_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bulk_progress_status
+    ON bulk_progress(run_key, item_type, status);
+
+CREATE TABLE IF NOT EXISTS app_cache (
+    key TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -852,6 +872,127 @@ class SQLiteStore:
                 message,
             ),
         )
+        self.conn.commit()
+
+    def ensure_bulk_items(self, run_key: str, item_type: str, item_keys: Iterable[str]) -> int:
+        keys = [str(key) for key in item_keys if str(key)]
+        now = _dt(datetime.now())
+        self.conn.executemany(
+            """
+            INSERT OR IGNORE INTO bulk_progress (
+                run_key, item_type, item_key, status, error, updated_at
+            )
+            VALUES (?, ?, ?, 'pending', '', ?)
+            """,
+            [(run_key, item_type, key, now) for key in keys],
+        )
+        self.conn.commit()
+        return len(keys)
+
+    def mark_bulk_item(
+        self,
+        run_key: str,
+        item_type: str,
+        item_key: str,
+        status: str,
+        *,
+        error: str = "",
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO bulk_progress (
+                run_key, item_type, item_key, status, error, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(run_key, item_type, item_key) DO UPDATE SET
+                status = excluded.status,
+                error = excluded.error,
+                updated_at = excluded.updated_at
+            """,
+            (run_key, item_type, item_key, status, str(error)[:500], _dt(datetime.now())),
+        )
+        self.conn.commit()
+
+    def get_bulk_item_statuses(self, run_key: str, item_type: str) -> dict[str, str]:
+        rows = self.conn.execute(
+            """
+            SELECT item_key, status
+            FROM bulk_progress
+            WHERE run_key = ? AND item_type = ?
+            """,
+            (run_key, item_type),
+        ).fetchall()
+        return {row["item_key"]: row["status"] for row in rows}
+
+    def get_bulk_item_keys_by_status(self, run_key: str, item_type: str, status: str) -> list[str]:
+        rows = self.conn.execute(
+            """
+            SELECT item_key
+            FROM bulk_progress
+            WHERE run_key = ? AND item_type = ? AND status = ?
+            ORDER BY item_key
+            """,
+            (run_key, item_type, status),
+        ).fetchall()
+        return [row["item_key"] for row in rows]
+
+    def get_bulk_progress_summary(self, run_key: str, item_type: str = "stock") -> dict[str, object]:
+        rows = self.conn.execute(
+            """
+            SELECT item_key, status, error, updated_at
+            FROM bulk_progress
+            WHERE run_key = ? AND item_type = ?
+            ORDER BY item_key
+            """,
+            (run_key, item_type),
+        ).fetchall()
+        counts: dict[str, int] = {}
+        failed: list[dict[str, str]] = []
+        latest_updated_at = None
+        for row in rows:
+            status = str(row["status"])
+            counts[status] = counts.get(status, 0) + 1
+            updated_at = row["updated_at"]
+            if latest_updated_at is None or updated_at > latest_updated_at:
+                latest_updated_at = updated_at
+            if status == "failed":
+                failed.append({"stock_id": row["item_key"], "error": row["error"]})
+        completed = counts.get("done", 0) + counts.get("skipped", 0)
+        return {
+            "total": len(rows),
+            "done": completed,
+            "pending": counts.get("pending", 0),
+            "running": counts.get("running", 0),
+            "failed_count": len(failed),
+            "failed": failed,
+            "counts": counts,
+            "updated_at": latest_updated_at,
+        }
+
+    def set_json_cache(self, key: str, payload: object) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO app_cache (key, payload, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            (key, json.dumps(payload, ensure_ascii=False), _dt(datetime.now())),
+        )
+        self.conn.commit()
+
+    def get_json_cache(self, key: str) -> tuple[object, datetime] | None:
+        row = self.conn.execute(
+            "SELECT payload, updated_at FROM app_cache WHERE key = ?",
+            (key,),
+        ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["payload"]), datetime.fromisoformat(row["updated_at"])
+
+    def delete_json_cache(self, key: str) -> None:
+        self.conn.execute("DELETE FROM app_cache WHERE key = ?", (key,))
         self.conn.commit()
 
 

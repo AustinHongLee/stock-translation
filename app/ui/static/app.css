@@ -1234,6 +1234,7 @@ td.down { color: var(--down); font-weight: 600; }
 .bulk-card { border-color: var(--line-strong); }
 .bulk-hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 10px; }
 .bulk-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.bulk-controls .chart-size-btn { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; }
 .bulk-progress-wrap { margin-top: 12px; }
 .bulk-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; border: 1px solid var(--line); }
 .bulk-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); transition: width .3s ease; }

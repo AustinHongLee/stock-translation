@@ -25,17 +25,18 @@ from app.screener.value import DEFAULT_SCREENER_PATH, refresh_value_screener
 from app.store.sqlite_store import SQLiteStore
 from app.sync.service import StockSyncService
 from app.sync.bulk import BULK_MANAGER
-from app.sync.bulk_runner import build_bulk_plan
+from app.sync.bulk_runner import BULK_RUN_KEY, build_bulk_plan
 from app.sync.twse import TwseClient
 from app.glossary.service import glossary_payload
 from app.quote.providers import TwseMisQuoteProvider
 from app.web.api import (
     HISTORICAL_VALUATION_DAYS,
+    LOCAL_DATA_CACHE_KEY,
     build_daily_price_payload,
     build_portfolio_payload,
     build_quote_payload,
     build_local_stocks_payload,
-    build_local_data_payload,
+    build_cached_local_data_payload,
     build_search_payload,
     build_stock_payload,
     build_value_screener_payload,
@@ -112,9 +113,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_xlsx(content, "雷達中心匯出.xlsx")
             elif parsed.path == "/api/local-data":
                 with SQLiteStore(self.server.db_path) as store:
-                    self._send_json(build_local_data_payload(store))
+                    self._send_json(build_cached_local_data_payload(store))
             elif parsed.path == "/api/bulk-download/status":
-                self._send_json(BULK_MANAGER.status())
+                self._send_json(_bulk_status(self.server.db_path))
             elif parsed.path.startswith("/api/news/"):
                 stock_id = unquote(parsed.path.removeprefix("/api/news/")).strip()
                 if not stock_id:
@@ -198,6 +199,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "message": result.message,
                         "finished_at": result.finished_at.isoformat(timespec="seconds"),
                     }
+                    store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
                     self._send_json(payload)
             elif parsed.path == "/api/sync/batch":
                 body = self._read_json_body()
@@ -238,6 +240,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                                 }
                             )
 
+                    store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
                 succeeded = sum(1 for item in results if item["ok"])
                 failed = len(results) - succeeded
                 rows_written = sum(int(item.get("rows_written", 0)) for item in results)
@@ -283,16 +286,36 @@ class RequestHandler(BaseHTTPRequestHandler):
                 except RuntimeError as exc:
                     self._send_error(HTTPStatus.CONFLICT, str(exc))
                     return
-                self._send_json(BULK_MANAGER.status())
+                self._send_json(_bulk_status(self.server.db_path))
+            elif parsed.path == "/api/bulk-download/retry-failed":
+                body = self._read_json_body()
+                lookback_days = int(body.get("lookback_days", 365))
+                with SQLiteStore(self.server.db_path) as store:
+                    summary = store.get_bulk_progress_summary(BULK_RUN_KEY)
+                    if int(summary.get("failed_count", 0)) <= 0:
+                        self._send_error(HTTPStatus.BAD_REQUEST, "目前沒有失敗清單可重試")
+                        return
+                try:
+                    BULK_MANAGER.start(
+                        build_bulk_plan(
+                            self.server.db_path,
+                            lookback_days=lookback_days,
+                            retry_failed_only=True,
+                        )
+                    )
+                except RuntimeError as exc:
+                    self._send_error(HTTPStatus.CONFLICT, str(exc))
+                    return
+                self._send_json(_bulk_status(self.server.db_path))
             elif parsed.path == "/api/bulk-download/pause":
                 BULK_MANAGER.pause()
-                self._send_json(BULK_MANAGER.status())
+                self._send_json(_bulk_status(self.server.db_path))
             elif parsed.path == "/api/bulk-download/resume":
                 BULK_MANAGER.resume()
-                self._send_json(BULK_MANAGER.status())
+                self._send_json(_bulk_status(self.server.db_path))
             elif parsed.path == "/api/bulk-download/stop":
                 BULK_MANAGER.stop()
-                self._send_json(BULK_MANAGER.status())
+                self._send_json(_bulk_status(self.server.db_path))
             elif parsed.path == "/api/value-screener/refresh":
                 client = TwseClient(request_interval=0.2)
                 result = refresh_value_screener(
@@ -561,6 +584,37 @@ def _configure_output() -> None:
 
 def _quote_provider() -> TwseMisQuoteProvider:
     return TwseMisQuoteProvider(TwseClient(timeout=5.0, request_interval=0.0))
+
+
+def _bulk_status(db_path: Path) -> dict[str, object]:
+    status = BULK_MANAGER.status()
+    with SQLiteStore(db_path) as store:
+        persisted = store.get_bulk_progress_summary(BULK_RUN_KEY)
+    status["persisted"] = persisted
+    status["can_retry_failed"] = bool(persisted.get("failed_count")) and not bool(status.get("running"))
+
+    if not status.get("running") and status.get("status") == "idle" and persisted.get("total"):
+        total = int(persisted.get("total") or 0)
+        done = int(persisted.get("done") or 0)
+        failed_count = int(persisted.get("failed_count") or 0)
+        status.update(
+            {
+                "status": "done" if done >= total and failed_count == 0 else "paused",
+                "total": total,
+                "done": done,
+                "failed": persisted.get("failed", []),
+                "failed_count": failed_count,
+                "message": "讀到上次下載進度；按開始下載會接續，或只重試失敗清單。",
+                "running": False,
+                "paused": False,
+                "current": None,
+            }
+        )
+    elif persisted.get("failed_count") and not status.get("failed_count"):
+        status["failed"] = persisted.get("failed", [])
+        status["failed_count"] = persisted.get("failed_count", 0)
+
+    return status
 
 
 if __name__ == "__main__":

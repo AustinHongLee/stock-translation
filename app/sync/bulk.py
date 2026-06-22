@@ -29,6 +29,8 @@ class BulkPlan:
     sync_one: Callable[[str], None]
     prelude: Callable[[threading.Event], None] | None = None
     skip: Callable[[str], bool] | None = None
+    on_finish: Callable[[dict[str, Any]], None] | None = None
+    retry_failed_only: bool = False
 
 
 class BulkDownloadManager:
@@ -39,6 +41,7 @@ class BulkDownloadManager:
         self._stop = threading.Event()
         self._max_consec = max(1, max_consecutive_failures)
         self._state: dict[str, Any] = {}
+        self._started_monotonic: float | None = None
         self._reset_state()
 
     def _reset_state(self) -> None:
@@ -52,6 +55,7 @@ class BulkDownloadManager:
             "message": "",
             "started_at": None,
             "finished_at": None,
+            "retry_failed_only": False,
         }
 
     # ---- 控制 ----
@@ -64,6 +68,8 @@ class BulkDownloadManager:
             self._reset_state()
             self._state["status"] = "preparing"
             self._state["started_at"] = _now()
+            self._state["retry_failed_only"] = plan.retry_failed_only
+            self._started_monotonic = time.monotonic()
             self._thread = threading.Thread(target=self._run, args=(plan,), daemon=True)
             self._thread.start()
 
@@ -93,7 +99,25 @@ class BulkDownloadManager:
             st["failed_count"] = len(self._state["failed"])
             st["running"] = self._thread is not None and self._thread.is_alive()
             st["paused"] = self._pause.is_set()
+            st.update(self._timing_status(st))
             return st
+
+    def _timing_status(self, state: dict[str, Any]) -> dict[str, Any]:
+        if self._started_monotonic is None:
+            return {"elapsed_seconds": None, "eta_seconds": None, "items_per_minute": None}
+        elapsed = max(0.0, time.monotonic() - self._started_monotonic)
+        total = int(state.get("total") or 0)
+        done = int(state.get("done") or 0)
+        if total <= 0 or done <= 0 or done >= total:
+            eta = None
+        else:
+            eta = round((elapsed / done) * (total - done))
+        rate = (done / elapsed * 60) if elapsed > 0 and done > 0 else None
+        return {
+            "elapsed_seconds": round(elapsed),
+            "eta_seconds": eta,
+            "items_per_minute": round(rate, 2) if rate is not None else None,
+        }
 
     def _update(self, **kw: Any) -> None:
         with self._lock:
@@ -153,6 +177,11 @@ class BulkDownloadManager:
                 self._update(status="stopped", current=None, finished_at=_now(), message="已停止")
             else:
                 self._update(status="done", done=len(ids), current=None, finished_at=_now(), message="完成")
+                if plan.on_finish is not None:
+                    try:
+                        plan.on_finish(self.status())
+                    except Exception:
+                        pass
         except Exception as exc:  # noqa: BLE001 - 整批層級錯誤
             self._update(status="error", current=None, finished_at=_now(), message=str(exc))
 

@@ -34,6 +34,14 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function chartThemeColors", js)
         self.assertIn("refreshThemeCanvases", js)
 
+    def test_app_js_documents_single_file_sections_and_error_state(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("app.js 分區地圖", js)
+        self.assertIn("未導入打包器前先維持單檔", js)
+        self.assertIn("function renderLocalDataError", js)
+        self.assertIn('stateMessageHTML("error", "讀取失敗"', js)
+
 
 if __name__ == "__main__":
     unittest.main()

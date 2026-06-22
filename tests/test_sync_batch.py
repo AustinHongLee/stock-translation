@@ -39,6 +39,19 @@ class SyncBatchTests(unittest.TestCase):
         self.assertIn('postJson("/api/sync"', js)
         self.assertIn("uniqueStockIds", js)
 
+    def test_bulk_download_has_retry_failed_control_and_eta(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="bulkRetryFailedBtn"', html)
+        self.assertIn("bulkRetryFailed", js)
+        self.assertIn('postJson("/api/bulk-download/retry-failed"', js)
+        self.assertIn("formatDuration(st.eta_seconds)", js)
+        self.assertIn("failedCount === 0", js)
+        self.assertIn(".bulk-controls .chart-size-btn", css)
+        self.assertIn("min-height: 38px", css)
+
 
 if __name__ == "__main__":
     unittest.main()

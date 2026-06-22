@@ -1,3 +1,6 @@
+// app.js 分區地圖（暫不拆檔）：state/elements/bootstrap → 資料載入 → 各頁 render →
+// 圖表互動 → bulk/local-data → 共用格式與狀態元件。HTML 仍有 inline onclick，
+// 未導入打包器前先維持單檔，避免模組拆分造成全域函式斷線。
 const state = {
   activeSheet: "dashboard",
   activeStockId: null,
@@ -3533,6 +3536,15 @@ function formatDateTime(value) {
   });
 }
 
+function formatDuration(seconds) {
+  const totalSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) return `${hours} 小時 ${minutes} 分`;
+  if (minutes > 0) return `${minutes} 分`;
+  return `${totalSeconds} 秒`;
+}
+
 function formatInteger(value) {
   if (value == null || Number.isNaN(Number(value))) return "--";
   return Number(value).toLocaleString("zh-TW", { maximumFractionDigits: 0 });
@@ -4160,6 +4172,10 @@ async function bulkPause() {
 async function bulkResume() {
   try { renderBulk(await postJson("/api/bulk-download/resume", {})); startBulkPolling(); } catch (e) { showMessage(e.message, true); }
 }
+async function bulkRetryFailed() {
+  try { renderBulk(await postJson("/api/bulk-download/retry-failed", {})); startBulkPolling(); }
+  catch (e) { showMessage(e.message, true); }
+}
 async function bulkStop() {
   try { renderBulk(await postJson("/api/bulk-download/stop", {})); } catch (e) { showMessage(e.message, true); }
 }
@@ -4181,9 +4197,11 @@ function renderBulk(st) {
   const startBtn = document.getElementById("bulkStartBtn");
   const pauseBtn = document.getElementById("bulkPauseBtn");
   const resumeBtn = document.getElementById("bulkResumeBtn");
+  const retryBtn = document.getElementById("bulkRetryFailedBtn");
   const stopBtn = document.getElementById("bulkStopBtn");
   if (!wrap) return;
   const active = Boolean(st.running);
+  const failedCount = Number(st.failed_count || 0);
   wrap.classList.toggle("hidden", st.status === "idle");
   if (bar) {
     const pct = st.total ? Math.round((Number(st.done) / Number(st.total)) * 100) : (st.status === "preparing" ? 5 : 0);
@@ -4192,16 +4210,19 @@ function renderBulk(st) {
   if (txt) {
     const map = { idle: "尚未開始", preparing: "準備中（抓全市場共用資料）…", running: "下載中", paused: "已暫停", stopped: "已停止", done: "完成", error: "發生錯誤" };
     let s = map[st.status] || st.status || "";
+    if (st.retry_failed_only) s += "（只重試失敗）";
     if (st.total) s += `　${st.done}/${st.total}`;
     if (st.current) s += `　目前：${st.current}`;
+    if (st.eta_seconds != null) s += `　ETA ${formatDuration(st.eta_seconds)}`;
     if (st.skipped) s += `　已跳過 ${st.skipped}`;
-    if (st.failed_count) s += `　失敗 ${st.failed_count}`;
+    if (failedCount) s += `　失敗 ${failedCount}`;
     if (st.message) s += `　${st.message}`;
     txt.textContent = s;
   }
   if (startBtn) startBtn.disabled = active || st.status === "preparing";
   if (pauseBtn) pauseBtn.disabled = !active || Boolean(st.paused);
   if (resumeBtn) resumeBtn.disabled = !(active && st.paused);
+  if (retryBtn) retryBtn.disabled = active || failedCount === 0;
   if (stopBtn) stopBtn.disabled = !active;
 }
 (async function bulkInit() {
@@ -4219,7 +4240,21 @@ async function loadLocalData() {
     state.localData = payload;
     renderLevelsRadar(payload);
     renderLocalDataTable(payload);
-  } catch (e) { /* 伺服器忙或無資料，略過 */ }
+  } catch (e) {
+    renderLocalDataError(e);
+  }
+}
+
+function renderLocalDataError(error) {
+  if (elements.localDataSummary) {
+    elements.localDataSummary.textContent = "本地資料讀取失敗；可能是資料庫忙碌或後端暫時沒有回應。";
+  }
+  if (elements.localDataRows) {
+    elements.localDataRows.innerHTML = `<tr><td colspan="7">${stateMessageHTML("error", "讀取失敗", error.message || "請稍後重新整理。", { compact: true })}</td></tr>`;
+  }
+  if (elements.levelsRadarList) {
+    elements.levelsRadarList.innerHTML = stateMessageHTML("error", "波段提醒暫時不可用", error.message || "請稍後重新整理。", { compact: true });
+  }
 }
 
 function renderLevelsRadar(payload) {

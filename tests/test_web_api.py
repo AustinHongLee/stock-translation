@@ -21,6 +21,8 @@ from app.store.sqlite_store import SQLiteStore
 from app.glossary.service import glossary_payload
 from app.portfolio.models import PortfolioTransaction
 from app.web.api import (
+    LOCAL_DATA_CACHE_KEY,
+    build_cached_local_data_payload,
     build_portfolio_payload,
     build_search_payload,
     build_stock_payload,
@@ -190,6 +192,31 @@ class WebApiPayloadTests(unittest.TestCase):
 
         self.assertIn("entries", payload)
         self.assertIn("收盤", payload["aliases"])
+
+    def test_cached_local_data_payload_reuses_recent_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_profiles([StockProfile("2330", "台積電", "台積電")])
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 1), 10, 11, 9, 10, 1000),
+                        DailyPrice("2330", date(2026, 6, 2), 10, 12, 10, 11, 1000),
+                    ]
+                )
+
+                first = build_cached_local_data_payload(store, max_age_seconds=60)
+                store.upsert_daily_prices(
+                    [DailyPrice("2303", date(2026, 6, 2), 20, 21, 19, 20, 1000)]
+                )
+                second = build_cached_local_data_payload(store, max_age_seconds=60)
+                store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
+                refreshed = build_cached_local_data_payload(store, max_age_seconds=60)
+
+        self.assertFalse(first["cache"]["hit"])  # type: ignore[index]
+        self.assertTrue(second["cache"]["hit"])  # type: ignore[index]
+        self.assertEqual(second["count"], 1)
+        self.assertEqual(refreshed["count"], 2)
 
     def test_build_search_payload_uses_catalog_for_unsynced_stock(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
