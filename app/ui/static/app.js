@@ -1508,12 +1508,35 @@ function renderDashboardPosition(item) {
 function renderDashboardWatchlistItem(item) {
   const profile = item.profile || { stock_id: item.stock_id, short_name: item.stock_id };
   const latest = item.latest;
+  const board = item.board || {};
+  const boardLatest = board.latest || {};
+  const close = boardLatest.close ?? latest?.close;
+  const latestDate = boardLatest.date || latest?.date;
+  const changePercent = boardLatest.change_percent;
+  const priceText = close == null ? "--" : formatNumber(close);
+  const changeText = changePercent == null ? "" : ` ${formatPercent(changePercent)}`;
   return `
-    <button class="dashboard-row" type="button" data-stock-id="${escapeHtml(profile.stock_id)}">
-      <strong>${escapeHtml(profile.stock_id)} ${escapeHtml(profile.short_name || "")}</strong>
-      <span>${latest ? formatNumber(latest.close) : "--"}</span>
-      <small>${latest ? `資料日 ${escapeHtml(latest.date)}` : "尚無日線資料"}</small>
+    <button class="dashboard-row watchlist-board-row" type="button" data-stock-id="${escapeHtml(profile.stock_id)}">
+      <div class="watchlist-board-main">
+        <strong>${escapeHtml(profile.stock_id)} ${escapeHtml(profile.short_name || "")}</strong>
+        <small>${latestDate ? `資料日 ${escapeHtml(latestDate)}` : "尚無日線資料"}</small>
+      </div>
+      <span class="watchlist-board-price ${toneClass(changePercent)}">${escapeHtml(priceText)}${escapeHtml(changeText)}</span>
+      <div class="watchlist-board-tags">
+        ${watchlistBoardTag("體質", board.assessment?.label || "待補", board.assessment?.tone)}
+        ${watchlistBoardTag("地雷", board.risk?.label || "待補", board.risk?.tone)}
+        ${watchlistBoardTag("關卡", board.level?.status || "待補", board.level?.tone)}
+      </div>
     </button>
+  `;
+}
+
+function watchlistBoardTag(label, value, tone) {
+  return `
+    <span class="watchlist-board-tag board-tone-${escapeHtml(tone || "unknown")}">
+      <em>${escapeHtml(label)}</em>
+      <b>${escapeHtml(value || "--")}</b>
+    </span>
   `;
 }
 

@@ -76,12 +76,13 @@ python -m compileall app tests              # 編譯掃描
 ### C. 深化既有功能（挑著做，研究型先出文件）
 
 - [x] **基本面趨勢**：毛利率/營益率/淨利率/ROE 多季小折線（純資料呈現，不下結論）。
-- [ ] **自選股看板**：watchlist 一覽表，每檔顯示 漲跌 / 體質總評燈號 / 地雷狀態 / 波段關卡，一眼掃過。
+- [x] **自選股看板**：watchlist 一覽表，每檔顯示 漲跌 / 體質總評燈號 / 地雷狀態 / 波段關卡，一眼掃過。
 - [ ] **多股比較**：2–3 檔 價格 / 三大法人 / 體質 對比視圖。
 - [ ] **上櫃 TPEx 覆蓋**（先寫 `docs/tpex-評估.md`）：上櫃的日線/法人/估值來源與 TWSE 差異、要改哪些 client 方法。
 - [ ] **ETF v2**（先寫 `docs/etf-評估.md`）：成分股、折溢價、追蹤指數、配息頻率的資料來源與可行性。
 - **驗收**：每個功能有純函數 + 測試；研究型先交評估文件再動手。
   - 2026-06-22 驗證（基本面趨勢）：新增 `app/analyze/fundamental_trends.py` 純函數，把多季財報整理成毛利率、營益率、淨利率、單季 ROE 四條序列；`build_stock_payload()` 回傳 `fundamental_trends`。個股頁「基本面：獲利能力」新增四張 SVG 小折線卡，只呈現歷史百分比與前季變動，不下結論。已跑 `python -m unittest discover -s tests`（192 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證使用暫存 demo DB（不改正式資料）：桌面 `C:/Users/a0976/AppData/Local/Temp/stock-fundamental-trends-desktop.png`；手機 `C:/Users/a0976/AppData/Local/Temp/stock-fundamental-trends-mobile.png`。
+  - 2026-06-22 驗證（自選股看板）：新增 `app/analyze/watchlist_board.py` 純函數，`/api/watchlist` 每檔回傳 `board`（漲跌、本地體質燈號、本地地雷狀態、波段關卡）；首頁自選股卡片改成三格狀態看板。地雷狀態只整理本地已同步資料，新聞地雷仍需進個股頁抓取。已跑 `python -m unittest discover -s tests`（195 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證：桌面 `C:/Users/a0976/AppData/Local/Temp/stock-watchlist-board-desktop.png`；手機 `C:/Users/a0976/AppData/Local/Temp/stock-watchlist-board-mobile.png`，並修正手機自選股看板不再被雙欄擠壓。
 
 ### D. 旗艦：一鍵個股研究報告（HTML / PDF 匯出）
 

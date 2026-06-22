@@ -188,6 +188,8 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertIn("移動平均成本法", portfolio_payload["limitations"][0])  # type: ignore[index]
         self.assertEqual(search_payload["results"][0]["stock_id"], "2330")  # type: ignore[index]
         self.assertEqual(watchlist_payload["items"][0]["profile"]["short_name"], "台積電")  # type: ignore[index]
+        self.assertIn("board", watchlist_payload["items"][0])  # type: ignore[index]
+        self.assertEqual(watchlist_payload["items"][0]["board"]["assessment"]["label"], "體質中性")  # type: ignore[index]
 
     def test_glossary_payload_is_available_for_ui_terms(self) -> None:
         payload = glossary_payload()

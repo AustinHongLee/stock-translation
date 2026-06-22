@@ -457,6 +457,33 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .dashboard-row span { font-size: 14px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 .dashboard-row small { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); }
 .dashboard-empty { padding: 16px; text-align: center; font-size: 12.5px; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--line-strong); border-radius: 10px; }
+.watchlist-board-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; }
+.watchlist-board-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.watchlist-board-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watchlist-board-main small { grid-column: auto; }
+.watchlist-board-price { align-self: start; white-space: nowrap; }
+.watchlist-board-tags { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.watchlist-board-tag {
+  min-height: 38px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 6px 8px;
+  overflow: hidden;
+}
+.watchlist-board-row .watchlist-board-tag { text-align: left; font-weight: 400; }
+.watchlist-board-tag em { font-style: normal; font-size: 10.5px; color: var(--muted); line-height: 1.2; }
+.watchlist-board-tag b { font-size: 11.5px; color: var(--ink-2); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.watchlist-board-tag.board-tone-positive { border-color: var(--brand-soft-line); background: var(--brand-soft); }
+.watchlist-board-tag.board-tone-positive b { color: var(--brand); }
+.watchlist-board-tag.board-tone-caution { border-color: var(--warn-line); background: var(--warn-bg); }
+.watchlist-board-tag.board-tone-caution b { color: var(--warn); }
+.watchlist-board-tag.board-tone-unknown { border-style: dashed; background: var(--bg-soft); }
 
 /* ============================================================
    雷達中心
@@ -1440,6 +1467,7 @@ td.down { color: var(--down); font-weight: 600; }
     padding: 16px 12px 38px;
   }
   .app-sheet { max-width: 100%; }
+  .dash-grid { grid-template-columns: 1fr; }
 
   .layer-nav {
     top: 0;

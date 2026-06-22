@@ -63,6 +63,16 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function renderMiniTrendSvg", js)
         self.assertIn(".fundamental-trend-grid", css)
 
+    def test_dashboard_watchlist_board_has_status_tags(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn("watchlist-board-row", js)
+        self.assertIn("function watchlistBoardTag", js)
+        self.assertIn("board.risk", js)
+        self.assertIn(".watchlist-board-tags", css)
+        self.assertIn(".watchlist-board-tag", css)
+
 
 if __name__ == "__main__":
     unittest.main()

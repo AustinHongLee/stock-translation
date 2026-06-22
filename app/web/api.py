@@ -16,6 +16,7 @@ from app.analyze.summary import PriceSummary, calculate_price_summary
 from app.analyze.valuation import ValuationResult, calculate_dividend_valuation
 from app.analyze.suitability import ValuationSuitability, assess_valuation_suitability
 from app.analyze.vital_signs import VitalSignsReport, build_vital_signs_report
+from app.analyze.watchlist_board import build_watchlist_board_item
 from app.explain.rule_based import build_rule_based_health_report
 from app.explain.validation import build_validation_brief
 
@@ -148,15 +149,17 @@ def build_watchlist_payload(store: SQLiteStore) -> dict[str, object]:
                 listed_date=_date_or_none(row["listed_date"]),
                 source_updated_at=_date_or_none(row["source_updated_at"]),
             )
-        latest = store.get_daily_prices(row["stock_id"], limit=1)
+        prices = store.get_daily_prices(row["stock_id"], limit=260)
+        profile_json = profile_to_json(profile) if profile else None
         items.append(
             {
                 "stock_id": row["stock_id"],
-                "profile": profile_to_json(profile) if profile else None,
-                "latest": price_to_json(latest[-1]) if latest else None,
+                "profile": profile_json,
+                "latest": price_to_json(prices[-1]) if prices else None,
                 "rows": store.count_daily_prices(row["stock_id"]),
                 "added_at": row["added_at"],
                 "note": row["note"],
+                "board": build_watchlist_board_item(row["stock_id"], profile_json, prices),
             }
         )
     return {"items": items}
