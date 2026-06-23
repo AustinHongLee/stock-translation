@@ -212,8 +212,10 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(computed["status"], "current")
             self.assertEqual(price_coverage["latest_date"], "2026-06-22")
             self.assertEqual(price_coverage["row_count"], 2)
+            self.assertEqual(price_coverage["hole_count"], 0)
             self.assertEqual(price_coverage["status"], "current")
             self.assertEqual(inst_coverage["latest_date"], "2026-06-22")
+            self.assertEqual(inst_coverage["hole_count"], 0)
             self.assertEqual(inst_coverage["status"], "gap")
 
     def test_portfolio_transactions_round_trip(self) -> None:

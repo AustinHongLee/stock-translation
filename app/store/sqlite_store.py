@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
 
+from app.analyze.twse_calendar import count_twse_trading_days
 from app.models import (
     DailyPrice,
     DividendRecord,
@@ -1308,15 +1309,7 @@ def _coverage_table_for_node(node: str) -> str:
 
 
 def _business_day_count(start_date: date, end_date: date) -> int:
-    if end_date < start_date:
-        return 0
-    total = 0
-    current = start_date
-    while current <= end_date:
-        if current.weekday() < 5:
-            total += 1
-        current = current.fromordinal(current.toordinal() + 1)
-    return total
+    return count_twse_trading_days(start_date, end_date)
 
 
 def _d(value: date | None) -> str | None:
