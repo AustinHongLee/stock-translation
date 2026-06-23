@@ -138,7 +138,7 @@ class ValueScreenerTests(unittest.TestCase):
 
         self.assertEqual(first["stock_id"], "2303")
         self.assertEqual(umc["latest_close"], 48)
-        self.assertEqual(umc["current_price"], 48)
+        self.assertNotIn("current_price", umc)
         self.assertAlmostEqual(umc["average_cash_dividend"], 3.01)
         self.assertAlmostEqual(umc["cheap_price"], 48.16)
         self.assertAlmostEqual(umc["difference"], -0.16)

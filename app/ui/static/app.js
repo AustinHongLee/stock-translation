@@ -1042,7 +1042,7 @@ function renderScreenerCheapRow(item, _rank, _mode) {
       <span class="screener-name">
         <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
       </span>
-      <span class="screener-price">收盤 ${formatNumber(item.current_price)}</span>
+      <span class="screener-price">收盤 ${formatNumber(item.latest_close)}</span>
       <span class="screener-diff ${diffClass}">${diffLabel}</span>
       ${srBadge(item)}
       <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
@@ -1119,7 +1119,7 @@ function renderScreenerMoverRow(item, rank, isGainer) {
       <span class="screener-name">
         <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
       </span>
-      <span class="screener-price">收盤 ${formatNumber(item.current_price)}</span>
+      <span class="screener-price">收盤 ${formatNumber(item.latest_close)}</span>
       <span class="${cls} screener-diff">${pct}</span>
       ${srBadge(item)}
       <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
@@ -1134,7 +1134,7 @@ function renderScreenerSnapshotRow(item, rank, type) {
       <span class="screener-rank">${rank}</span>
       <span class="screener-name">
         <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
-        <span class="screener-ctype">收盤 ${formatNumber(item.current_price)}</span>
+        <span class="screener-ctype">收盤 ${formatNumber(item.latest_close)}</span>
       </span>
       <span class="screener-snapshot-metric ${metric.className}">
         <span>${escapeHtml(metric.label)}</span>

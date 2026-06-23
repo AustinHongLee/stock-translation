@@ -185,8 +185,6 @@ def build_value_screener_payload(
                 "market": profile.market,
                 "price_date": price.date.isoformat(),
                 "latest_close": price.close,
-                # Backward-compatible alias for older UI/export code. Prefer latest_close in new code.
-                "current_price": price.close,
                 "previous_close": previous_close,
                 "open_price": price.open,
                 "high_price": price.high,
@@ -353,8 +351,6 @@ def _with_snapshot_rankings(payload: dict[str, object]) -> dict[str, object]:
             continue
         if raw_item.get("latest_close") is None and raw_item.get("current_price") is not None:
             raw_item["latest_close"] = raw_item.get("current_price")
-        if raw_item.get("current_price") is None and raw_item.get("latest_close") is not None:
-            raw_item["current_price"] = raw_item.get("latest_close")
         previous_close = _safe_float(raw_item.get("previous_close"))
         if previous_close is None or previous_close <= 0:
             continue
