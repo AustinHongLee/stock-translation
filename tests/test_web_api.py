@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from app.models import (
@@ -357,6 +357,34 @@ class WebApiPayloadTests(unittest.TestCase):
 
         self.assertIn("entries", payload)
         self.assertIn("收盤", payload["aliases"])
+
+    def test_stock_payload_includes_ma_warmup_prices_without_expanding_visible_prices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            start = date(2026, 1, 1)
+            with SQLiteStore(db_path) as store:
+                store.upsert_profiles([StockProfile("2330", "台積電", "台積電")])
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            "2330",
+                            start + timedelta(days=i),
+                            100 + i,
+                            101 + i,
+                            99 + i,
+                            100 + i,
+                            1000,
+                        )
+                        for i in range(80)
+                    ]
+                )
+
+                payload = build_stock_payload(store, "2330", days=10)
+
+        self.assertEqual(len(payload["prices"]), 10)  # type: ignore[arg-type]
+        self.assertEqual(len(payload["ma_prices"]), 80)  # type: ignore[arg-type]
+        self.assertEqual(payload["prices"][0]["date"], "2026-03-12")  # type: ignore[index]
+        self.assertEqual(payload["ma_prices"][0]["date"], "2026-01-01")  # type: ignore[index]
 
     def test_cached_local_data_payload_reuses_recent_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

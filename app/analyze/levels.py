@@ -1,7 +1,8 @@
 """波段支撐/壓力與『接近狀態』偵測（純函數，可單元測試，不碰網路）。
 
 與前端 K 線同一套 swing-pivot 邏輯：在近 window 個交易日找波段轉折點（前後各 k 天都
-更高/更低），取最接近現價的『上方壓力』與『下方支撐』，再判斷目前是否接近其中之一。
+    更高/更低），取最接近現價的『上方壓力』與『下方支撐』，再判斷目前是否接近其中之一。
+    若價格已突破所有樞紐高或跌破所有樞紐低，不把錯邊舊關卡硬當壓力/支撐。
 
 紅線：只描述價位與接近狀態的事實，不預測股價、不給買賣建議。
 """
@@ -62,7 +63,7 @@ def compute_support_resistance(
 ) -> dict[str, Any]:
     """回傳 {available, support, resistance, dist_support_pct, dist_resistance_pct, status}。
 
-    status: 接近波撐 / 接近波壓 / 區間中 / 資料不足。固定輸入→固定輸出。
+    status: 接近波撐 / 接近波壓 / 創區間新高 / 創區間新低 / 區間中 / 資料不足。固定輸入→固定輸出。
     prices 由舊到新（chronological），可為 dict 或物件（有 high/low/close）。
     """
     rows = _valid_price_rows(prices)
@@ -79,9 +80,9 @@ def compute_support_resistance(
 
     pivot_highs, pivot_lows = swing_pivots(highs, lows, k)
     above = [p for p in pivot_highs if p > close]
-    resistance = min(above) if above else (max(pivot_highs) if pivot_highs else None)
+    resistance = min(above) if above else None
     below = [p for p in pivot_lows if p < close]
-    support = max(below) if below else (min(pivot_lows) if pivot_lows else None)
+    support = max(below) if below else None
 
     dist_r = (resistance - close) / close * 100 if resistance else None
     dist_s = (close - support) / close * 100 if support else None
@@ -89,7 +90,11 @@ def compute_support_resistance(
     status = "區間中"
     near_s = dist_s is not None and dist_s >= 0 and dist_s <= tolerance
     near_r = dist_r is not None and dist_r >= 0 and dist_r <= tolerance
-    if near_s and (not near_r or dist_s <= dist_r):
+    if pivot_highs and resistance is None and close > max(pivot_highs):
+        status = "創區間新高"
+    elif pivot_lows and support is None and close < min(pivot_lows):
+        status = "創區間新低"
+    elif near_s and (not near_r or dist_s <= dist_r):
         status = "接近波撐"
     elif near_r:
         status = "接近波壓"

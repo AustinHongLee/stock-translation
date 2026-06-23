@@ -51,6 +51,13 @@ from app.web.sync_batch import normalize_sync_targets
 STATIC_DIR = static_dir()
 DEFAULT_DB = data_path("stock_translator.sqlite3", writable=True)
 CHART_DAYS = 365
+TWSE_FETCH_DURING_BULK_MESSAGE = "全市場資料下載進行中，請先暫停、停止或等完成後再更新雷達/同步個股。"
+TWSE_FETCH_BLOCKED_DURING_BULK = {
+    "/api/sync",
+    "/api/sync/batch",
+    "/api/institutional/sync",
+    "/api/value-screener/refresh",
+}
 
 
 class StockTranslatorServer(ThreadingHTTPServer):
@@ -203,6 +210,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         try:
+            if _bulk_blocks_twse_fetch(parsed.path):
+                self._send_error(HTTPStatus.CONFLICT, TWSE_FETCH_DURING_BULK_MESSAGE)
+                return
             if parsed.path == "/api/sync":
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()
@@ -734,6 +744,17 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
         status["failed_count"] = persisted.get("failed_count", 0)
 
     return status
+
+
+def _bulk_blocks_twse_fetch(path: str, status: dict[str, object] | None = None) -> bool:
+    if path not in TWSE_FETCH_BLOCKED_DURING_BULK:
+        return False
+    current = status if status is not None else BULK_MANAGER.status()
+    return bool(
+        current.get("running")
+        or current.get("paused")
+        or current.get("status") in {"preparing", "running", "paused"}
+    )
 
 
 def _report_news_payload(stock_id: str, short_name: str) -> dict[str, object]:

@@ -60,6 +60,14 @@ class FakeClient:
             )
         ]
 
+    def fetch_historical_dividend_records(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[DividendRecord]:
+        return []
+
     def fetch_market_valuation(self, stock_id: str) -> MarketValuation:
         return MarketValuation(
             stock_id=stock_id,
@@ -139,6 +147,33 @@ class RecordingClient(FakeClient):
                 low=100.0,
                 close=101.5,
                 volume=456,
+            )
+        ]
+
+
+class DividendHistoryRecordingClient(RecordingClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.dividend_ranges: list[tuple[str, date, date]] = []
+
+    def fetch_historical_dividend_records(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[DividendRecord]:
+        self.dividend_ranges.append((stock_id, start_date, end_date))
+        return [
+            DividendRecord(
+                stock_id=stock_id,
+                year=114,
+                period="除息 06/24",
+                status="除息",
+                board_date=date(2025, 6, 24),
+                shareholder_meeting_date=None,
+                cash_dividend=2.85,
+                stock_dividend=0.0,
+                source="TWSE_TWT49U",
             )
         ]
 
@@ -264,6 +299,38 @@ class StockSyncServiceTests(unittest.TestCase):
             self.assertFalse(result.skipped)
             self.assertEqual(result.gap_plan["fetch_start_date"], "2026-06-22")  # type: ignore[index]
             self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
+
+    def test_sync_stock_history_uses_fixed_dividend_history_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = DividendHistoryRecordingClient()
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date(2026, 6, 18),
+                            open=100,
+                            high=101,
+                            low=99,
+                            close=100,
+                            volume=10,
+                        )
+                    ]
+                )
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                service.sync_stock_history(
+                    "2330",
+                    lookback_days=365,
+                    end_date=date(2026, 6, 23),
+                    target_date=date(2026, 6, 22),
+                )
+
+                periods = {(item.year, item.period) for item in store.get_dividend_records("2330")}
+
+            self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 22), date(2026, 6, 22))])
+            self.assertEqual(client.dividend_ranges, [("2330", date(2021, 1, 1), date(2026, 6, 22))])
+            self.assertIn((114, "除息 06/24"), periods)
 
     def test_sync_stock_history_defaults_weekend_target_to_previous_business_day(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

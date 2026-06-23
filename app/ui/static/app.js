@@ -2026,7 +2026,7 @@ function renderStock(payload, fallbackStockId) {
   renderRows(prices.filter(isTradingRow));
   state.activeChips = payload.chips || null;
   state.chartNewsEvents = [];
-  setupChart(prices, payload.chips_series || [], buildChartEvents(payload));
+  setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices);
   renderDateEvent((state.chartAll || []).length - 1);
   renderChipsCard(payload.chips);
   state.activeAssessment = payload.assessment;
@@ -3388,15 +3388,19 @@ function rangeVwap(rows) {
 }
 
 // ---- 設定整合圖（價格 + 三大法人 + 事件），預設顯示全部，可滾輪縮放、拖曳平移 ----
-function setupChart(prices, chipsSeries, localEvents) {
+function setupChart(prices, chipsSeries, localEvents, maPrices = null) {
   const valid = (prices || []).filter(isTradingRow);
+  const maSource = (maPrices || prices || []).filter(isTradingRow);
   if (!state.chartSeriesHidden) state.chartSeriesHidden = { vol: true, sr_s: true, sr_l: true };
   state.chartAll = valid;
   state.chartPrices = valid; // 與 renderDateEvent 等相容
   const chipsMap = {};
   (chipsSeries || []).forEach((c) => { if (c && c.date) chipsMap[c.date] = c; });
   state.chartChips = chipsMap;
-  state.chartMA = PRICE_MOVING_AVERAGES.map((s) => ({ ...s, values: calculateMovingAverage(valid, s.window) }));
+  state.chartMA = PRICE_MOVING_AVERAGES.map((s) => ({
+    ...s,
+    values: calculateAlignedMovingAverage(valid, maSource, s.window),
+  }));
   state.chartLocalEvents = localEvents || [];
   state.chartNewsEvents = state.chartNewsEvents || [];
   rebuildEventIndex();
@@ -3410,6 +3414,18 @@ function setupChart(prices, chipsSeries, localEvents) {
   drawChart();
   renderRangeStatsPanel();
   updateChartLegendState();
+}
+
+function calculateAlignedMovingAverage(visiblePrices, sourcePrices, windowSize) {
+  const visible = Array.isArray(visiblePrices) ? visiblePrices : [];
+  const source = Array.isArray(sourcePrices) && sourcePrices.length ? sourcePrices : visible;
+  if (!visible.length) return [];
+  const sourceValues = calculateMovingAverage(source, windowSize);
+  let offset = source.findIndex((item) => item?.date && item.date === visible[0]?.date);
+  if (offset < 0) offset = Math.max(0, source.length - visible.length);
+  const aligned = sourceValues.slice(offset, offset + visible.length);
+  while (aligned.length < visible.length) aligned.push(null);
+  return aligned;
 }
 
 function buildChartEvents(payload) {
@@ -4597,6 +4613,7 @@ const INDICATOR_GUIDES = {
       { h: "空頭排列", b: "MA5 小於 MA20 小於 MA60 且股價在下，傳統上偏弱。" },
       { h: "均線糾結", b: "三條均線交錯黏在一起，方向不明、常是盤整。" },
       { h: "動態支撐 / 壓力", b: "上升時均線常被當支撐，下跌時常被當壓力。" },
+      { h: "資料不足時", b: "未滿 N 根日線就不畫該條均線；剛上市或只同步少量資料時，MA60 可能暫時空白。" },
     ],
     note: "趨勢工具，不預測股價、不構成買賣建議。",
   },

@@ -34,6 +34,14 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function chartThemeColors", js)
         self.assertIn("refreshThemeCanvases", js)
 
+    def test_chart_uses_ma_warmup_prices_without_expanding_visible_prices(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("payload.ma_prices || prices", js)
+        self.assertIn("function calculateAlignedMovingAverage", js)
+        self.assertIn("setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices)", js)
+        self.assertIn("未滿 N 根日線就不畫該條均線", js)
+
     def test_app_js_documents_single_file_sections_and_error_state(self) -> None:
         js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
 

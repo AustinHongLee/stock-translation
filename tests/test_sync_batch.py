@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from app.web.sync_batch import normalize_sync_targets
+from app.web.server import _bulk_blocks_twse_fetch
 
 
 STATIC_DIR = Path("app/ui/static")
@@ -70,6 +71,18 @@ class SyncBatchTests(unittest.TestCase):
         self.assertIn("freshness?.can_skip_sync", js)
         self.assertIn("skip_if_current: true", js)
         self.assertIn("已是最近收盤", js)
+
+    def test_bulk_running_blocks_other_twse_fetches(self) -> None:
+        running = {"running": True, "paused": False, "status": "running"}
+        paused = {"running": False, "paused": True, "status": "paused"}
+        done = {"running": False, "paused": False, "status": "done"}
+
+        for path in ("/api/sync", "/api/sync/batch", "/api/institutional/sync", "/api/value-screener/refresh"):
+            self.assertTrue(_bulk_blocks_twse_fetch(path, running))
+            self.assertTrue(_bulk_blocks_twse_fetch(path, paused))
+            self.assertFalse(_bulk_blocks_twse_fetch(path, done))
+
+        self.assertFalse(_bulk_blocks_twse_fetch("/api/bulk-download/stop", running))
 
 
 if __name__ == "__main__":

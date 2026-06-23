@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.analyze.dividends import dedupe_dividend_records as _dedupe_dividend_records
+from app.analyze.dividends import (
+    dedupe_dividend_records as _dedupe_dividend_records,
+    dividend_history_start_date,
+)
 from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     DATA_NODE_INSTITUTIONAL,
@@ -70,7 +73,7 @@ class StockSyncService:
         fetch_end_date = gap_plan.fetch_end_date or target_date
 
         try:
-            metadata = self._refresh_stock_metadata(stock_id, start_date, fetch_end_date)
+            metadata = self._refresh_stock_metadata(stock_id, fetch_end_date)
             rows_written += int(metadata["rows_written"])
             if gap_plan.status == STATUS_CURRENT:
                 message = (
@@ -166,7 +169,6 @@ class StockSyncService:
     def _refresh_stock_metadata(
         self,
         stock_id: str,
-        start_date: date,
         fetch_end_date: date,
     ) -> dict[str, object]:
         profile = self.client.fetch_profile(stock_id)
@@ -180,10 +182,11 @@ class StockSyncService:
         if hasattr(self.client, "fetch_historical_dividend_records"):
             try:
                 warning_count = len(getattr(self.client, "last_warnings", []))
+                dividend_start_date = dividend_history_start_date(fetch_end_date)
                 dividends.extend(
                     self.client.fetch_historical_dividend_records(
                         stock_id,
-                        start_date,
+                        dividend_start_date,
                         fetch_end_date,
                     )
                 )

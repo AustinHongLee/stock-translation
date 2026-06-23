@@ -359,6 +359,36 @@ class TwseClientTests(unittest.TestCase):
         self.assertEqual(valuation.date, date(2026, 6, 11))  # type: ignore[union-attr]
         self.assertEqual(valuation.pe_ratio, 30.25)  # type: ignore[union-attr]
 
+    def test_shared_metadata_cache_reuses_payload_across_clients(self) -> None:
+        calls: list[str] = []
+
+        def fake_fetch_json(url: str) -> object:
+            calls.append(url)
+            return [
+                {
+                    "Date": "1150611",
+                    "Code": "2330",
+                    "Name": "台積電",
+                    "PEratio": "30.25",
+                    "DividendYield": "0.98",
+                    "PBratio": "9.90",
+                }
+            ]
+
+        TwseClient.clear_shared_cache()
+        try:
+            first = TwseClient(fetch_json=fake_fetch_json)
+            second = TwseClient(fetch_json=fake_fetch_json)
+            first._cache_enabled = True
+            second._cache_enabled = True
+
+            self.assertEqual(first.fetch_market_valuation("2330").pe_ratio, 30.25)  # type: ignore[union-attr]
+            self.assertEqual(second.fetch_market_valuation("2330").pb_ratio, 9.9)  # type: ignore[union-attr]
+        finally:
+            TwseClient.clear_shared_cache()
+
+        self.assertEqual(len(calls), 1)
+
     def test_fetch_monthly_revenue_maps_twse_payload(self) -> None:
         def fake_fetch_json(url: str) -> object:
             self.assertIn("t187ap05_L", url)

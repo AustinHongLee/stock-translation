@@ -56,6 +56,48 @@ class LevelsTest(unittest.TestCase):
         self.assertNotEqual(result["resistance"], 20.0)
         self.assertEqual(result["status"], "接近波壓")
 
+    def test_breakout_does_not_use_lower_pivot_as_resistance(self):
+        seq = _p([
+            (100, 98, 99),
+            (102, 99, 101),
+            (105, 100, 104),
+            (103, 99, 100),
+            (101, 97, 99),
+            (104, 98, 103),
+            (106, 99, 105),
+            (104, 98, 102),
+            (103, 97, 100),
+            (110, 108, 110),
+        ])
+
+        result = compute_support_resistance(seq, k=2)
+
+        self.assertEqual(result["status"], "創區間新高")
+        self.assertIsNone(result["resistance"])
+        self.assertIsNone(result["dist_resistance_pct"])
+        self.assertIsNotNone(result["support"])
+
+    def test_breakdown_does_not_use_higher_pivot_as_support(self):
+        seq = _p([
+            (102, 99, 101),
+            (101, 98, 100),
+            (100, 94, 95),
+            (101, 97, 100),
+            (103, 98, 102),
+            (102, 96, 97),
+            (101, 93, 94),
+            (102, 96, 101),
+            (103, 98, 102),
+            (92, 90, 90),
+        ])
+
+        result = compute_support_resistance(seq, k=2)
+
+        self.assertEqual(result["status"], "創區間新低")
+        self.assertIsNone(result["support"])
+        self.assertIsNone(result["dist_support_pct"])
+        self.assertIsNotNone(result["resistance"])
+
     def test_bad_rows_keep_high_low_pairs_aligned(self):
         seq = _p([
             (11, 10, 10.5), (11, 10, 10.4), (10.5, 9.5, 9.6), (9, 8.0, 8.2),

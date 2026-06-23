@@ -9,8 +9,10 @@ from typing import Protocol
 
 from app.runtime_paths import data_path
 from app.analyze.dividends import (
+    DIVIDEND_HISTORY_YEARS,
     annual_cash_dividends_by_year as _annual_cash_dividends_by_year,
     dedupe_dividend_records as _dedupe_dividend_records,
+    dividend_history_start_date,
     recent_annual_cash_values as _recent_annual_cash_values,
 )
 from app.analyze.suitability import assess_valuation_suitability
@@ -56,10 +58,10 @@ def refresh_value_screener(
     output_path: Path = DEFAULT_SCREENER_PATH,
     today: date | None = None,
     dividend_years: int = 5,
-    fetch_years: int = 6,
+    fetch_years: int = DIVIDEND_HISTORY_YEARS,
 ) -> ValueScreenerResult:
     today = today or date.today()
-    source_start_date = date(today.year - fetch_years + 1, 1, 1)
+    source_start_date = dividend_history_start_date(today, fetch_years)
     source_end_date = today
 
     profiles = client.fetch_listed_profiles()

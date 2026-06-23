@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import ssl
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -35,6 +36,9 @@ class TwseClient:
     EX_RIGHT_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U"
     MIS_QUOTE_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
     T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86"
+    _SHARED_CACHE_TTL_SECONDS = 15 * 60
+    _shared_payload_cache: dict[str, tuple[float, Any]] = {}
+    _shared_payload_cache_lock = threading.Lock()
 
     def __init__(
         self,
@@ -51,10 +55,11 @@ class TwseClient:
         self.retry_backoff = max(0.0, retry_backoff)
         self.last_warnings: list[str] = []
         self._fetch_json = fetch_json or self._default_fetch_json
+        self._cache_enabled = fetch_json is None
         self._ssl_context = ssl.create_default_context()
 
     def fetch_listed_profiles(self) -> list[StockProfile]:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap03_L")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap03_L")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE company profile payload.")
 
@@ -214,7 +219,7 @@ class TwseClient:
         return prices
 
     def fetch_dividend_records(self, stock_id: str) -> list[DividendRecord]:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap45_L")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap45_L")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE dividend payload.")
 
@@ -228,7 +233,7 @@ class TwseClient:
         return sorted(records, key=lambda item: (item.year, item.period), reverse=True)
 
     def fetch_all_dividend_records(self) -> list[DividendRecord]:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap45_L")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap45_L")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE dividend payload.")
 
@@ -262,7 +267,7 @@ class TwseClient:
                 }
             )
             try:
-                payload = self._fetch_json(f"{self.EX_RIGHT_URL}?{query}")
+                payload = self._fetch_shared_json(f"{self.EX_RIGHT_URL}?{query}")
             except TwseError as exc:
                 self.last_warnings.append(
                     f"Skipped {stock_id} {year} dividend history: {exc}"
@@ -327,7 +332,7 @@ class TwseClient:
                 }
             )
             try:
-                payload = self._fetch_json(f"{self.EX_RIGHT_URL}?{query}")
+                payload = self._fetch_shared_json(f"{self.EX_RIGHT_URL}?{query}")
             except TwseError as exc:
                 self.last_warnings.append(f"Skipped {year} dividend history: {exc}")
                 continue
@@ -376,7 +381,7 @@ class TwseClient:
         return sorted(records, key=lambda item: (item.stock_id, item.year, item.board_date or date.min), reverse=True)
 
     def fetch_market_valuation(self, stock_id: str) -> MarketValuation | None:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/exchangeReport/BWIBBU_ALL")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/exchangeReport/BWIBBU_ALL")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE valuation payload.")
 
@@ -394,7 +399,7 @@ class TwseClient:
         return None
 
     def fetch_monthly_revenue(self, stock_id: str) -> MonthlyRevenue | None:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap05_L")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap05_L")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE monthly revenue payload.")
 
@@ -406,8 +411,8 @@ class TwseClient:
         return None
 
     def fetch_financial_statement(self, stock_id: str) -> FinancialStatement | None:
-        income_payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap06_L_ci")
-        balance_payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap07_L_ci")
+        income_payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap06_L_ci")
+        balance_payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap07_L_ci")
         if not isinstance(income_payload, list) or not isinstance(balance_payload, list):
             raise TwseError("Unexpected TWSE financial statement payload.")
 
@@ -509,7 +514,7 @@ class TwseClient:
         return sorted(results, key=lambda item: item.date)
 
     def fetch_all_monthly_revenues(self) -> list[MonthlyRevenue]:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap05_L")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap05_L")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE monthly revenue payload.")
         out: list[MonthlyRevenue] = []
@@ -526,7 +531,7 @@ class TwseClient:
         return out
 
     def fetch_all_market_valuations(self) -> list[MarketValuation]:
-        payload = self._fetch_json(f"{self.OPENAPI_BASE}/exchangeReport/BWIBBU_ALL")
+        payload = self._fetch_shared_json(f"{self.OPENAPI_BASE}/exchangeReport/BWIBBU_ALL")
         if not isinstance(payload, list):
             raise TwseError("Unexpected TWSE valuation payload.")
         out: list[MarketValuation] = []
@@ -551,8 +556,8 @@ class TwseClient:
         return out
 
     def fetch_all_financial_statements(self) -> list[FinancialStatement]:
-        income = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap06_L_ci")
-        balance = self._fetch_json(f"{self.OPENAPI_BASE}/opendata/t187ap07_L_ci")
+        income = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap06_L_ci")
+        balance = self._fetch_shared_json(f"{self.OPENAPI_BASE}/opendata/t187ap07_L_ci")
         if not isinstance(income, list) or not isinstance(balance, list):
             raise TwseError("Unexpected TWSE financial statement payload.")
         imap = {str(r.get("公司代號", "")).strip(): r for r in income if isinstance(r, dict)}
@@ -648,6 +653,27 @@ class TwseClient:
             ask_prices=ask_prices,
             source_delay_ms=_parse_optional_int(payload.get("userDelay")),
         )
+
+    @classmethod
+    def clear_shared_cache(cls) -> None:
+        with cls._shared_payload_cache_lock:
+            cls._shared_payload_cache.clear()
+
+    def _fetch_shared_json(self, url: str) -> Any:
+        if not self._cache_enabled:
+            return self._fetch_json(url)
+        now = time.monotonic()
+        with self._shared_payload_cache_lock:
+            cached = self._shared_payload_cache.get(url)
+            if cached is not None:
+                cached_at, payload = cached
+                if now - cached_at <= self._SHARED_CACHE_TTL_SECONDS:
+                    return payload
+
+        payload = self._fetch_json(url)
+        with self._shared_payload_cache_lock:
+            self._shared_payload_cache[url] = (now, payload)
+        return payload
 
     def _default_fetch_json(self, url: str) -> Any:
         request = urllib.request.Request(

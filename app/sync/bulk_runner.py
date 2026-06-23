@@ -8,6 +8,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from app.analyze.dividends import (
+    dedupe_dividend_records as _dedupe_dividend_records,
+    dividend_history_start_date,
+)
+from app.analyze.twse_calendar import is_twse_trading_day
 from app.sync.bulk import BulkPlan
 from app.sync.twse import TwseClient
 from app.store.sqlite_store import SQLiteStore
@@ -61,8 +66,11 @@ def build_bulk_plan(
         # 3) 股利（一次，分組存）
         if not stop_event.is_set():
             try:
+                dividend_start = dividend_history_start_date(today)
+                records = client.fetch_all_dividend_records()
+                records.extend(client.fetch_all_historical_dividend_records(dividend_start, today))
                 by_stock: dict[str, list] = {}
-                for record in client.fetch_all_dividend_records():
+                for record in _dedupe_dividend_records(records):
                     by_stock.setdefault(record.stock_id, []).append(record)
                 for sid, recs in by_stock.items():
                     store.upsert_dividend_records(recs)
@@ -80,7 +88,7 @@ def build_bulk_plan(
         empty = 0
         while day >= start and not stop_event.is_set():
             day_key = day.isoformat()
-            if day.weekday() < 5 and day_key not in have and day_key not in done_t86:
+            if is_twse_trading_day(day) and day_key not in have and day_key not in done_t86:
                 fetch_failed = False
                 try:
                     trades = client.fetch_institutional_trades_for_date(day)

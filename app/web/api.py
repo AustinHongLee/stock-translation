@@ -48,6 +48,7 @@ from app.store.sqlite_store import SQLiteStore
 
 
 HISTORICAL_VALUATION_DAYS = 365 * 5
+CHART_MA_WARMUP_DAYS = 140
 LOCAL_DATA_CACHE_KEY = "local_data_v2"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
 
@@ -591,8 +592,18 @@ def build_stock_payload(
         start_date=start_date,
         end_date=end_date,
     )
+    used_price_limit_fallback = False
     if not prices:
         prices = store.get_daily_prices(stock_id, limit=days)
+        used_price_limit_fallback = True
+    if used_price_limit_fallback:
+        ma_prices = store.get_daily_prices(stock_id, limit=days + CHART_MA_WARMUP_DAYS)
+    else:
+        ma_prices = store.get_daily_prices(
+            stock_id,
+            start_date=start_date - timedelta(days=CHART_MA_WARMUP_DAYS),
+            end_date=end_date,
+        )
     latest_close = prices[-1].close if prices else None
     valuation_prices = store.get_daily_prices(
         stock_id,
@@ -665,6 +676,7 @@ def build_stock_payload(
     return {
         "profile": profile_to_json(profile) if profile else None,
         "prices": [price_to_json(item) for item in prices],
+        "ma_prices": [price_to_json(item) for item in ma_prices],
         "summary": summary_to_json(summary),
         "price_window": price_window_to_json(
             summary,

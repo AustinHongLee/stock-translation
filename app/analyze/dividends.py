@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
 from app.models import DividendRecord
 
 SOURCE_EX_DIVIDEND = "TWSE_TWT49U"
 SOURCE_ANNOUNCEMENT = "TWSE_T187AP45"
+DIVIDEND_HISTORY_YEARS = 6
+
+
+def dividend_history_start_date(end_date: date, years: int = DIVIDEND_HISTORY_YEARS) -> date:
+    if years < 1:
+        raise ValueError("years must be positive")
+    return date(end_date.year - years + 1, 1, 1)
 
 
 def dedupe_dividend_records(records: list[DividendRecord]) -> list[DividendRecord]:
