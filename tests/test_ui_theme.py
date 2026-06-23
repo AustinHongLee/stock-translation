@@ -119,6 +119,16 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("normal_positive_area_percent", js)
         self.assertIn(".historical-frequency-grid", css)
 
+    def test_local_data_table_exposes_gap_status(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn("資料狀態", html)
+        self.assertIn("function localDataCoverageLabel", js)
+        self.assertIn("dataGapShortLabel", js)
+        self.assertIn(".ld-coverage", css)
+
 
 if __name__ == "__main__":
     unittest.main()

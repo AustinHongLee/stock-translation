@@ -5080,14 +5080,40 @@ function renderLocalDataTable(payload) {
     const stale = it.stale_days > 7;
     const dateCell = `<span class="${stale ? "ld-stale" : ""}">${escapeHtml(it.last_date)}${stale ? `（過期${it.stale_days}天）` : ""}</span>`;
     const sr = it.sr_status && it.sr_status !== "資料不足" ? escapeHtml(it.sr_status) : "—";
+    const dataStatus = localDataCoverageLabel(it);
     return `<tr>
       <td>${escapeHtml(it.stock_id)}</td>
       <td>${escapeHtml(it.name || "")}</td>
       <td>${it.price_rows}</td>
       <td>${dateCell}</td>
+      <td>${dataStatus}</td>
       <td>${it.has_institutional ? "✓" : "—"}</td>
       <td>${sr}</td>
       <td><button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button></td>
     </tr>`;
-  }).join("") : `<tr><td colspan="7">${stateMessageHTML("empty", "目前沒有符合條件的資料", "換一個篩選條件，或先同步更多股票。", { compact: true })}</td></tr>`;
+  }).join("") : `<tr><td colspan="8">${stateMessageHTML("empty", "目前沒有符合條件的資料", "換一個篩選條件，或先同步更多股票。", { compact: true })}</td></tr>`;
+}
+
+function localDataCoverageLabel(item) {
+  const price = dataGapShortLabel(item?.price_gap, "日線");
+  const inst = dataGapShortLabel(item?.institutional_gap, "法人");
+  return `<span class="ld-coverage">${price}${inst ? `<br>${inst}` : ""}</span>`;
+}
+
+function dataGapShortLabel(gap, label) {
+  const status = gap?.status || "";
+  if (status === "current" || status === "patched") {
+    return `<span class="ld-ok">${escapeHtml(label)}已最新</span>`;
+  }
+  if (status === "gap") {
+    const days = Number(gap?.gap_business_days || 0);
+    return `<span class="ld-gap">${escapeHtml(label)}缺 ${formatInteger(days)} 日</span>`;
+  }
+  if (status === "force_refresh_required") {
+    return `<span class="ld-stale">${escapeHtml(label)}需重建</span>`;
+  }
+  if (status === "source_pending") {
+    return `<span class="ld-muted">${escapeHtml(label)}待來源</span>`;
+  }
+  return `<span class="ld-muted">${escapeHtml(label)}未索引</span>`;
 }

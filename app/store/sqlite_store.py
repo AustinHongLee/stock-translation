@@ -202,6 +202,25 @@ CREATE TABLE IF NOT EXISTS app_cache (
     payload TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS data_coverage (
+    stock_id TEXT NOT NULL,
+    node TEXT NOT NULL,
+    earliest_date TEXT,
+    latest_date TEXT,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    hole_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'unknown',
+    suspect_reason TEXT NOT NULL DEFAULT '',
+    target_date TEXT,
+    last_checked_at TEXT,
+    last_success_at TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (stock_id, node)
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_coverage_node_status
+    ON data_coverage(node, status);
 """
 
 
@@ -729,6 +748,123 @@ class SQLiteStore:
         ).fetchone()
         return int(row["total"])
 
+    def get_data_coverage(self, stock_id: str, node: str) -> dict[str, object] | None:
+        row = self.conn.execute(
+            """
+            SELECT stock_id, node, earliest_date, latest_date, row_count, hole_count,
+                   status, suspect_reason, target_date, last_checked_at,
+                   last_success_at, updated_at
+            FROM data_coverage
+            WHERE stock_id = ? AND node = ?
+            """,
+            (stock_id, node),
+        ).fetchone()
+        return _coverage_from_row(row) if row is not None else None
+
+    def record_data_coverage(
+        self,
+        *,
+        stock_id: str,
+        node: str,
+        earliest_date: date | None,
+        latest_date: date | None,
+        row_count: int,
+        hole_count: int = 0,
+        status: str = "unknown",
+        suspect_reason: str = "",
+        target_date: date | None = None,
+        last_checked_at: datetime | None = None,
+        last_success_at: datetime | None = None,
+    ) -> dict[str, object]:
+        now = datetime.now()
+        checked_at = last_checked_at or now
+        self.conn.execute(
+            """
+            INSERT INTO data_coverage (
+                stock_id, node, earliest_date, latest_date, row_count, hole_count,
+                status, suspect_reason, target_date, last_checked_at,
+                last_success_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(stock_id, node) DO UPDATE SET
+                earliest_date = excluded.earliest_date,
+                latest_date = excluded.latest_date,
+                row_count = excluded.row_count,
+                hole_count = excluded.hole_count,
+                status = excluded.status,
+                suspect_reason = excluded.suspect_reason,
+                target_date = excluded.target_date,
+                last_checked_at = excluded.last_checked_at,
+                last_success_at = excluded.last_success_at,
+                updated_at = excluded.updated_at
+            """,
+            (
+                stock_id,
+                node,
+                _d(earliest_date),
+                _d(latest_date),
+                int(row_count),
+                max(0, int(hole_count)),
+                status,
+                suspect_reason[:500],
+                _d(target_date),
+                _dt(checked_at),
+                _dt(last_success_at) if last_success_at is not None else None,
+                _dt(now),
+            ),
+        )
+        self.conn.commit()
+        result = self.get_data_coverage(stock_id, node)
+        return result or {}
+
+    def refresh_data_coverage(
+        self,
+        stock_id: str,
+        node: str,
+        *,
+        target_date: date | None = None,
+        status: str | None = None,
+        suspect_reason: str = "",
+    ) -> dict[str, object]:
+        table = _coverage_table_for_node(node)
+        row = self.conn.execute(
+            f"""
+            SELECT MIN(date) AS earliest_date, MAX(date) AS latest_date, COUNT(*) AS row_count
+            FROM {table}
+            WHERE stock_id = ?
+            """,
+            (stock_id,),
+        ).fetchone()
+        earliest = _date_or_none(row["earliest_date"]) if row else None
+        latest = _date_or_none(row["latest_date"]) if row else None
+        row_count = int(row["row_count"] or 0) if row else 0
+        hole_count = 0
+        if earliest is not None and latest is not None:
+            hole_count = max(0, _business_day_count(earliest, latest) - row_count)
+        resolved_status = status
+        if resolved_status is None:
+            if latest is None:
+                resolved_status = "missing"
+            elif target_date is not None and latest >= target_date:
+                resolved_status = "current"
+            elif target_date is not None:
+                resolved_status = "gap"
+            else:
+                resolved_status = "indexed"
+        return self.record_data_coverage(
+            stock_id=stock_id,
+            node=node,
+            earliest_date=earliest,
+            latest_date=latest,
+            row_count=row_count,
+            hole_count=hole_count,
+            status=resolved_status,
+            suspect_reason=suspect_reason,
+            target_date=target_date,
+            last_checked_at=datetime.now(),
+            last_success_at=datetime.now() if latest is not None else None,
+        )
+
     def add_to_watchlist(self, stock_id: str, *, note: str = "") -> None:
         self.conn.execute(
             """
@@ -1110,6 +1246,43 @@ def _portfolio_transaction_from_row(row: sqlite3.Row) -> PortfolioTransaction:
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
     )
+
+
+def _coverage_from_row(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "stock_id": row["stock_id"],
+        "node": row["node"],
+        "earliest_date": row["earliest_date"],
+        "latest_date": row["latest_date"],
+        "row_count": int(row["row_count"]),
+        "hole_count": int(row["hole_count"]),
+        "status": row["status"],
+        "suspect_reason": row["suspect_reason"],
+        "target_date": row["target_date"],
+        "last_checked_at": row["last_checked_at"],
+        "last_success_at": row["last_success_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _coverage_table_for_node(node: str) -> str:
+    if node == "daily_price":
+        return "daily_prices"
+    if node == "institutional":
+        return "institutional_trades"
+    raise ValueError(f"unsupported data coverage node: {node}")
+
+
+def _business_day_count(start_date: date, end_date: date) -> int:
+    if end_date < start_date:
+        return 0
+    total = 0
+    current = start_date
+    while current <= end_date:
+        if current.weekday() < 5:
+            total += 1
+        current = current.fromordinal(current.toordinal() + 1)
+    return total
 
 
 def _d(value: date | None) -> str | None:

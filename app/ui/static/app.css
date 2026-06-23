@@ -1519,6 +1519,10 @@ td.down { color: var(--down); font-weight: 600; }
 .local-data-table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .local-data-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .ld-stale { color: var(--alert); font-weight: 700; }
+.ld-coverage { display: inline-flex; flex-direction: column; gap: 2px; min-width: 92px; line-height: 1.35; }
+.ld-ok { color: var(--brand); font-weight: 700; }
+.ld-gap { color: var(--warn); font-weight: 700; }
+.ld-muted { color: var(--muted); font-weight: 600; }
 
 /* ===== Small screens ===== */
 @media (max-width: 760px) {

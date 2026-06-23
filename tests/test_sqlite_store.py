@@ -9,6 +9,7 @@ from app.models import (
     DailyPrice,
     DividendRecord,
     FinancialStatement,
+    InstitutionalTrade,
     MarketValuation,
     MonthlyRevenue,
     StockProfile,
@@ -172,6 +173,40 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(cached[0]["count"], 2)  # type: ignore[index]
             with SQLiteStore(db_path) as store:
                 self.assertIsNone(store.get_json_cache("local_data_v1"))
+
+    def test_data_coverage_refreshes_from_prices_and_institutional(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 18), 100, 101, 99, 100, 10),
+                        DailyPrice("2330", date(2026, 6, 22), 101, 102, 100, 101, 12),
+                    ]
+                )
+                store.upsert_institutional_trades(
+                    [
+                        InstitutionalTrade("2330", date(2026, 6, 18), 1, 2, 3, 6),
+                        InstitutionalTrade("2330", date(2026, 6, 22), 2, 3, 4, 9),
+                    ]
+                )
+
+                price_coverage = store.refresh_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=date(2026, 6, 22),
+                )
+                inst_coverage = store.refresh_data_coverage(
+                    "2330",
+                    "institutional",
+                    target_date=date(2026, 6, 23),
+                )
+
+            self.assertEqual(price_coverage["latest_date"], "2026-06-22")
+            self.assertEqual(price_coverage["row_count"], 2)
+            self.assertEqual(price_coverage["status"], "current")
+            self.assertEqual(inst_coverage["latest_date"], "2026-06-22")
+            self.assertEqual(inst_coverage["status"], "gap")
 
     def test_portfolio_transactions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

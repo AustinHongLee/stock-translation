@@ -9,6 +9,12 @@ from app.analyze.financial import (
     financial_title,
     financial_tone,
 )
+from app.analyze.data_gap import (
+    DATA_NODE_DAILY_PRICE,
+    DATA_NODE_INSTITUTIONAL,
+    STATUS_CURRENT,
+    plan_data_gap,
+)
 from app.analyze.fundamental_trends import build_fundamental_trends
 from app.analyze.historical_frequency import build_historical_frequency_report
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
@@ -50,22 +56,54 @@ def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
     from datetime import date as _date
     today = _date.today()
     inst_ids = store.get_institutional_stock_ids()
+    reference_dates = _screener_reference_dates(DEFAULT_SCREENER_PATH)
     items: list[dict[str, object]] = []
     for sid in sorted(store.get_price_stock_ids()):
         prices = store.get_daily_prices(sid, limit=140)
         if not prices:
             continue
         last = prices[-1].date
+        target_date = reference_dates.get(sid)
+        price_coverage = store.refresh_data_coverage(
+            sid,
+            DATA_NODE_DAILY_PRICE,
+            target_date=target_date,
+        )
+        institutional_coverage = store.refresh_data_coverage(
+            sid,
+            DATA_NODE_INSTITUTIONAL,
+            target_date=target_date,
+        )
+        price_gap = plan_data_gap(
+            stock_id=sid,
+            node=DATA_NODE_DAILY_PRICE,
+            coverage=price_coverage,
+            target_date=target_date,
+            lookback_days=HISTORICAL_VALUATION_DAYS,
+            max_patch_business_days=45,
+        )
+        institutional_gap = plan_data_gap(
+            stock_id=sid,
+            node=DATA_NODE_INSTITUTIONAL,
+            coverage=institutional_coverage,
+            target_date=target_date,
+            lookback_days=365,
+            max_patch_business_days=60,
+        )
         profile = store.get_profile(sid)
         name = (profile.short_name or profile.name) if profile else ""
         sr = compute_support_resistance(prices)
         items.append({
             "stock_id": sid,
             "name": name,
-            "price_rows": store.count_daily_prices(sid),
+            "price_rows": int(price_coverage.get("row_count") or store.count_daily_prices(sid)),
             "last_date": last.isoformat(),
             "stale_days": (today - last).days,
             "has_institutional": sid in inst_ids,
+            "data_target_date": target_date.isoformat() if target_date else None,
+            "price_gap": price_gap.to_json(),
+            "institutional_gap": institutional_gap.to_json(),
+            "institutional_last_date": institutional_coverage.get("latest_date"),
             "sr_status": sr.get("status"),
             "support": sr.get("support"),
             "resistance": sr.get("resistance"),
@@ -111,16 +149,42 @@ def build_sync_freshness_payload(
     stock_id: str,
     *,
     screener_path: Path = DEFAULT_SCREENER_PATH,
+    lookback_days: int = HISTORICAL_VALUATION_DAYS,
 ) -> dict[str, object]:
     stock_id = stock_id.strip()
     if not stock_id:
         raise ValueError("stock_id is required")
 
-    local_latest = store.get_daily_prices(stock_id, limit=1)
-    local_date = local_latest[-1].date if local_latest else None
     reference = _screener_reference_item(stock_id, screener_path)
     reference_date = _date_or_none(reference.get("price_date")) if reference else None
-    is_current = bool(local_date and reference_date and local_date >= reference_date)
+    daily_coverage = store.refresh_data_coverage(
+        stock_id,
+        DATA_NODE_DAILY_PRICE,
+        target_date=reference_date,
+    )
+    institutional_coverage = store.refresh_data_coverage(
+        stock_id,
+        DATA_NODE_INSTITUTIONAL,
+        target_date=reference_date,
+    )
+    daily_gap = plan_data_gap(
+        stock_id=stock_id,
+        node=DATA_NODE_DAILY_PRICE,
+        coverage=daily_coverage,
+        target_date=reference_date,
+        lookback_days=lookback_days,
+        max_patch_business_days=45,
+    )
+    institutional_gap = plan_data_gap(
+        stock_id=stock_id,
+        node=DATA_NODE_INSTITUTIONAL,
+        coverage=institutional_coverage,
+        target_date=reference_date,
+        lookback_days=365,
+        max_patch_business_days=60,
+    )
+    local_date = _date_or_none(daily_coverage.get("latest_date"))
+    is_current = daily_gap.status == STATUS_CURRENT
     can_decide = reference_date is not None
     if is_current:
         status = "current"
@@ -140,6 +204,14 @@ def build_sync_freshness_payload(
         "local_latest_date": local_date.isoformat() if local_date else None,
         "reference_latest_date": reference_date.isoformat() if reference_date else None,
         "reference_source": "value_screener_snapshot" if reference_date else None,
+        "daily_price": {
+            "coverage": daily_coverage,
+            "gap": daily_gap.to_json(),
+        },
+        "institutional": {
+            "coverage": institutional_coverage,
+            "gap": institutional_gap.to_json(),
+        },
         "message": message,
     }
 
@@ -169,6 +241,22 @@ def _screener_reference_item(stock_id: str, path: Path) -> dict[str, object] | N
         if isinstance(item, dict) and str(item.get("stock_id", "")).strip() == stock_id:
             return item
     return None
+
+
+def _screener_reference_dates(path: Path) -> dict[str, date]:
+    payload = load_value_screener(path)
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return {}
+    result: dict[str, date] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        stock_id = str(item.get("stock_id", "")).strip()
+        price_date = _date_or_none(item.get("price_date"))
+        if stock_id and price_date:
+            result[stock_id] = price_date
+    return result
 
 
 def build_value_screener_payload(path: Path = DEFAULT_SCREENER_PATH) -> dict[str, object]:

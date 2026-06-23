@@ -9,6 +9,7 @@ from app.models import (
     DailyPrice,
     DividendRecord,
     FinancialStatement,
+    InstitutionalTrade,
     MarketValuation,
     MonthlyRevenue,
     StockProfile,
@@ -118,6 +119,56 @@ class WarningClient(FakeClient):
         return prices
 
 
+class RecordingClient(FakeClient):
+    def __init__(self) -> None:
+        self.price_ranges: list[tuple[str, date, date]] = []
+
+    def fetch_daily_prices(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        return [
+            DailyPrice(
+                stock_id=stock_id,
+                date=end_date,
+                open=101.0,
+                high=102.0,
+                low=100.0,
+                close=101.5,
+                volume=456,
+            )
+        ]
+
+
+class InstitutionalClient(FakeClient):
+    def __init__(self) -> None:
+        self.institutional_ranges: list[tuple[str, date, date, int]] = []
+
+    def fetch_institutional_trades(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+        *,
+        max_days: int = 20,
+        skip_dates: set[str] | None = None,
+    ) -> list[InstitutionalTrade]:
+        self.institutional_ranges.append((stock_id, start_date, end_date, max_days))
+        return [
+            InstitutionalTrade(
+                stock_id=stock_id,
+                date=end_date,
+                foreign_net=1,
+                trust_net=2,
+                dealer_net=3,
+                total_net=6,
+            )
+        ]
+
+
 class StockSyncServiceTests(unittest.TestCase):
     def test_sync_stock_history_writes_profile_prices_and_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -151,6 +202,69 @@ class StockSyncServiceTests(unittest.TestCase):
 
                 self.assertIn("Skipped 1 price month", result.message)
                 self.assertIn("2025-08", result.message)
+
+    def test_sync_stock_history_uses_gap_plan_instead_of_full_lookback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = RecordingClient()
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date(2026, 6, 18),
+                            open=100,
+                            high=101,
+                            low=99,
+                            close=100,
+                            volume=10,
+                        )
+                    ]
+                )
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "2330",
+                    lookback_days=365,
+                    end_date=date(2026, 6, 23),
+                    target_date=date(2026, 6, 22),
+                )
+
+            self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 19), date(2026, 6, 22))])
+            self.assertFalse(result.skipped)
+            self.assertEqual(result.gap_plan["fetch_start_date"], "2026-06-19")  # type: ignore[index]
+            self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
+
+    def test_sync_institutional_uses_gap_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = InstitutionalClient()
+            with SQLiteStore(db_path) as store:
+                store.upsert_institutional_trades(
+                    [
+                        InstitutionalTrade(
+                            stock_id="2330",
+                            date=date(2026, 6, 18),
+                            foreign_net=1,
+                            trust_net=0,
+                            dealer_net=0,
+                            total_net=1,
+                        )
+                    ]
+                )
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                result = service.sync_institutional(
+                    "2330",
+                    lookback_days=365,
+                    end_date=date(2026, 6, 23),
+                    target_date=date(2026, 6, 22),
+                )
+
+            self.assertEqual(
+                client.institutional_ranges,
+                [("2330", date(2026, 6, 19), date(2026, 6, 22), 20)],
+            )
+            self.assertFalse(result.skipped)
+            self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
 
     def test_dedupe_dividend_records_keeps_unpaid_quarter_and_drops_paid_duplicate(self) -> None:
         records = [

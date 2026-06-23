@@ -73,8 +73,11 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertTrue(current["is_current"])
         self.assertTrue(current["can_skip_sync"])
         self.assertEqual(current["reference_latest_date"], "2026-06-22")
+        self.assertEqual(current["daily_price"]["gap"]["status"], "current")
+        self.assertEqual(current["institutional"]["gap"]["status"], "gap")
         self.assertFalse(stale["is_current"])
         self.assertEqual(stale["status"], "stale")
+        self.assertEqual(stale["daily_price"]["gap"]["target_date"], "2026-06-21")
 
     def test_build_stock_payload_contains_profile_prices_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -3,6 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from app.analyze.data_gap import (
+    DATA_NODE_DAILY_PRICE,
+    DATA_NODE_INSTITUTIONAL,
+    STATUS_CURRENT,
+    plan_data_gap,
+    resolve_post_patch_status,
+)
 from app.models import DividendRecord
 from app.store.sqlite_store import SQLiteStore
 from app.sync.twse import TwseClient
@@ -15,6 +22,9 @@ class SyncResult:
     started_at: datetime
     finished_at: datetime
     message: str
+    skipped: bool = False
+    gap_plan: dict[str, object] | None = None
+    coverage: dict[str, object] | None = None
 
 
 class StockSyncService:
@@ -28,6 +38,7 @@ class StockSyncService:
         *,
         lookback_days: int = 365,
         end_date: date | None = None,
+        target_date: date | None = None,
     ) -> SyncResult:
         stock_id = stock_id.strip()
         if not stock_id:
@@ -37,7 +48,44 @@ class StockSyncService:
 
         started_at = datetime.now()
         end_date = end_date or date.today()
-        start_date = end_date - timedelta(days=lookback_days)
+        target_date = target_date or end_date
+        coverage_before = self.store.refresh_data_coverage(
+            stock_id,
+            DATA_NODE_DAILY_PRICE,
+            target_date=target_date,
+        )
+        gap_plan = plan_data_gap(
+            stock_id=stock_id,
+            node=DATA_NODE_DAILY_PRICE,
+            coverage=coverage_before,
+            target_date=target_date,
+            lookback_days=lookback_days,
+            max_patch_business_days=45,
+        )
+        if gap_plan.status == STATUS_CURRENT:
+            message = gap_plan.reason
+            self.store.record_sync_run(
+                kind="stock_history",
+                target=stock_id,
+                status="skipped",
+                rows_written=0,
+                started_at=started_at,
+                finished_at=datetime.now(),
+                message=message,
+            )
+            return SyncResult(
+                stock_id=stock_id,
+                rows_written=0,
+                started_at=started_at,
+                finished_at=datetime.now(),
+                message=message,
+                skipped=True,
+                gap_plan=gap_plan.to_json(),
+                coverage=coverage_before,
+            )
+
+        start_date = gap_plan.fetch_start_date or (target_date - timedelta(days=lookback_days))
+        fetch_end_date = gap_plan.fetch_end_date or target_date
         rows_written = 0
         status = "success"
         message = ""
@@ -58,7 +106,7 @@ class StockSyncService:
                         self.client.fetch_historical_dividend_records(
                             stock_id,
                             start_date,
-                            end_date,
+                            fetch_end_date,
                         )
                     )
                     dividend_warnings.extend(getattr(self.client, "last_warnings", [])[warning_count:])
@@ -67,9 +115,27 @@ class StockSyncService:
             dividends = _dedupe_dividend_records(dividends)
             dividend_rows = self.store.replace_dividend_records(stock_id, dividends)
 
-            prices = self.client.fetch_daily_prices(stock_id, start_date, end_date)
+            prices = self.client.fetch_daily_prices(stock_id, start_date, fetch_end_date)
             price_warnings = list(getattr(self.client, "last_warnings", []))
-            rows_written = self.store.upsert_daily_prices(prices)
+            price_rows = self.store.upsert_daily_prices(prices)
+            rows_written = price_rows
+            coverage_after_raw = self.store.refresh_data_coverage(
+                stock_id,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+            )
+            post_status = resolve_post_patch_status(
+                gap_plan,
+                latest_date=coverage_after_raw.get("latest_date"),
+                rows_written=price_rows,
+            )
+            coverage_after = self.store.refresh_data_coverage(
+                stock_id,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+                status=post_status.status,
+                suspect_reason=post_status.reason if post_status.status != "patched" else "",
+            )
             valuation = self.client.fetch_market_valuation(stock_id)
             valuation_rows = self.store.upsert_market_valuations([valuation]) if valuation else 0
             revenue = self.client.fetch_monthly_revenue(stock_id)
@@ -91,9 +157,11 @@ class StockSyncService:
             warning_text = f" {' '.join(warning_parts)}" if warning_parts else ""
             message = (
                 f"Synced {rows_written} rows for {stock_id} "
-                f"({len(prices)} prices, {dividend_rows} dividends, "
+                f"({len(prices)} prices from {start_date.isoformat()} to {fetch_end_date.isoformat()}, "
+                f"{dividend_rows} dividends, "
                 f"{valuation_rows} valuation, {revenue_rows} revenue, "
-                f"{financial_rows} financial).{warning_text}"
+                f"{financial_rows} financial). Data gap: {gap_plan.reason} "
+                f"Post-check: {post_status.reason}.{warning_text}"
             )
             return SyncResult(
                 stock_id=stock_id,
@@ -101,6 +169,8 @@ class StockSyncService:
                 started_at=started_at,
                 finished_at=datetime.now(),
                 message=message,
+                gap_plan=gap_plan.to_json(),
+                coverage=coverage_after,
             )
         except Exception as exc:
             status = "failed"
@@ -124,6 +194,7 @@ class StockSyncService:
         *,
         lookback_days: int = 365,
         end_date: date | None = None,
+        target_date: date | None = None,
     ) -> SyncResult:
         """單獨抓三大法人買賣超（近一年、增量）。與主同步分開，使用者要看才按。"""
         stock_id = stock_id.strip()
@@ -131,7 +202,44 @@ class StockSyncService:
             raise ValueError("stock_id is required")
         started_at = datetime.now()
         end_date = end_date or date.today()
-        start_date = end_date - timedelta(days=max(1, lookback_days))
+        target_date = target_date or end_date
+        coverage_before = self.store.refresh_data_coverage(
+            stock_id,
+            DATA_NODE_INSTITUTIONAL,
+            target_date=target_date,
+        )
+        gap_plan = plan_data_gap(
+            stock_id=stock_id,
+            node=DATA_NODE_INSTITUTIONAL,
+            coverage=coverage_before,
+            target_date=target_date,
+            lookback_days=lookback_days,
+            max_patch_business_days=60,
+        )
+        if gap_plan.status == STATUS_CURRENT:
+            message = gap_plan.reason
+            self.store.record_sync_run(
+                kind="institutional",
+                target=stock_id,
+                status="skipped",
+                rows_written=0,
+                started_at=started_at,
+                finished_at=datetime.now(),
+                message=message,
+            )
+            return SyncResult(
+                stock_id=stock_id,
+                rows_written=0,
+                started_at=started_at,
+                finished_at=datetime.now(),
+                message=message,
+                skipped=True,
+                gap_plan=gap_plan.to_json(),
+                coverage=coverage_before,
+            )
+
+        start_date = gap_plan.fetch_start_date or (target_date - timedelta(days=max(1, lookback_days)))
+        fetch_end_date = gap_plan.fetch_end_date or target_date
         rows_written = 0
         status = "success"
         message = ""
@@ -139,19 +247,43 @@ class StockSyncService:
             if hasattr(self.client, "last_warnings"):
                 self.client.last_warnings = []
             known_dates = self.store.get_institutional_dates(stock_id)
+            max_days = max(20, gap_plan.gap_business_days + 5)
             trades = self.client.fetch_institutional_trades(
-                stock_id, start_date, end_date, max_days=300, skip_dates=known_dates,
+                stock_id, start_date, fetch_end_date, max_days=max_days, skip_dates=known_dates,
             )
             rows_written = self.store.upsert_institutional_trades(trades)
+            coverage_after_raw = self.store.refresh_data_coverage(
+                stock_id,
+                DATA_NODE_INSTITUTIONAL,
+                target_date=target_date,
+            )
+            post_status = resolve_post_patch_status(
+                gap_plan,
+                latest_date=coverage_after_raw.get("latest_date"),
+                rows_written=rows_written,
+            )
+            coverage_after = self.store.refresh_data_coverage(
+                stock_id,
+                DATA_NODE_INSTITUTIONAL,
+                target_date=target_date,
+                status=post_status.status,
+                suspect_reason=post_status.reason if post_status.status != "patched" else "",
+            )
             warnings = list(getattr(self.client, "last_warnings", []))
             warn = f" Skipped {len(warnings)} day(s)." if warnings else ""
-            message = f"Synced {rows_written} institutional day(s) for {stock_id}.{warn}"
+            message = (
+                f"Synced {rows_written} institutional day(s) for {stock_id} "
+                f"from {start_date.isoformat()} to {fetch_end_date.isoformat()}. "
+                f"Data gap: {gap_plan.reason} Post-check: {post_status.reason}.{warn}"
+            )
             return SyncResult(
                 stock_id=stock_id,
                 rows_written=rows_written,
                 started_at=started_at,
                 finished_at=datetime.now(),
                 message=message,
+                gap_plan=gap_plan.to_json(),
+                coverage=coverage_after,
             )
         except Exception as exc:
             status = "failed"
