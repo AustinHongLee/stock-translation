@@ -135,7 +135,7 @@ def build_bulk_plan(
     def on_finish(_status) -> None:
         store = ctx.get("store")
         if store is not None:
-            store.delete_json_cache("local_data_v1")
+            store.delete_json_cache("local_data_v2")
 
     return BulkPlan(
         list_stocks=list_stocks,

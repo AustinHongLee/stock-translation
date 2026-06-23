@@ -214,7 +214,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
                 with SQLiteStore(self.server.db_path) as store:
                     freshness = build_sync_freshness_payload(store, stock_id)
-                    target_date = _date_or_none(freshness.get("reference_latest_date"))
+                    target_date = _date_or_none(
+                        freshness.get("target_latest_date") or freshness.get("reference_latest_date")
+                    )
                     if skip_if_current and freshness.get("can_skip_sync"):
                         payload = build_stock_payload(
                             store,
@@ -277,7 +279,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     for stock_id in stock_ids:
                         try:
                             freshness = build_sync_freshness_payload(store, stock_id)
-                            target_date = _date_or_none(freshness.get("reference_latest_date"))
+                            target_date = _date_or_none(
+                                freshness.get("target_latest_date") or freshness.get("reference_latest_date")
+                            )
                             if skip_if_current and freshness.get("can_skip_sync"):
                                 results.append(
                                     {
@@ -343,7 +347,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 with SQLiteStore(self.server.db_path) as store:
                     freshness = build_sync_freshness_payload(store, stock_id)
-                    target_date = _date_or_none(freshness.get("reference_latest_date"))
+                    target_date = _date_or_none(
+                        freshness.get("target_latest_date") or freshness.get("reference_latest_date")
+                    )
                     service = StockSyncService(
                         client=TwseClient(request_interval=0.2),
                         store=store,

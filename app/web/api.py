@@ -17,6 +17,7 @@ from app.analyze.data_gap import (
 )
 from app.analyze.fundamental_trends import build_fundamental_trends
 from app.analyze.historical_frequency import build_historical_frequency_report
+from app.analyze.market_calendar import MarketTargetDate, resolve_market_target_date
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
 from app.analyze.summary import PriceSummary, calculate_price_summary
@@ -47,23 +48,28 @@ from app.store.sqlite_store import SQLiteStore
 
 
 HISTORICAL_VALUATION_DAYS = 365 * 5
-LOCAL_DATA_CACHE_KEY = "local_data_v1"
+LOCAL_DATA_CACHE_KEY = "local_data_v2"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
 
 
-def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
+def build_local_data_payload(
+    store: SQLiteStore,
+    *,
+    today: date | None = None,
+    screener_path: Path = DEFAULT_SCREENER_PATH,
+) -> dict[str, object]:
     """本地資料盤點：每檔已下載的日線檔數、最後資料日、是否過期、是否有法人，及波撐/波壓狀態。"""
-    from datetime import date as _date
-    today = _date.today()
+    today = today or date.today()
     inst_ids = store.get_institutional_stock_ids()
-    reference_dates = _screener_reference_dates(DEFAULT_SCREENER_PATH)
+    reference_targets, default_target = _screener_reference_targets(screener_path, today=today)
     items: list[dict[str, object]] = []
     for sid in sorted(store.get_price_stock_ids()):
         prices = store.get_daily_prices(sid, limit=140)
         if not prices:
             continue
         last = prices[-1].date
-        target_date = reference_dates.get(sid)
+        target = reference_targets.get(sid, default_target)
+        target_date = target.target_date
         price_coverage = _coverage_snapshot(
             store,
             sid,
@@ -103,6 +109,7 @@ def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
             "stale_days": (today - last).days,
             "has_institutional": sid in inst_ids,
             "data_target_date": target_date.isoformat() if target_date else None,
+            "data_target": target.to_json() if target else None,
             "price_gap": price_gap.to_json(),
             "institutional_gap": institutional_gap.to_json(),
             "institutional_last_date": institutional_coverage.get("latest_date"),
@@ -112,7 +119,14 @@ def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
         })
     items = filter_sort_local_data_items(items, sort_key=SORT_STOCK_ID)
     near = [it for it in items if it["sr_status"] in ("接近波撐", "接近波壓")]
-    return {"generated_at": today.isoformat(), "count": len(items), "items": items, "near": near}
+    return {
+        "generated_at": today.isoformat(),
+        "data_target_date": default_target.target_date.isoformat(),
+        "data_target": default_target.to_json(),
+        "count": len(items),
+        "items": items,
+        "near": near,
+    }
 
 
 def build_cached_local_data_payload(
@@ -152,30 +166,32 @@ def build_sync_freshness_payload(
     *,
     screener_path: Path = DEFAULT_SCREENER_PATH,
     lookback_days: int = HISTORICAL_VALUATION_DAYS,
+    today: date | None = None,
 ) -> dict[str, object]:
     stock_id = stock_id.strip()
     if not stock_id:
         raise ValueError("stock_id is required")
 
-    reference = _screener_reference_item(stock_id, screener_path)
-    reference_date = _date_or_none(reference.get("price_date")) if reference else None
+    target = _screener_reference_target(stock_id, screener_path, today=today)
+    reference_date = target.reference_date
+    target_date = target.target_date
     daily_coverage = _coverage_snapshot(
         store,
         stock_id,
         DATA_NODE_DAILY_PRICE,
-        target_date=reference_date,
+        target_date=target_date,
     )
     institutional_coverage = _coverage_snapshot(
         store,
         stock_id,
         DATA_NODE_INSTITUTIONAL,
-        target_date=reference_date,
+        target_date=target_date,
     )
     daily_gap = plan_data_gap(
         stock_id=stock_id,
         node=DATA_NODE_DAILY_PRICE,
         coverage=daily_coverage,
-        target_date=reference_date,
+        target_date=target_date,
         lookback_days=lookback_days,
         max_patch_business_days=45,
     )
@@ -183,19 +199,25 @@ def build_sync_freshness_payload(
         stock_id=stock_id,
         node=DATA_NODE_INSTITUTIONAL,
         coverage=institutional_coverage,
-        target_date=reference_date,
+        target_date=target_date,
         lookback_days=365,
         max_patch_business_days=60,
     )
     local_date = _date_or_none(daily_coverage.get("latest_date"))
     is_current = daily_gap.status == STATUS_CURRENT
-    can_decide = reference_date is not None
-    if is_current:
+    can_decide = target_date is not None
+    if is_current and not target.snapshot_stale:
         status = "current"
-        message = f"{stock_id} 本地日線已到最近收盤 {reference_date.isoformat()}，不需要重新同步。"
+        message = f"{stock_id} 本地日線已到最近收盤 {target_date.isoformat()}，不需要重新同步。"
+    elif is_current:
+        status = "current"
+        message = f"{stock_id} 本地日線已到目標日 {target_date.isoformat()}；雷達快照可能過舊，建議先更新雷達確認。"
+    elif target.snapshot_stale:
+        status = "stale_snapshot"
+        message = f"雷達快照停在 {reference_date.isoformat() if reference_date else '未知日期'}，會以 {target_date.isoformat()} 做補正目標。"
     elif can_decide:
         status = "stale"
-        message = f"{stock_id} 本地日線尚未到最近收盤 {reference_date.isoformat()}。"
+        message = f"{stock_id} 本地日線尚未到最近收盤 {target_date.isoformat()}。"
     else:
         status = "unknown"
         message = "目前沒有最近收盤快照可比對，會照一般同步流程處理。"
@@ -204,10 +226,16 @@ def build_sync_freshness_payload(
         "stock_id": stock_id,
         "status": status,
         "is_current": is_current,
-        "can_skip_sync": is_current,
+        "can_skip_sync": is_current and not target.snapshot_stale,
         "local_latest_date": local_date.isoformat() if local_date else None,
         "reference_latest_date": reference_date.isoformat() if reference_date else None,
-        "reference_source": "value_screener_snapshot" if reference_date else None,
+        "target_latest_date": target_date.isoformat(),
+        "reference_source": "value_screener_snapshot" if reference_date else target.source,
+        "target_source": target.source,
+        "snapshot_stale": target.snapshot_stale,
+        "snapshot_lag_business_days": target.snapshot_lag_business_days,
+        "expected_latest_close_date": target.expected_latest_close_date.isoformat(),
+        "market_latest_date": target.market_latest_date.isoformat() if target.market_latest_date else None,
         "daily_price": {
             "coverage": daily_coverage,
             "gap": daily_gap.to_json(),
@@ -236,31 +264,82 @@ def enrich_screener_with_levels(payload: dict[str, object], store: SQLiteStore) 
     return payload
 
 
-def _screener_reference_item(stock_id: str, path: Path) -> dict[str, object] | None:
+def _screener_reference_target(
+    stock_id: str,
+    path: Path,
+    *,
+    today: date | None,
+) -> MarketTargetDate:
     payload = load_value_screener(path)
     items = payload.get("items")
     if not isinstance(items, list):
-        return None
+        items = []
+    market_latest = _market_latest_price_date(items)
+    snapshot_checked = _payload_generated_date(payload)
+    reference_date: date | None = None
     for item in items:
         if isinstance(item, dict) and str(item.get("stock_id", "")).strip() == stock_id:
-            return item
-    return None
+            reference_date = _date_or_none(item.get("price_date"))
+            break
+    return resolve_market_target_date(
+        reference_date=reference_date,
+        market_latest_date=market_latest,
+        snapshot_checked_date=snapshot_checked,
+        as_of=today,
+    )
 
 
-def _screener_reference_dates(path: Path) -> dict[str, date]:
+def _screener_reference_targets(
+    path: Path,
+    *,
+    today: date | None,
+) -> tuple[dict[str, MarketTargetDate], MarketTargetDate]:
     payload = load_value_screener(path)
     items = payload.get("items")
     if not isinstance(items, list):
-        return {}
-    result: dict[str, date] = {}
+        items = []
+    market_latest = _market_latest_price_date(items)
+    snapshot_checked = _payload_generated_date(payload)
+    default_target = resolve_market_target_date(
+        reference_date=None,
+        market_latest_date=market_latest,
+        snapshot_checked_date=snapshot_checked,
+        as_of=today,
+    )
+    result: dict[str, MarketTargetDate] = {}
     for item in items:
         if not isinstance(item, dict):
             continue
         stock_id = str(item.get("stock_id", "")).strip()
-        price_date = _date_or_none(item.get("price_date"))
-        if stock_id and price_date:
-            result[stock_id] = price_date
-    return result
+        if not stock_id:
+            continue
+        result[stock_id] = resolve_market_target_date(
+            reference_date=_date_or_none(item.get("price_date")),
+            market_latest_date=market_latest,
+            snapshot_checked_date=snapshot_checked,
+            as_of=today,
+        )
+    return result, default_target
+
+
+def _market_latest_price_date(items: list[object]) -> date | None:
+    dates: list[date] = []
+    for item in items:
+        if isinstance(item, dict):
+            price_date = _date_or_none(item.get("price_date"))
+            if price_date:
+                dates.append(price_date)
+    return max(dates) if dates else None
+
+
+def _payload_generated_date(payload: dict[str, object]) -> date | None:
+    value = payload.get("generated_at")
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
+    except ValueError:
+        return _date_or_none(str(value)[:10])
 
 
 def _coverage_snapshot(

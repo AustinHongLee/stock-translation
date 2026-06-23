@@ -125,9 +125,14 @@ class UIThemeTests(unittest.TestCase):
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
         self.assertIn("資料狀態", html)
+        self.assertIn("function localDataTargetSummary", js)
+        self.assertIn("最近收盤目標", js)
+        self.assertIn("補正目標", js)
         self.assertIn("function localDataCoverageLabel", js)
         self.assertIn("dataGapShortLabel", js)
+        self.assertIn("快照待更新", js)
         self.assertIn(".ld-coverage", css)
+        self.assertIn(".ld-snapshot", css)
 
 
 if __name__ == "__main__":

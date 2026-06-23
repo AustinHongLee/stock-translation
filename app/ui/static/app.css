@@ -1523,6 +1523,7 @@ td.down { color: var(--down); font-weight: 600; }
 .ld-ok { color: var(--brand); font-weight: 700; }
 .ld-gap { color: var(--warn); font-weight: 700; }
 .ld-muted { color: var(--muted); font-weight: 600; }
+.ld-snapshot { color: var(--warn); font-weight: 700; }
 
 /* ===== Small screens ===== */
 @media (max-width: 760px) {

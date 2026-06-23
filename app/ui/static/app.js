@@ -5080,8 +5080,12 @@ function renderLocalDataTable(payload) {
   });
   if (elements.localDataSummary) {
     const countText = items.length === allItems.length ? `${allItems.length} 檔` : `${items.length} / ${allItems.length} 檔`;
+    const targetText = localDataTargetSummary(payload);
+    const dateText = targetText
+      ? `檢查日 ${payload.generated_at}，${targetText}`
+      : `檢查日 ${payload.generated_at}`;
     elements.localDataSummary.textContent = allItems.length
-      ? `本地共有 ${countText} 有日線資料（資料日 ${payload.generated_at}）。過期會以紅字標示。`
+      ? `本地共有 ${countText} 有日線資料（${dateText}）。過期會以紅字標示。`
       : "本地還沒有任何已下載的日線資料；到雷達中心按『開始下載』，或開個股按『同步』。";
   }
   tbody.innerHTML = items.length ? items.map((it) => {
@@ -5102,10 +5106,26 @@ function renderLocalDataTable(payload) {
   }).join("") : `<tr><td colspan="8">${stateMessageHTML("empty", "目前沒有符合條件的資料", "換一個篩選條件，或先同步更多股票。", { compact: true })}</td></tr>`;
 }
 
+function localDataTargetSummary(payload) {
+  const target = payload?.data_target || {};
+  const targetDate = payload?.data_target_date || target.target_date || "";
+  if (!targetDate) return "";
+  const label = target.snapshot_stale ? "補正目標" : "最近收盤目標";
+  const staleHint = target.snapshot_stale ? "（快照待更新）" : "";
+  return `${label} ${targetDate}${staleHint}`;
+}
+
 function localDataCoverageLabel(item) {
   const price = dataGapShortLabel(item?.price_gap, "日線");
   const inst = dataGapShortLabel(item?.institutional_gap, "法人");
-  return `<span class="ld-coverage">${price}${inst ? `<br>${inst}` : ""}</span>`;
+  const target = item?.data_target || {};
+  const parts = [];
+  if (target.snapshot_stale) {
+    parts.push(`<span class="ld-snapshot">快照待更新</span>`);
+  }
+  parts.push(price);
+  if (inst) parts.push(inst);
+  return `<span class="ld-coverage">${parts.join("")}</span>`;
 }
 
 function dataGapShortLabel(gap, label) {
