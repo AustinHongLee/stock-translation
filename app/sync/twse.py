@@ -467,7 +467,7 @@ class TwseClient:
     ) -> list[InstitutionalTrade]:
         """由近往遠逐日抓 T86，收集個股近 max_days 個交易日的三大法人買賣超。
 
-        以『按日』查詢（T86 只能按日），跳過週末；遇連續多日無資料即提前停止，
+        以『按日』查詢（T86 只能按日），跳過週末；遇連續多個交易日無資料即提前停止，
         避免長假或資料缺口時無止盡查詢。任何單日失敗只記 warning，不中斷整體。
         """
         stock_id = stock_id.strip()
@@ -477,6 +477,7 @@ class TwseClient:
         consecutive_empty = 0
         first_attempt = True
         skip_dates = skip_dates or set()
+        empty_gate = max(10, min(max_days, 20))
         while day >= start_date and len(results) < max_days:
             if day.weekday() < 5 and day.isoformat() in skip_dates:
                 day -= timedelta(days=1)
@@ -500,7 +501,7 @@ class TwseClient:
                     consecutive_empty += 1
                 if self.request_interval > 0:
                     time.sleep(self.request_interval)
-                if consecutive_empty >= 10:
+                if consecutive_empty >= empty_gate:
                     break
             day -= timedelta(days=1)
         return sorted(results, key=lambda item: item.date)

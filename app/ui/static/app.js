@@ -2319,7 +2319,17 @@ function renderHistoricalWindow(windowStats) {
   const range95 = Array.isArray(windowStats.normal_95_range_percent)
     ? windowStats.normal_95_range_percent.map(formatSignedPercent).join(" ~ ")
     : "--";
+  const hasNormalApproximation = Array.isArray(windowStats.normal_68_range_percent)
+    && Array.isArray(windowStats.normal_95_range_percent)
+    && Number.isFinite(Number(windowStats.normal_positive_area_percent));
   const quantile = `${formatSignedPercent(windowStats.p25_return_percent)} ~ ${formatSignedPercent(windowStats.p75_return_percent)}`;
+  const normalRows = hasNormalApproximation
+    ? `
+        <div><dt>常態 68%</dt><dd>${range68}</dd></div>
+        <div><dt>常態 95%</dt><dd>${range95}</dd></div>
+        <div><dt>常態面積 &gt;0</dt><dd>${formatPlainPercent(windowStats.normal_positive_area_percent)}</dd></div>
+      `
+    : `<div><dt>常態近似</dt><dd>樣本不足不顯示</dd></div>`;
   return `
     <div class="historical-window-card">
       <div class="historical-window-title">
@@ -2330,9 +2340,7 @@ function renderHistoricalWindow(windowStats) {
         <div><dt>正報酬比例</dt><dd>${formatPlainPercent(windowStats.positive_ratio_percent)}</dd></div>
         <div><dt>平均 / 中位</dt><dd>${formatSignedPercent(windowStats.average_return_percent)} / ${formatSignedPercent(windowStats.median_return_percent)}</dd></div>
         <div><dt>中間 50%</dt><dd>${quantile}</dd></div>
-        <div><dt>常態 68%</dt><dd>${range68}</dd></div>
-        <div><dt>常態 95%</dt><dd>${range95}</dd></div>
-        <div><dt>常態面積 &gt;0</dt><dd>${formatPlainPercent(windowStats.normal_positive_area_percent)}</dd></div>
+        ${normalRows}
       </dl>
       <p>${escapeHtml(windowStats.sample_note || "")}</p>
     </div>

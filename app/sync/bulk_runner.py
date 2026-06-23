@@ -65,7 +65,7 @@ def build_bulk_plan(
                 for record in client.fetch_all_dividend_records():
                     by_stock.setdefault(record.stock_id, []).append(record)
                 for sid, recs in by_stock.items():
-                    store.replace_dividend_records(sid, recs)
+                    store.upsert_dividend_records(recs)
             except Exception:  # noqa: BLE001
                 pass
 

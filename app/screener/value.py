@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Protocol
 
 from app.runtime_paths import data_path
+from app.analyze.dividends import (
+    annual_cash_dividends_by_year as _annual_cash_dividends_by_year,
+    dedupe_dividend_records as _dedupe_dividend_records,
+    recent_annual_cash_values as _recent_annual_cash_values,
+)
 from app.analyze.suitability import assess_valuation_suitability
 from app.models import DailyPrice, DividendRecord, StockProfile
 
@@ -515,58 +520,3 @@ def _dividends_by_stock(records: list[DividendRecord]) -> dict[str, list[Dividen
     for record in records:
         by_stock.setdefault(record.stock_id, []).append(record)
     return by_stock
-
-
-def _dedupe_dividend_records(records: list[DividendRecord]) -> list[DividendRecord]:
-    ex_dividend_amounts_by_year: dict[tuple[str, int], list[float]] = {}
-    for record in records:
-        if record.source == "TWSE_TWT49U":
-            ex_dividend_amounts_by_year.setdefault((record.stock_id, record.year), []).append(
-                record.cash_dividend
-            )
-
-    by_key: dict[tuple[str, int, str], DividendRecord] = {}
-    for record in records:
-        if record.source == "TWSE_T187AP45":
-            paid_amounts = ex_dividend_amounts_by_year.get((record.stock_id, record.year), [])
-            if any(abs(record.cash_dividend - paid_amount) < 0.01 for paid_amount in paid_amounts):
-                continue
-        key = (record.stock_id, record.year, record.period)
-        current = by_key.get(key)
-        if current is None or current.source == "TWSE_TWT49U":
-            by_key[key] = record
-    return sorted(by_key.values(), key=lambda item: (item.stock_id, item.year, item.period), reverse=True)
-
-
-def _annual_cash_dividends_by_year(records: list[DividendRecord]) -> dict[int, float]:
-    annual_values: dict[int, float] = {}
-    by_year: dict[int, list[DividendRecord]] = {}
-    for record in records:
-        if record.cash_dividend > 0 or record.stock_dividend > 0:
-            by_year.setdefault(record.year, []).append(record)
-
-    for year, year_records in by_year.items():
-        ex_dividend_records = [item for item in year_records if item.source == "TWSE_TWT49U"]
-        if ex_dividend_records:
-            annual_values[year] = sum(item.cash_dividend for item in year_records)
-            continue
-        annual_records = [item for item in year_records if item.period == "年度"]
-        if annual_records:
-            annual_values[year] = sum(item.cash_dividend for item in annual_records)
-            continue
-        quarter_records = [item for item in year_records if "季" in item.period]
-        if len(quarter_records) >= 4:
-            annual_values[year] = sum(item.cash_dividend for item in quarter_records)
-    return annual_values
-
-
-def _recent_annual_cash_values(
-    annual_cash_by_year: dict[int, float],
-    historical_years: int,
-) -> list[float]:
-    if historical_years < 1:
-        return []
-    return [
-        annual_cash_by_year[year]
-        for year in sorted(annual_cash_by_year, reverse=True)[:historical_years]
-    ]

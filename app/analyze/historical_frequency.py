@@ -14,6 +14,7 @@ from app.analyze.levels import compute_support_resistance
 
 FORWARD_WINDOWS = (5, 20)
 MIN_ROWS = 80
+MIN_NORMAL_SAMPLE_COUNT = 8
 RSI_PERIOD = 14
 KD_PERIOD = 9
 
@@ -70,7 +71,7 @@ def build_historical_frequency_report(
         "rows": len(rows),
         "summary": summary,
         "events": visible_events,
-        "math_note": "常態面積是用樣本平均與標準差估出的鐘形分布面積；分位數更能反映偏態與極端值。",
+        "math_note": "常態近似只在樣本至少 8 次時顯示；它是用樣本平均與標準差估出的鐘形分布面積，分位數更能反映偏態與極端值。",
         "disclaimer": DISCLAIMER,
     }
 
@@ -95,9 +96,8 @@ def summarize_forward_returns(values: Sequence[float]) -> dict[str, Any]:
     positive = sum(1 for value in sample if value > 0)
     negative = sum(1 for value in sample if value < 0)
     flat = count - positive - negative
-    normal_area = _normal_area_above_zero(mean, stdev)
 
-    return {
+    summary = {
         "available": True,
         "count": count,
         "positive_count": positive,
@@ -113,11 +113,18 @@ def summarize_forward_returns(values: Sequence[float]) -> dict[str, Any]:
         "p25_return_percent": _round(_percentile(sample, 25)),
         "p75_return_percent": _round(_percentile(sample, 75)),
         "p90_return_percent": _round(_percentile(sample, 90)),
-        "normal_positive_area_percent": _round(normal_area, 1),
-        "normal_68_range_percent": [_round(mean - stdev), _round(mean + stdev)],
-        "normal_95_range_percent": [_round(mean - 1.96 * stdev), _round(mean + 1.96 * stdev)],
         "sample_note": _sample_note(count),
     }
+    if count >= MIN_NORMAL_SAMPLE_COUNT:
+        normal_area = _normal_area_above_zero(mean, stdev)
+        summary.update(
+            {
+                "normal_positive_area_percent": _round(normal_area, 1),
+                "normal_68_range_percent": [_round(mean - stdev), _round(mean + stdev)],
+                "normal_95_range_percent": [_round(mean - 1.96 * stdev), _round(mean + 1.96 * stdev)],
+            }
+        )
+    return summary
 
 
 def _build_event_payload(

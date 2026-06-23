@@ -16,6 +16,7 @@ from app.models import (
     MonthlyRevenue,
     StockProfile,
 )
+from app.analyze.data_gap import DATA_NODE_DAILY_PRICE, DATA_NODE_INSTITUTIONAL
 from app.analyze.suitability import ValuationSuitability
 from app.news.classifier import contains_forbidden
 from app.store.sqlite_store import SQLiteStore
@@ -69,6 +70,8 @@ class WebApiPayloadTests(unittest.TestCase):
 
                 current = build_sync_freshness_payload(store, "2330", screener_path=screener_path)
                 stale = build_sync_freshness_payload(store, "2303", screener_path=screener_path)
+                self.assertIsNone(store.get_data_coverage("2330", DATA_NODE_DAILY_PRICE))
+                self.assertIsNone(store.get_data_coverage("2330", DATA_NODE_INSTITUTIONAL))
 
         self.assertTrue(current["is_current"])
         self.assertTrue(current["can_skip_sync"])

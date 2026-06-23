@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from app.analyze.dividends import (
+    annual_cash_dividends_by_year as _annual_cash_dividends_by_year,
+    recent_annual_cash_values as _recent_annual_cash_values,
+)
 from app.models import DailyPrice, DividendRecord, MarketValuation
 
 
@@ -238,39 +242,6 @@ def _estimated_historical_yield_points(
             )
         )
     return points
-
-
-def _annual_cash_dividends_by_year(records: list[DividendRecord]) -> dict[int, float]:
-    annual_values: dict[int, float] = {}
-    by_year: dict[int, list[DividendRecord]] = {}
-    for record in records:
-        by_year.setdefault(record.year, []).append(record)
-
-    for year, year_records in by_year.items():
-        ex_dividend_records = [item for item in year_records if item.source == "TWSE_TWT49U"]
-        if ex_dividend_records:
-            annual_values[year] = sum(item.cash_dividend for item in year_records)
-            continue
-        annual_records = [item for item in year_records if item.period == "年度"]
-        if annual_records:
-            annual_values[year] = sum(item.cash_dividend for item in annual_records)
-            continue
-        quarter_records = [item for item in year_records if "季" in item.period]
-        if len(quarter_records) >= 4:
-            annual_values[year] = sum(item.cash_dividend for item in quarter_records)
-    return annual_values
-
-
-def _recent_annual_cash_values(
-    annual_cash_by_year: dict[int, float],
-    historical_years: int,
-) -> list[float]:
-    if historical_years < 1:
-        return []
-    return [
-        annual_cash_by_year[year]
-        for year in sorted(annual_cash_by_year, reverse=True)[:historical_years]
-    ]
 
 
 def _valuation_confidence(

@@ -56,6 +56,18 @@ class T86ParseTest(unittest.TestCase):
         self.assertEqual([t.date for t in trades], [date(2025, 6, 12), date(2025, 6, 13)])
         self.assertEqual([t.total_net for t in trades], [-100, 300])
 
+    def test_window_tolerates_long_empty_stretch_before_trade(self):
+        def fake(url):
+            d = up.parse_qs(up.urlparse(url).query)["date"][0]
+            if d == "20250613":
+                return {"stat": "OK", "data": [_row("2330", "300", "0", "0", "300")]}
+            return {"stat": "no data", "total": 0}
+
+        client = TwseClient(fetch_json=fake, request_interval=0)
+        trades = client.fetch_institutional_trades("2330", date(2025, 6, 1), date(2025, 6, 30), max_days=20)
+
+        self.assertEqual([t.date for t in trades], [date(2025, 6, 13)])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -228,8 +228,10 @@ class SQLiteStore:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(self.path, timeout=5.0)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA busy_timeout = 5000")
+        self.conn.execute("PRAGMA journal_mode = WAL")
         self.ensure_schema()
 
     def close(self) -> None:
@@ -826,6 +828,36 @@ class SQLiteStore:
         status: str | None = None,
         suspect_reason: str = "",
     ) -> dict[str, object]:
+        coverage = self.compute_data_coverage(
+            stock_id,
+            node,
+            target_date=target_date,
+            status=status,
+            suspect_reason=suspect_reason,
+        )
+        return self.record_data_coverage(
+            stock_id=stock_id,
+            node=node,
+            earliest_date=_date_or_none(coverage["earliest_date"]),
+            latest_date=_date_or_none(coverage["latest_date"]),
+            row_count=int(coverage["row_count"]),
+            hole_count=int(coverage["hole_count"]),
+            status=str(coverage["status"]),
+            suspect_reason=str(coverage["suspect_reason"]),
+            target_date=_date_or_none(coverage["target_date"]),
+            last_checked_at=datetime.now(),
+            last_success_at=datetime.now() if coverage["latest_date"] else None,
+        )
+
+    def compute_data_coverage(
+        self,
+        stock_id: str,
+        node: str,
+        *,
+        target_date: date | None = None,
+        status: str | None = None,
+        suspect_reason: str = "",
+    ) -> dict[str, object]:
         table = _coverage_table_for_node(node)
         row = self.conn.execute(
             f"""
@@ -851,19 +883,21 @@ class SQLiteStore:
                 resolved_status = "gap"
             else:
                 resolved_status = "indexed"
-        return self.record_data_coverage(
-            stock_id=stock_id,
-            node=node,
-            earliest_date=earliest,
-            latest_date=latest,
-            row_count=row_count,
-            hole_count=hole_count,
-            status=resolved_status,
-            suspect_reason=suspect_reason,
-            target_date=target_date,
-            last_checked_at=datetime.now(),
-            last_success_at=datetime.now() if latest is not None else None,
-        )
+        now = datetime.now().isoformat(timespec="seconds")
+        return {
+            "stock_id": stock_id,
+            "node": node,
+            "earliest_date": _d(earliest),
+            "latest_date": _d(latest),
+            "row_count": row_count,
+            "hole_count": hole_count,
+            "status": resolved_status,
+            "suspect_reason": suspect_reason,
+            "target_date": _d(target_date),
+            "last_checked_at": now,
+            "last_success_at": now if latest is not None else None,
+            "updated_at": now,
+        }
 
     def add_to_watchlist(self, stock_id: str, *, note: str = "") -> None:
         self.conn.execute(

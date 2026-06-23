@@ -43,9 +43,16 @@ class HistoricalFrequencyTests(unittest.TestCase):
         self.assertEqual(summary["average_return_percent"], 2.0)
         self.assertEqual(summary["median_return_percent"], 2.0)
         self.assertAlmostEqual(summary["stdev_percent"], 2.58, delta=0.01)
-        self.assertEqual(summary["normal_68_range_percent"], [-0.58, 4.58])
-        self.assertEqual(summary["normal_95_range_percent"], [-3.06, 7.06])
-        self.assertAlmostEqual(summary["normal_positive_area_percent"], 78.1, delta=0.1)
+        self.assertNotIn("normal_68_range_percent", summary)
+        self.assertNotIn("normal_positive_area_percent", summary)
+
+    def test_summarize_forward_returns_shows_normal_approximation_only_with_enough_samples(self) -> None:
+        summary = summarize_forward_returns([-2, -1, 0.5, 1, 2, 3, 4, 5])
+
+        self.assertEqual(summary["count"], 8)
+        self.assertEqual(summary["normal_68_range_percent"], [-0.85, 3.97])
+        self.assertEqual(summary["normal_95_range_percent"], [-3.16, 6.29])
+        self.assertAlmostEqual(summary["normal_positive_area_percent"], 74.1, delta=0.1)
 
     def test_report_builds_event_windows_without_forbidden_language(self) -> None:
         report = build_historical_frequency_report(_sample_prices())
@@ -55,7 +62,6 @@ class HistoricalFrequencyTests(unittest.TestCase):
         volume_event = next(item for item in report["events"] if item["key"] == "volume_up_day")
         self.assertGreater(volume_event["completed_sample_count"], 0)
         self.assertEqual([window["days"] for window in volume_event["windows"]], [5, 20])
-        self.assertIn("normal_positive_area_percent", volume_event["windows"][0])
 
         text = json.dumps(report, ensure_ascii=False)
         self.assertEqual(contains_forbidden(text), [])

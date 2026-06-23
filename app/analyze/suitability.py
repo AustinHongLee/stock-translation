@@ -14,6 +14,7 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import date
 
+from app.analyze.dividends import annual_cash_dividends_by_year as _annual_cash_by_year
 from app.models import DividendRecord, FinancialStatement, MarketValuation, StockProfile
 
 # --- 可調門檻常數(對齊《12》3.6) ---------------------------------------
@@ -264,28 +265,6 @@ def _headline(state: str) -> str:
 
 
 # --- 訊號計算(純函數) --------------------------------------------------
-def _annual_cash_by_year(records: list[DividendRecord]) -> dict[int, float]:
-    """沿用 valuation/screener 的年度現金股利彙整邏輯。"""
-    by_year: dict[int, list[DividendRecord]] = {}
-    for record in records:
-        if record.cash_dividend > 0 or record.stock_dividend > 0:
-            by_year.setdefault(record.year, []).append(record)
-    annual: dict[int, float] = {}
-    for year, year_records in by_year.items():
-        ex = [r for r in year_records if r.source == "TWSE_TWT49U"]
-        if ex:
-            annual[year] = sum(r.cash_dividend for r in year_records)
-            continue
-        annual_rows = [r for r in year_records if r.period == "年度"]
-        if annual_rows:
-            annual[year] = sum(r.cash_dividend for r in annual_rows)
-            continue
-        quarters = [r for r in year_records if "季" in r.period]
-        if len(quarters) >= 4:
-            annual[year] = sum(r.cash_dividend for r in quarters)
-    return annual
-
-
 def _current_yield(average_cash, latest_close, market) -> float | None:
     if average_cash and latest_close and latest_close > 0:
         return (average_cash / latest_close) * 100

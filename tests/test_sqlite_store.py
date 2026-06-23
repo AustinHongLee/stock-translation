@@ -191,6 +191,12 @@ class SQLiteStoreTests(unittest.TestCase):
                     ]
                 )
 
+                computed = store.compute_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=date(2026, 6, 22),
+                )
+                self.assertIsNone(store.get_data_coverage("2330", "daily_price"))
                 price_coverage = store.refresh_data_coverage(
                     "2330",
                     "daily_price",
@@ -202,6 +208,8 @@ class SQLiteStoreTests(unittest.TestCase):
                     target_date=date(2026, 6, 23),
                 )
 
+            self.assertEqual(computed["latest_date"], "2026-06-22")
+            self.assertEqual(computed["status"], "current")
             self.assertEqual(price_coverage["latest_date"], "2026-06-22")
             self.assertEqual(price_coverage["row_count"], 2)
             self.assertEqual(price_coverage["status"], "current")

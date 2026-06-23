@@ -162,6 +162,36 @@ class ValueScreenerTests(unittest.TestCase):
         self.assertEqual(payload["amplitude_leaders"][0]["stock_id"], "2303")  # type: ignore[index]
         self.assertEqual(payload["summary"]["low_confidence_rows"], 2)  # type: ignore[index]
 
+    def test_build_value_screener_payload_does_not_double_count_paid_dividend_announcement(self) -> None:
+        payload = build_value_screener_payload(
+            profiles=[StockProfile(stock_id="2330", name="台積電", short_name="台積電")],
+            prices=[
+                DailyPrice(
+                    stock_id="2330",
+                    date=date(2026, 6, 15),
+                    open=100,
+                    high=100,
+                    low=100,
+                    close=100,
+                    volume=100,
+                    trade_value=10_000,
+                    change=0,
+                )
+            ],
+            dividends=[
+                DividendRecord("2330", 115, "除息 06/11", "除息", None, None, 6.0, 0, source="TWSE_TWT49U"),
+                DividendRecord("2330", 115, "年度", "股東會確認", None, None, 6.2, 0, source="TWSE_T187AP45"),
+                DividendRecord("2330", 114, "114", "股東會確認", None, None, 5.0, 0, source="TWSE_T187AP45"),
+            ],
+            generated_at=datetime(2026, 6, 15, tzinfo=timezone.utc),
+            source_start_date=date(2021, 1, 1),
+            source_end_date=date(2026, 6, 15),
+        )
+
+        item = payload["items"][0]  # type: ignore[index]
+        self.assertAlmostEqual(item["average_cash_dividend"], 5.5)
+        self.assertAlmostEqual(item["current_yield_percent"], 5.5)
+
 
 if __name__ == "__main__":
     unittest.main()

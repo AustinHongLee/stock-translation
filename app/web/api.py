@@ -64,12 +64,14 @@ def build_local_data_payload(store: SQLiteStore) -> dict[str, object]:
             continue
         last = prices[-1].date
         target_date = reference_dates.get(sid)
-        price_coverage = store.refresh_data_coverage(
+        price_coverage = _coverage_snapshot(
+            store,
             sid,
             DATA_NODE_DAILY_PRICE,
             target_date=target_date,
         )
-        institutional_coverage = store.refresh_data_coverage(
+        institutional_coverage = _coverage_snapshot(
+            store,
             sid,
             DATA_NODE_INSTITUTIONAL,
             target_date=target_date,
@@ -157,12 +159,14 @@ def build_sync_freshness_payload(
 
     reference = _screener_reference_item(stock_id, screener_path)
     reference_date = _date_or_none(reference.get("price_date")) if reference else None
-    daily_coverage = store.refresh_data_coverage(
+    daily_coverage = _coverage_snapshot(
+        store,
         stock_id,
         DATA_NODE_DAILY_PRICE,
         target_date=reference_date,
     )
-    institutional_coverage = store.refresh_data_coverage(
+    institutional_coverage = _coverage_snapshot(
+        store,
         stock_id,
         DATA_NODE_INSTITUTIONAL,
         target_date=reference_date,
@@ -257,6 +261,20 @@ def _screener_reference_dates(path: Path) -> dict[str, date]:
         if stock_id and price_date:
             result[stock_id] = price_date
     return result
+
+
+def _coverage_snapshot(
+    store: SQLiteStore,
+    stock_id: str,
+    node: str,
+    *,
+    target_date: date | None,
+) -> dict[str, object]:
+    return store.compute_data_coverage(
+        stock_id,
+        node,
+        target_date=target_date,
+    )
 
 
 def build_value_screener_payload(path: Path = DEFAULT_SCREENER_PATH) -> dict[str, object]:

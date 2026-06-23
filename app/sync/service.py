@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from app.analyze.dividends import dedupe_dividend_records as _dedupe_dividend_records
 from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     DATA_NODE_INSTITUTIONAL,
     STATUS_CURRENT,
     plan_data_gap,
+    previous_business_day,
     resolve_post_patch_status,
 )
-from app.models import DividendRecord
 from app.store.sqlite_store import SQLiteStore
 from app.sync.twse import TwseClient
 
@@ -48,7 +49,7 @@ class StockSyncService:
 
         started_at = datetime.now()
         end_date = end_date or date.today()
-        target_date = target_date or end_date
+        target_date = target_date or previous_business_day(end_date)
         coverage_before = self.store.refresh_data_coverage(
             stock_id,
             DATA_NODE_DAILY_PRICE,
@@ -113,7 +114,7 @@ class StockSyncService:
                 except Exception as exc:
                     dividend_warnings.append(f"Skipped historical dividends: {exc}")
             dividends = _dedupe_dividend_records(dividends)
-            dividend_rows = self.store.replace_dividend_records(stock_id, dividends)
+            dividend_rows = self.store.upsert_dividend_records(dividends)
 
             prices = self.client.fetch_daily_prices(stock_id, start_date, fetch_end_date)
             price_warnings = list(getattr(self.client, "last_warnings", []))
@@ -202,7 +203,7 @@ class StockSyncService:
             raise ValueError("stock_id is required")
         started_at = datetime.now()
         end_date = end_date or date.today()
-        target_date = target_date or end_date
+        target_date = target_date or previous_business_day(end_date)
         coverage_before = self.store.refresh_data_coverage(
             stock_id,
             DATA_NODE_INSTITUTIONAL,
@@ -299,25 +300,3 @@ class StockSyncService:
                 finished_at=datetime.now(),
                 message=message,
             )
-
-
-def _dedupe_dividend_records(records: list[DividendRecord]) -> list[DividendRecord]:
-    ex_dividend_amounts_by_year: dict[tuple[str, int], list[float]] = {}
-    for record in records:
-        if record.source == "TWSE_TWT49U":
-            ex_dividend_amounts_by_year.setdefault(
-                (record.stock_id, record.year),
-                [],
-            ).append(record.cash_dividend)
-
-    by_key: dict[tuple[str, int, str], DividendRecord] = {}
-    for record in records:
-        if record.source == "TWSE_T187AP45":
-            paid_amounts = ex_dividend_amounts_by_year.get((record.stock_id, record.year), [])
-            if any(abs(record.cash_dividend - paid_amount) < 0.01 for paid_amount in paid_amounts):
-                continue
-        key = (record.stock_id, record.year, record.period)
-        current = by_key.get(key)
-        if current is None or current.source == "TWSE_TWT49U":
-            by_key[key] = record
-    return sorted(by_key.values(), key=lambda item: (item.year, item.period), reverse=True)

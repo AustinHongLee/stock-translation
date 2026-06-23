@@ -189,6 +189,37 @@ class StockSyncServiceTests(unittest.TestCase):
                 self.assertEqual(store.get_monthly_revenues("2330")[0].year_month, "2026-05")
                 self.assertEqual(store.get_latest_financial_statement("2330").eps, 22.08)  # type: ignore[union-attr]
 
+    def test_sync_stock_history_preserves_existing_dividend_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_dividend_records(
+                    [
+                        DividendRecord(
+                            stock_id="2330",
+                            year=114,
+                            period="年度",
+                            status="除息",
+                            board_date=None,
+                            shareholder_meeting_date=None,
+                            cash_dividend=12.0,
+                            stock_dividend=0.0,
+                            source="TWSE_TWT49U",
+                        )
+                    ]
+                )
+                service = StockSyncService(client=FakeClient(), store=store)  # type: ignore[arg-type]
+
+                service.sync_stock_history(
+                    "2330",
+                    lookback_days=7,
+                    end_date=date(2026, 6, 12),
+                )
+
+                periods = {(item.year, item.period) for item in store.get_dividend_records("2330")}
+                self.assertIn((114, "年度"), periods)
+                self.assertIn((115, "第1季"), periods)
+
     def test_sync_stock_history_reports_skipped_price_months(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"
@@ -233,6 +264,34 @@ class StockSyncServiceTests(unittest.TestCase):
             self.assertFalse(result.skipped)
             self.assertEqual(result.gap_plan["fetch_start_date"], "2026-06-19")  # type: ignore[index]
             self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
+
+    def test_sync_stock_history_defaults_weekend_target_to_previous_business_day(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = RecordingClient()
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date(2026, 6, 18),
+                            open=100,
+                            high=101,
+                            low=99,
+                            close=100,
+                            volume=10,
+                        )
+                    ]
+                )
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "2330",
+                    lookback_days=365,
+                    end_date=date(2026, 6, 21),
+                )
+
+            self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 19), date(2026, 6, 19))])
+            self.assertEqual(result.gap_plan["target_date"], "2026-06-19")  # type: ignore[index]
 
     def test_sync_institutional_uses_gap_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
