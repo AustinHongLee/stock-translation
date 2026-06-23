@@ -127,6 +127,9 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function renderHistoricalFrequency", js)
         self.assertIn("normal_positive_area_percent", js)
         self.assertIn("不代表後續走勢", js)
+        self.assertIn("鐘形假設", js)
+        self.assertIn("不當成未來機率", js)
+        self.assertNotIn("常態面積", js)
         self.assertIn(".historical-frequency-grid", css)
         self.assertIn(".historical-current-note", css)
 

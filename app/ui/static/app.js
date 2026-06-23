@@ -2329,11 +2329,15 @@ function renderHistoricalWindow(windowStats) {
   const quantile = `${formatSignedPercent(windowStats.p25_return_percent)} ~ ${formatSignedPercent(windowStats.p75_return_percent)}`;
   const normalRows = hasNormalApproximation
     ? `
-        <div><dt>常態 68%</dt><dd>${range68}</dd></div>
-        <div><dt>常態 95%</dt><dd>${range95}</dd></div>
-        <div><dt>常態面積 &gt;0</dt><dd>${formatPlainPercent(windowStats.normal_positive_area_percent)}</dd></div>
+        <div><dt>鐘形假設 68%</dt><dd>${range68}</dd></div>
+        <div><dt>鐘形假設 95%</dt><dd>${range95}</dd></div>
+        <div><dt>鐘形假設 &gt;0</dt><dd>${formatPlainPercent(windowStats.normal_positive_area_percent)}</dd></div>
       `
-    : `<div><dt>常態近似</dt><dd>樣本不足不顯示</dd></div>`;
+    : `<div><dt>鐘形假設</dt><dd>樣本不足不顯示</dd></div>`;
+  const notes = [
+    windowStats.sample_note || "",
+    hasNormalApproximation ? "鐘形假設只做粗略對照，不當成未來機率。" : "",
+  ].filter(Boolean).join(" ");
   return `
     <div class="historical-window-card">
       <div class="historical-window-title">
@@ -2346,7 +2350,7 @@ function renderHistoricalWindow(windowStats) {
         <div><dt>中間 50%</dt><dd>${quantile}</dd></div>
         ${normalRows}
       </dl>
-      <p>${escapeHtml(windowStats.sample_note || "")}</p>
+      <p>${escapeHtml(notes)}</p>
     </div>
   `;
 }

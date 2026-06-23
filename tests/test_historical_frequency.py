@@ -58,6 +58,7 @@ class HistoricalFrequencyTests(unittest.TestCase):
         report = build_historical_frequency_report(_sample_prices())
 
         self.assertTrue(report["available"])
+        self.assertIn("不是未來機率", report["math_note"])
         self.assertGreaterEqual(len(report["events"]), 1)
         volume_event = next(item for item in report["events"] if item["key"] == "volume_up_day")
         self.assertGreater(volume_event["completed_sample_count"], 0)

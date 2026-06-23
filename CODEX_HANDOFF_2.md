@@ -85,6 +85,7 @@ python -m compileall app tests              # 編譯掃描
   - 2026-06-23 驗證（A3 股票股利口徑防誤讀）：不把 TWSE TWT49U「權值」當成每股股票股利；TWT49U 歷史除權息紀錄 note 改為「僅使用息值作現金股利，權值不是每股股票股利」，個股 valuation summary/API/UI/Excel 同步顯示股票股利口徑說明，雷達 source 標成 `TWSE TWT49U 息值`。`RISK_REVIEW_2026-06-23.md` 將 A3 更新為已緩解；完全修正仍需另接可追溯每股股票股利的官方公告來源。已跑 `python -m unittest tests.test_valuation_analysis tests.test_twse_adapter tests.test_ui_theme tests.test_excel_export tests.test_web_api`（46 OK）、`node --check app/ui/static/app.js`、`python -m py_compile app/analyze/valuation.py app/sync/twse.py app/web/api.py app/exporters/excel.py`。
   - 2026-06-23 驗證（G1 更新流程文案）：雷達中心 header/status 明確寫成「更新雷達只更新排行榜快照（最近收盤、股利、殖利率），不補個股日線或法人」；本地資料頁與全市場資料下載說明明確寫成「本機資料庫（日線、三大法人、波段關卡）」且不重建雷達排行榜快照。`RISK_REVIEW_2026-06-23.md` 將 G1 更新為已修。已跑 `python -m unittest tests.test_ui_theme`（12 OK）、`node --check app/ui/static/app.js`。
   - 2026-06-23 驗證（歷史頻率措辭降風險）：個股頁歷史頻率卡片將「最近一日符合」改為「近期出現」，且當近期命中時加上「不代表後續走勢」旁註；`RISK_REVIEW_2026-06-23.md` 將 E2 更新為部分修。
+  - 2026-06-23 驗證（歷史頻率鐘形假設降風險）：歷史頻率卡片的對外標籤由「常態 68% / 常態 95% / 常態面積 >0」改為「鐘形假設 68% / 95% / >0」，每個有鐘形假設的視窗卡片加「不當成未來機率」旁註；`math_note` 也明確寫不是未來機率。`RISK_REVIEW_2026-06-23.md` 將 E2 更新為已修。已跑 `python -m unittest tests.test_historical_frequency tests.test_ui_theme tests.test_web_api`（27 OK）、`node --check app/ui/static/app.js`、`python -m py_compile app/analyze/historical_frequency.py`。
 
 ### C. 深化既有功能（挑著做，研究型先出文件）
 

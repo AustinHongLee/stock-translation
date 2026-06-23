@@ -71,7 +71,7 @@ def build_historical_frequency_report(
         "rows": len(rows),
         "summary": summary,
         "events": visible_events,
-        "math_note": "常態近似只在樣本至少 8 次時顯示；它是用樣本平均與標準差估出的鐘形分布面積，分位數更能反映偏態與極端值。",
+        "math_note": "鐘形假設只在樣本至少 8 次時顯示；它是用樣本平均與標準差做粗略對照，不是未來機率，分位數更能反映偏態與極端值。",
         "disclaimer": DISCLAIMER,
     }
 
