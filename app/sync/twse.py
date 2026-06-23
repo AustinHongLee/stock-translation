@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.analyze.twse_calendar import is_twse_trading_day
 from app.models import (
     DailyPrice,
     DividendRecord,
@@ -467,7 +468,7 @@ class TwseClient:
     ) -> list[InstitutionalTrade]:
         """由近往遠逐日抓 T86，收集個股近 max_days 個交易日的三大法人買賣超。
 
-        以『按日』查詢（T86 只能按日），跳過週末；遇連續多個交易日無資料即提前停止，
+        以『按日』查詢（T86 只能按日），只查台股交易日；遇連續多個交易日無資料即提前停止，
         避免長假或資料缺口時無止盡查詢。任何單日失敗只記 warning，不中斷整體。
         """
         stock_id = stock_id.strip()
@@ -479,10 +480,11 @@ class TwseClient:
         skip_dates = skip_dates or set()
         empty_gate = max(10, min(max_days, 20))
         while day >= start_date and len(results) < max_days:
-            if day.weekday() < 5 and day.isoformat() in skip_dates:
+            trading_day = is_twse_trading_day(day)
+            if trading_day and day.isoformat() in skip_dates:
                 day -= timedelta(days=1)
                 continue
-            if day.weekday() < 5:  # 一～五才可能是交易日
+            if trading_day:
                 try:
                     trade = self.fetch_institutional_trade_for_stock_on(stock_id, day)
                 except TwseError as exc:

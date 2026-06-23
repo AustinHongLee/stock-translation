@@ -68,6 +68,22 @@ class T86ParseTest(unittest.TestCase):
 
         self.assertEqual([t.date for t in trades], [date(2025, 6, 13)])
 
+    def test_window_skips_official_twse_holidays(self):
+        requested_dates: list[str] = []
+
+        def fake(url):
+            d = up.parse_qs(up.urlparse(url).query)["date"][0]
+            requested_dates.append(d)
+            if d == "20260211":
+                return {"stat": "OK", "data": [_row("2330", "300", "0", "0", "300")]}
+            return {"stat": "no data", "total": 0}
+
+        client = TwseClient(fetch_json=fake, request_interval=0)
+        trades = client.fetch_institutional_trades("2330", date(2026, 2, 11), date(2026, 2, 23))
+
+        self.assertEqual([t.date for t in trades], [date(2026, 2, 11)])
+        self.assertEqual(requested_dates, ["20260223", "20260211"])
+
 
 if __name__ == "__main__":
     unittest.main()
