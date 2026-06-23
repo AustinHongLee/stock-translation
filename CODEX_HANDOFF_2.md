@@ -88,6 +88,7 @@ python -m compileall app tests              # 編譯掃描
   - 2026-06-23 驗證（歷史頻率鐘形假設降風險）：歷史頻率卡片的對外標籤由「常態 68% / 常態 95% / 常態面積 >0」改為「鐘形假設 68% / 95% / >0」，每個有鐘形假設的視窗卡片加「不當成未來機率」旁註；`math_note` 也明確寫不是未來機率。`RISK_REVIEW_2026-06-23.md` 將 E2 更新為已修。已跑 `python -m unittest tests.test_historical_frequency tests.test_ui_theme tests.test_web_api`（27 OK）、`node --check app/ui/static/app.js`、`python -m py_compile app/analyze/historical_frequency.py`。
   - 2026-06-23 驗證（SUSPECT 來源延遲寬限）：`resolve_post_patch_status()` 新增 1 個台股交易日的來源發布寬限；若補正有寫入但最新資料只差目標 1 個交易日，狀態維持 `source_pending`，超過寬限才標 `suspect`，避免半日市/來源晚出時誤報可疑。`RISK_REVIEW_2026-06-23.md` 將 B5 更新為已修。已跑 `python -m unittest tests.test_data_gap`（6 OK）、`python -m py_compile app/analyze/data_gap.py`。
   - 2026-06-23 驗證（法人 T86 交易日曆驅動）：`fetch_institutional_trades()` 改用 TWSE 交易日曆，只查台股交易日；春節等長假不再被當成連續空日，也不會對休市日多打 T86。`RISK_REVIEW_2026-06-23.md` 將 D1 更新為已修。已跑 `python -m unittest tests.test_twse_institutional tests.test_twse_calendar tests.test_sync_service`（18 OK）、`python -m py_compile app/sync/twse.py app/analyze/twse_calendar.py`。
+  - 2026-06-23 驗證（T187AP45 股利組成註記）：T187AP45 公告若含法定盈餘公積/資本公積現金，或公積轉增資，`DividendRecord.note` 會揭露組成口徑；計算仍保留總現金分派，不偷偷改公式。`RISK_REVIEW_2026-06-23.md` 將 A5 更新為已修。已跑 `python -m unittest tests.test_twse_adapter tests.test_valuation_analysis tests.test_excel_export tests.test_web_api tests.test_ui_theme`（47 OK）、`python -m py_compile app/sync/twse.py`。
 
 ### C. 深化既有功能（挑著做，研究型先出文件）
 

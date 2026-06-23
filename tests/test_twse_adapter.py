@@ -238,6 +238,38 @@ class TwseClientTests(unittest.TestCase):
         self.assertEqual(records[0].year, 115)
         self.assertEqual(records[0].cash_dividend, 2.6)
 
+    def test_fetch_dividend_records_notes_distribution_components(self) -> None:
+        def fake_fetch_json(url: str) -> object:
+            return [
+                {
+                    "出表日期": "1150614",
+                    "公司代號": "2303",
+                    "決議（擬議）進度": "股東會確認",
+                    "股利年度": "114",
+                    "股利所屬年(季)度": "年度",
+                    "董事會（擬議）股利分派日": "1150225",
+                    "股東會日期": "1150527",
+                    "股東配發-盈餘分配之現金股利(元/股)": "2.60000000",
+                    "股東配發-法定盈餘公積發放之現金(元/股)": "0.10000000",
+                    "股東配發-資本公積發放之現金(元/股)": "0.20000000",
+                    "股東配發-盈餘轉增資配股(元/股)": "0.30000000",
+                    "股東配發-法定盈餘公積轉增資配股(元/股)": "0.00000000",
+                    "股東配發-資本公積轉增資配股(元/股)": "0.05000000",
+                    "備註": "無。",
+                }
+            ]
+
+        client = TwseClient(fetch_json=fake_fetch_json)
+        records = client.fetch_dividend_records("2303")
+
+        self.assertAlmostEqual(records[0].cash_dividend, 2.9)
+        self.assertAlmostEqual(records[0].stock_dividend, 0.35)
+        self.assertIn("現金股利口徑", records[0].note)
+        self.assertIn("法定盈餘公積現金 0.1", records[0].note)
+        self.assertIn("資本公積現金 0.2", records[0].note)
+        self.assertIn("股票股利口徑", records[0].note)
+        self.assertNotIn("無。", records[0].note)
+
     def test_fetch_historical_dividend_records_maps_ex_dividend_cash(self) -> None:
         def fake_fetch_json(url: str) -> object:
             self.assertIn("TWT49U", url)

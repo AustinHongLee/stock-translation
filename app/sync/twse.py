@@ -814,30 +814,39 @@ def _find_company_row(payload: list[Any], stock_id: str) -> dict[str, Any] | Non
 
 
 def _dividend_record_from_row(stock_id: str, row: dict[str, Any]) -> DividendRecord:
-    cash_dividend = (
+    earnings_cash = (
         _parse_optional_float(row.get("股東配發-盈餘分配之現金股利(元/股)")) or 0.0
     )
-    cash_dividend += (
+    legal_reserve_cash = (
         _parse_optional_float(row.get("股東配發-法定盈餘公積發放之現金(元/股)")) or 0.0
     )
-    cash_dividend += (
+    capital_reserve_cash = (
         _parse_optional_float(row.get("股東配發-資本公積發放之現金(元/股)")) or 0.0
     )
-    stock_dividend = (
+    cash_dividend = earnings_cash + legal_reserve_cash + capital_reserve_cash
+    earnings_stock = (
         _parse_optional_float(row.get("股東配發-盈餘轉增資配股(元/股)")) or 0.0
     )
-    stock_dividend += (
+    legal_reserve_stock = (
         _parse_optional_float(row.get("股東配發-法定盈餘公積轉增資配股(元/股)")) or 0.0
     )
-    stock_dividend += (
+    capital_reserve_stock = (
         _parse_optional_float(row.get("股東配發-資本公積轉增資配股(元/股)")) or 0.0
     )
+    stock_dividend = earnings_stock + legal_reserve_stock + capital_reserve_stock
     period = str(row.get("股利所屬年(季)度", "")).strip()
     declared_year = int(str(row.get("股利年度", "0")).strip())
     board_date = _parse_optional_roc_compact_date(row.get("董事會（擬議）股利分派日"))
     distribution_year = declared_year
     if board_date and board_date.year - 1911 > declared_year:
         distribution_year = board_date.year - 1911
+    raw_note = str(row.get("備註", "")).strip()
+    component_notes = [
+        _cash_distribution_component_note(earnings_cash, legal_reserve_cash, capital_reserve_cash),
+        _stock_distribution_component_note(earnings_stock, legal_reserve_stock, capital_reserve_stock),
+    ]
+    if any(component_notes) and raw_note in {"無", "無。"}:
+        raw_note = ""
 
     return DividendRecord(
         stock_id=stock_id,
@@ -849,8 +858,57 @@ def _dividend_record_from_row(stock_id: str, row: dict[str, Any]) -> DividendRec
         cash_dividend=cash_dividend,
         stock_dividend=stock_dividend,
         source_updated_at=_parse_optional_roc_compact_date(row.get("出表日期")),
-        note=str(row.get("備註", "")).strip(),
+        note=_join_notes(raw_note, *component_notes),
     )
+
+
+def _cash_distribution_component_note(
+    earnings_cash: float, legal_reserve_cash: float, capital_reserve_cash: float
+) -> str:
+    if legal_reserve_cash <= 0 and capital_reserve_cash <= 0:
+        return ""
+    return _distribution_component_note(
+        "現金股利口徑",
+        (
+            ("盈餘分配現金", earnings_cash),
+            ("法定盈餘公積現金", legal_reserve_cash),
+            ("資本公積現金", capital_reserve_cash),
+        ),
+    )
+
+
+def _stock_distribution_component_note(
+    earnings_stock: float, legal_reserve_stock: float, capital_reserve_stock: float
+) -> str:
+    if legal_reserve_stock <= 0 and capital_reserve_stock <= 0:
+        return ""
+    return _distribution_component_note(
+        "股票股利口徑",
+        (
+            ("盈餘轉增資", earnings_stock),
+            ("法定盈餘公積轉增資", legal_reserve_stock),
+            ("資本公積轉增資", capital_reserve_stock),
+        ),
+    )
+
+
+def _distribution_component_note(title: str, components: tuple[tuple[str, float], ...]) -> str:
+    parts = [
+        f"{label} {_format_per_share_amount(value)}"
+        for label, value in components
+        if value > 0
+    ]
+    if not parts:
+        return ""
+    return f"{title}：含{'、'.join(parts)} 元/股。"
+
+
+def _format_per_share_amount(value: float) -> str:
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _join_notes(*notes: str) -> str:
+    return " ".join(note for note in notes if note)
 
 
 def _monthly_revenue_from_row(stock_id: str, row: dict[str, Any]) -> MonthlyRevenue:

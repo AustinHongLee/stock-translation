@@ -18,7 +18,7 @@
 | A1 | 已修 | 股利年度彙整抽到 `app/analyze/dividends.py`，已除息 TWT49U 與公告 T187AP45 不再重複加總。 |
 | A4 | 已修 | 單檔同步改用 `upsert_dividend_records()`，增量同步不再清空既有歷史股利。 |
 | A2 | 已修 | 數字年度與 ROC 季度可正確歸戶。 |
-| A5 | 已緩解 | 股利彙整共用同一套去重/年度歸戶，避免公積現金造成重複估算；來源定義仍需後續更精細註記。 |
+| A5 | 已修 | 股利彙整共用同一套去重/年度歸戶；T187AP45 若含法定盈餘公積/資本公積現金或轉增資，會在股利註記揭露組成口徑。 |
 | C1/C2 | 已修 | SQLite 已加 WAL / `busy_timeout`；`/api/local-data`、`/api/sync/freshness` 改為唯讀覆蓋率計算，不在 GET 內寫 coverage。 |
 | B1/B4 | 已修 | 新增 `MarketTargetDate`；本地資料、freshness、同步、法人同步都用 `target_latest_date`，舊快照不再靜默假裝最新。 |
 | B2 | 已修 | 週末與 TWSE 官方休市日 target 會退到最近台股交易日；盤中/尚未收盤時沿用最近完成收盤日。 |
