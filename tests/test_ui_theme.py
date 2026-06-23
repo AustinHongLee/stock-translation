@@ -86,6 +86,17 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn(".compare-table", css)
         self.assertIn(".compare-pill", css)
 
+    def test_stock_page_exposes_historical_frequency_backtest(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="historicalFrequency"', html)
+        self.assertIn("payload.historical_frequency", js)
+        self.assertIn("function renderHistoricalFrequency", js)
+        self.assertIn("normal_positive_area_percent", js)
+        self.assertIn(".historical-frequency-grid", css)
+
 
 if __name__ == "__main__":
     unittest.main()

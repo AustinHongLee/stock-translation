@@ -100,9 +100,10 @@ python -m compileall app tests              # 編譯掃描
 
 > 回應之前的「玄學」需求，但**用歷史事實呈現、絕不變成預測**。
 
-- [ ] 「歷史頻率」而非勝率：例如「近一年內，KD 低檔黃金交叉出現 N 次；當時其後 5／20 個交易日的**漲跌分布**為 …」——**純歷史統計**，明確標「過去不代表未來、不保證重演、不是買賣建議」。
-- [ ] 先寫設計（門檻、視窗、措辭、免責），再做純函數 + 測試；UI 收在教學/進階區。
+- [x] 「歷史頻率」而非勝率：例如「近一年內，KD 低檔黃金交叉出現 N 次；當時其後 5／20 個交易日的**漲跌分布**為 …」——**純歷史統計**，明確標「過去不代表未來、不保證重演、不是買賣建議」。
+- [x] 先寫設計（門檻、視窗、措辭、免責），再做純函數 + 測試；UI 收在教學/進階區。
 - **驗收**：輸出全是歷史事實 + 強免責；`contains_forbidden()` 對所有對外字串回空；有測試。
+  - 2026-06-23 驗證（事實頻率回測）：新增 `app/analyze/historical_frequency.py` 純函數，固定 KD 低檔交叉、RSI 低位回升、收回月線、接近波撐、爆量收紅、高檔過熱等事件，只統計事件後 5/20 個交易日的歷史報酬分布；輸出樣本數、正報酬比例、平均/中位數、分位數、樣本標準差、常態 68%/95% 區間與常態面積 >0，UI 收在個股頁「歷史頻率回測」摺疊區並標示「樣本分布 · 非預測」。已跑 `python -m unittest discover -s tests`（204 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、`git diff --check`、共通紅線掃描 `NO_MATCHES`、2330 `historical_frequency` payload `contains_forbidden()` 回 `[]`。前端截圖驗證：桌機 `C:/Users/a0976/AppData/Local/Temp/stock-historical-frequency-desktop.png`；手機 390px `C:/Users/a0976/AppData/Local/Temp/stock-historical-frequency-mobile.png`，手機 `overflowX=0`。
 
 ---
 

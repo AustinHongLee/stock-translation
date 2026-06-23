@@ -204,6 +204,7 @@ const elements = {
   roaValue: document.querySelector("#roaValue"),
   financialRows: document.querySelector("#financialRows"),
   fundamentalTrends: document.querySelector("#fundamentalTrends"),
+  historicalFrequency: document.querySelector("#historicalFrequency"),
   priceChartTitle: document.querySelector("#priceChartTitle"),
   dateRange: document.querySelector("#dateRange"),
   chartRangeBtn: document.querySelector("#chartRangeBtn"),
@@ -1892,6 +1893,7 @@ function renderStock(payload, fallbackStockId) {
   renderCompanyBrief(payload.brief);
   renderRevenue(payload.revenue_summary, payload.monthly_revenues || []);
   renderFinancial(payload.financial_summary, payload.financial_statements || [], payload.fundamental_trends);
+  renderHistoricalFrequency(payload.historical_frequency);
   renderValidation(payload.validation);
   renderHealthReport(payload.report);
   renderValuation(payload.valuation, payload.dividends || [], summary, payload.quote || {});
@@ -2124,6 +2126,91 @@ function renderFundamentalTrendCard(item) {
       </div>
       ${renderMiniTrendSvg(points, item.label || "")}
     </article>
+  `;
+}
+
+function renderHistoricalFrequency(report) {
+  const el = elements.historicalFrequency;
+  if (!el) return;
+  if (!report || !report.available) {
+    el.innerHTML = stateMessageHTML("empty", "歷史樣本待補", report?.summary || "同步更多日線後會顯示事件後 5/20 日的歷史分布。", {
+      compact: true,
+      className: "historical-frequency-empty",
+    });
+    return;
+  }
+  const events = Array.isArray(report.events) ? report.events : [];
+  el.innerHTML = `
+    <div class="historical-frequency-head">
+      <div>
+        <strong>${escapeHtml(report.title || "歷史頻率回測")}</strong>
+        <p>${escapeHtml(report.summary || "")}</p>
+      </div>
+      <span>${escapeHtml(report.start_date || "--")} → ${escapeHtml(report.end_date || "--")}</span>
+    </div>
+    ${events.length ? `<div class="historical-frequency-grid">${events.map(renderHistoricalFrequencyEvent).join("")}</div>` : stateMessageHTML("empty", "樣本內沒有命中事件", "目前這段資料沒有足夠事件可統計。", { compact: true, className: "historical-frequency-empty" })}
+    <p class="historical-frequency-note">${escapeHtml(report.math_note || "")}</p>
+    <p class="disclaimer">${escapeHtml(report.disclaimer || "")}</p>
+  `;
+}
+
+function renderHistoricalFrequencyEvent(event) {
+  const windows = Array.isArray(event.windows) ? event.windows : [];
+  const current = event.current_match ? `<span class="historical-current">最近一日符合</span>` : "";
+  const latest = event.latest_trigger_date ? `最近樣本 ${event.latest_trigger_date}` : "樣本內未命中";
+  return `
+    <article class="historical-event-card">
+      <div class="historical-event-head">
+        <div>
+          <strong>${escapeHtml(event.label || "--")}</strong>
+          <p>${escapeHtml(event.description || "")}</p>
+        </div>
+        ${current}
+      </div>
+      <div class="historical-event-meta">
+        <span>觸發 ${formatInteger(event.trigger_count || 0)} 次</span>
+        <span>${escapeHtml(latest)}</span>
+      </div>
+      <div class="historical-window-grid">
+        ${windows.map(renderHistoricalWindow).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderHistoricalWindow(windowStats) {
+  const days = Number(windowStats.days || 0);
+  if (!windowStats.available) {
+    return `
+      <div class="historical-window-card is-empty">
+        <strong>${days} 日後</strong>
+        <p>完成樣本不足</p>
+      </div>
+    `;
+  }
+  const range68 = Array.isArray(windowStats.normal_68_range_percent)
+    ? windowStats.normal_68_range_percent.map(formatSignedPercent).join(" ~ ")
+    : "--";
+  const range95 = Array.isArray(windowStats.normal_95_range_percent)
+    ? windowStats.normal_95_range_percent.map(formatSignedPercent).join(" ~ ")
+    : "--";
+  const quantile = `${formatSignedPercent(windowStats.p25_return_percent)} ~ ${formatSignedPercent(windowStats.p75_return_percent)}`;
+  return `
+    <div class="historical-window-card">
+      <div class="historical-window-title">
+        <strong>${days} 日後</strong>
+        <span>${formatInteger(windowStats.count)} 次</span>
+      </div>
+      <dl>
+        <div><dt>正報酬比例</dt><dd>${formatPlainPercent(windowStats.positive_ratio_percent)}</dd></div>
+        <div><dt>平均 / 中位</dt><dd>${formatSignedPercent(windowStats.average_return_percent)} / ${formatSignedPercent(windowStats.median_return_percent)}</dd></div>
+        <div><dt>中間 50%</dt><dd>${quantile}</dd></div>
+        <div><dt>常態 68%</dt><dd>${range68}</dd></div>
+        <div><dt>常態 95%</dt><dd>${range95}</dd></div>
+        <div><dt>常態面積 &gt;0</dt><dd>${formatPlainPercent(windowStats.normal_positive_area_percent)}</dd></div>
+      </dl>
+      <p>${escapeHtml(windowStats.sample_note || "")}</p>
+    </div>
   `;
 }
 

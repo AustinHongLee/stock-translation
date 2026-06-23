@@ -172,6 +172,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertGreater(payload["financial_statements"][0]["roe_percent"], 9)  # type: ignore[index]
         self.assertEqual(payload["fundamental_trends"]["sample_quarters"], 1)  # type: ignore[index]
         self.assertEqual(payload["fundamental_trends"]["series"][0]["label"], "毛利率")  # type: ignore[index]
+        self.assertIn("historical_frequency", payload)
         self.assertEqual(len(payload["report"]["sections"]), 6)  # type: ignore[index]
         self.assertEqual(len(payload["validation"]["items"]), 3)  # type: ignore[index]
         self.assertEqual(payload["dividends"][0]["cash_dividend"], 7.0)  # type: ignore[index]

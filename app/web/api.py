@@ -10,6 +10,7 @@ from app.analyze.financial import (
     financial_tone,
 )
 from app.analyze.fundamental_trends import build_fundamental_trends
+from app.analyze.historical_frequency import build_historical_frequency_report
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
 from app.analyze.summary import PriceSummary, calculate_price_summary
@@ -457,6 +458,7 @@ def build_stock_payload(
         ],
         "financial_summary": financial_summary_payload,
         "fundamental_trends": build_fundamental_trends(financial_statements),
+        "historical_frequency": build_historical_frequency_report(prices),
         "valuation": valuation_payload,
         "brief": stock_brief_to_json(profile, suitability),
         "chips": chips_summary,
