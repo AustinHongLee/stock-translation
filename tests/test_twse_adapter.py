@@ -276,6 +276,7 @@ class TwseClientTests(unittest.TestCase):
         self.assertEqual(records[0].year, 114)
         self.assertAlmostEqual(records[0].cash_dividend, 2.850164)
         self.assertEqual(records[0].source, "TWSE_TWT49U")
+        self.assertIn("權值不是每股股票股利", records[0].note)
 
     def test_fetch_historical_dividend_records_skips_failed_year(self) -> None:
         def fake_fetch_json(url: str) -> object:

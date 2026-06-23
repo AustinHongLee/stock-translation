@@ -1430,6 +1430,7 @@ def valuation_to_json(result: ValuationResult) -> dict[str, object]:
             "latest_stock_dividend": result.dividend_summary.latest_stock_dividend,
             "years": result.dividend_summary.years,
             "estimate_source": result.dividend_summary.estimate_source,
+            "stock_dividend_scope_note": result.dividend_summary.stock_dividend_scope_note,
         },
         "estimates": [
             {

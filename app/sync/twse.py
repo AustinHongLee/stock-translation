@@ -300,7 +300,7 @@ class TwseClient:
                         cash_dividend=cash_dividend,
                         stock_dividend=0.0,
                         source_updated_at=None,
-                        note="TWSE 除權息資料。",
+                        note="TWSE 除權息計算結果；僅使用息值作現金股利，權值不是每股股票股利。",
                         source="TWSE_TWT49U",
                     )
                 )
@@ -365,7 +365,7 @@ class TwseClient:
                         cash_dividend=cash_dividend,
                         stock_dividend=0.0,
                         source_updated_at=None,
-                        note="TWSE 除權息資料。",
+                        note="TWSE 除權息計算結果；僅使用息值作現金股利，權值不是每股股票股利。",
                         source="TWSE_TWT49U",
                     )
                 )

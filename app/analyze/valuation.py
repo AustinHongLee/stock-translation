@@ -18,6 +18,7 @@ class DividendSummary:
     latest_stock_dividend: float | None
     years: list[int]
     estimate_source: str
+    stock_dividend_scope_note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +110,7 @@ def calculate_dividend_valuation(
             latest_stock_dividend=latest.stock_dividend if latest else None,
             years=sorted({item.year for item in relevant}, reverse=True),
             estimate_source=estimate_source,
+            stock_dividend_scope_note=_stock_dividend_scope_note(relevant),
         ),
         estimates=estimates,
         historical_yield=historical_yield,
@@ -117,6 +119,15 @@ def calculate_dividend_valuation(
         suitability_notes=suitability_notes,
         warning="股利殖利率情境只用股利與歷史價格回推，不代表交易基準價格，也不預測股價。",
     )
+
+
+def _stock_dividend_scope_note(dividends: list[DividendRecord]) -> str | None:
+    if any(item.source == "TWSE_TWT49U" for item in dividends):
+        return (
+            "股票股利只納入公告資料；TWSE TWT49U 歷史除權息僅用息值作現金股利，"
+            "權值不是每股股票股利。"
+        )
+    return None
 
 
 def _estimate(

@@ -108,6 +108,12 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("均息", js)
         self.assertIn(".screener-snapshot-grid", css)
 
+    def test_dividend_assumption_note_discloses_stock_dividend_scope(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("stock_dividend_scope_note", js)
+        self.assertIn("function buildDividendAssumptionNote", js)
+
     def test_stock_page_exposes_historical_frequency_backtest(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")

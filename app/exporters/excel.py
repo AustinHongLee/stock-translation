@@ -523,8 +523,8 @@ def _write_dividends(
     *,
     generated_at: datetime | None,
 ) -> None:
-    _setup_sheet(sheet, "股利資料", generated_at=generated_at, last_column=8)
-    headers = ["年度", "期間", "現金股利", "股票股利", "狀態", "董事會日", "資料日", "來源"]
+    _setup_sheet(sheet, "股利資料", generated_at=generated_at, last_column=9)
+    headers = ["年度", "期間", "現金股利", "股票股利", "狀態", "董事會日", "資料日", "來源", "註記"]
     rows = [
         [
             item.get("year"),
@@ -535,10 +535,11 @@ def _write_dividends(
             item.get("board_date"),
             item.get("source_updated_at"),
             item.get("source"),
+            item.get("note"),
         ]
         for item in payload.get("dividends") or []
     ]
-    _write_table(sheet, 4, headers, rows or [["尚無股利資料", None, None, None, None, None, None, None]])
+    _write_table(sheet, 4, headers, rows or [["尚無股利資料", None, None, None, None, None, None, None, None]])
     _format_numeric_columns(sheet, 5, sheet.max_row, {3, 4}, "#,##0.####")
     _finish_sheet(sheet)
 
@@ -563,6 +564,7 @@ def _write_valuation(
         ["主要方法", (suitability.get("recommended") or {}).get("primary_label")],
         ["股利資料年數", dividend_summary.get("years")],
         ["平均現金股利", dividend_summary.get("average_cash_dividend")],
+        ["股票股利口徑", dividend_summary.get("stock_dividend_scope_note")],
         ["相對估值說明", relative.get("headline")],
     ]
     _write_table(sheet, 4, ["項目", "內容"], top_rows)

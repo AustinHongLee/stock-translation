@@ -266,7 +266,7 @@ def build_value_screener_payload(
             "prices": "TWSE STOCK_DAY_ALL",
             "profiles": "TWSE t187ap03_L",
             "announced_dividends": "TWSE t187ap45_L",
-            "historical_dividends": "TWSE TWT49U",
+            "historical_dividends": "TWSE TWT49U 息值",
             "source_start_date": source_start_date.isoformat(),
             "source_end_date": source_end_date.isoformat(),
         },

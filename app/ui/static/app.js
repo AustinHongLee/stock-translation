@@ -2967,7 +2967,10 @@ function dividendScenarioLabel(item) {
 function buildDividendAssumptionNote(summary = {}) {
   const cash = formatNumber(summary.average_cash_dividend);
   const source = dividendEstimateLabel(summary);
-  return `股利情境不是交易基準：它只是在「年股利約 ${cash}、未來配息維持類似水準」的假設下，用要求殖利率反推價格。成長股、循環股、虧損股或配息不穩股票要降權看。資料基礎：${source}。`;
+  const stockDividendScope = summary.stock_dividend_scope_note
+    ? ` ${summary.stock_dividend_scope_note}`
+    : "";
+  return `股利情境不是交易基準：它只是在「年股利約 ${cash}、未來配息維持類似水準」的假設下，用要求殖利率反推價格。成長股、循環股、虧損股或配息不穩股票要降權看。資料基礎：${source}。${stockDividendScope}`;
 }
 
 function relativeBasisLabel(source) {

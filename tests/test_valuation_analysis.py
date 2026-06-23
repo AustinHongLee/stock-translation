@@ -205,6 +205,7 @@ class ValuationAnalysisTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(result.dividend_summary.average_cash_dividend, 15.1)
+        self.assertIn("權值不是每股股票股利", result.dividend_summary.stock_dividend_scope_note or "")
         self.assertAlmostEqual(result.estimates[0].price, 241.6)
         self.assertAlmostEqual(result.estimates[1].price, 302.0)
         self.assertAlmostEqual(result.estimates[2].price, 483.2)
