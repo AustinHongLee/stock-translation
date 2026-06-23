@@ -95,6 +95,8 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn('id="screenerPriceDate"', html)
         self.assertIn("高殖利率觀察", html)
         self.assertIn("殖利率需複查", html)
+        self.assertIn("更新雷達只更新排行榜快照", html)
+        self.assertIn("不補個股日線或法人", html)
         self.assertIn("最近收盤漲跌榜", html)
         self.assertIn("收盤快照排行", html)
         self.assertIn('id="screenerTurnoverList"', html)
@@ -105,6 +107,7 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function renderScreenerSnapshotRow", js)
         self.assertIn("formatCompactAmount", js)
         self.assertIn("收盤資料", js)
+        self.assertIn("日線、法人與波段關卡仍以", js)
         self.assertIn("均息", js)
         self.assertIn(".screener-snapshot-grid", css)
 
@@ -133,6 +136,8 @@ class UIThemeTests(unittest.TestCase):
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
         self.assertIn("資料狀態", html)
+        self.assertIn("雷達中心是另一份排行榜快照", html)
+        self.assertIn("不會重建雷達排行榜快照", html)
         self.assertIn("function localDataTargetSummary", js)
         self.assertIn("最近收盤目標", js)
         self.assertIn("補正目標", js)

@@ -180,7 +180,7 @@
               <div>
                 <p class="kicker">最近收盤排行</p>
                 <h2>雷達中心</h2>
-                <p class="sheet-sub screener-declaration">這是資料觀察清單，不是推薦清單。排序使用最近收盤快照與股利資料；「看個股」只開本地資料，不會自動同步。</p>
+                <p class="sheet-sub screener-declaration">這是資料觀察清單，不是推薦清單。更新雷達只更新排行榜快照（最近收盤、股利、殖利率），不補個股日線或法人；「看個股」只開本地資料，不會自動同步。</p>
               </div>
               <div class="sheet-head-actions">
                 <span id="screenerUpdatedAt" class="meta-pill">尚未更新</span>
@@ -226,7 +226,7 @@
               <span class="chip chip-off">排除景氣循環</span>
             </div>
 
-            <p id="screenerStatus" class="screener-status-text">用最近收盤快照整理股利情境、殖利率與漲跌排行；全市場日線下載請到「本地資料」。</p>
+            <p id="screenerStatus" class="screener-status-text">用最近收盤快照整理股利情境、殖利率與漲跌排行；要補日線、三大法人與波段關卡，請到「本地資料」跑全市場資料下載。</p>
 
             <section class="surface levels-card" id="levelsCard">
               <div class="surface-head compact">
@@ -337,7 +337,7 @@
             <header class="sheet-head">
               <div>
                 <h2>本地資料狀況</h2>
-                <p>看每檔已下載多少日線、最後資料日、是否過期、有沒有法人，以及波段關卡狀態。</p>
+                <p>看每檔已下載多少日線、最後資料日、是否過期、有沒有法人，以及波段關卡狀態。這裡是本機資料庫；雷達中心是另一份排行榜快照。</p>
               </div>
               <button class="primary-button" type="button" onclick="loadLocalData()">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4M3 12A9 9 0 0 1 18.4 5.6M18 2v4h-4M6 22v-4h4"/></svg>
@@ -350,7 +350,7 @@
                 <h3>全市場資料下載</h3>
                 <span class="muted-tag">本地資料庫・近一年・含三大法人</span>
               </div>
-              <p class="bulk-hint">這裡負責補齊本機資料庫。第一次會跑很久（數小時級：逐檔抓日線＋全市場法人）；可暫停／停止，關掉也會記住進度，下次接續；已是最新的會自動跳過。</p>
+              <p class="bulk-hint">這裡負責補齊本機資料庫（日線、三大法人、波段關卡用它）；不會重建雷達排行榜快照。第一次會跑很久（數小時級：逐檔抓日線＋全市場法人）；可暫停／停止，關掉也會記住進度，下次接續；已是最新的會自動跳過。</p>
               <div class="bulk-controls">
                 <button id="bulkStartBtn" type="button" class="primary-button" onclick="bulkStart()">開始下載</button>
                 <button id="bulkPauseBtn" type="button" class="chart-size-btn" onclick="bulkPause()" disabled>暫停</button>

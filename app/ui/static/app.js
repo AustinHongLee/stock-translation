@@ -902,8 +902,8 @@ function renderScreener(payload) {
     elements.screenerPriceDate.textContent = priceDate ? `收盤資料 ${priceDate}` : "收盤資料 --";
   }
   elements.screenerStatus.textContent = payload?.generated_at
-    ? `資料已更新。排行使用${priceDate ? ` ${priceDate} ` : "最近"}收盤快照；股利情境、殖利率主榜與需複查區已分開。`
-    : "尚未更新。按「更新雷達」後會抓 TWSE 最近收盤快照與股利資料。";
+    ? `雷達快照已更新。排行使用${priceDate ? ` ${priceDate} ` : "最近"}收盤資料；日線、法人與波段關卡仍以「本地資料」下載狀態為準。`
+    : "尚未更新。按「更新雷達」只抓 TWSE 最近收盤快照與股利資料；日線、法人請到「本地資料」下載。";
 
   const highConf = Array.isArray(payload?.below_cheap_high_conf) ? payload.below_cheap_high_conf : [];
   const lowConf = Array.isArray(payload?.below_cheap_low_conf) ? payload.below_cheap_low_conf : [];
