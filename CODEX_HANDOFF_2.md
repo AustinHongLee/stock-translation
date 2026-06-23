@@ -78,12 +78,14 @@ python -m compileall app tests              # 編譯掃描
 - [x] **基本面趨勢**：毛利率/營益率/淨利率/ROE 多季小折線（純資料呈現，不下結論）。
 - [x] **自選股看板**：watchlist 一覽表，每檔顯示 漲跌 / 體質總評燈號 / 地雷狀態 / 波段關卡，一眼掃過。
 - [x] **多股比較**：2–3 檔 價格 / 三大法人 / 體質 對比視圖。
-- [ ] **上櫃 TPEx 覆蓋**（先寫 `docs/tpex-評估.md`）：上櫃的日線/法人/估值來源與 TWSE 差異、要改哪些 client 方法。
-- [ ] **ETF v2**（先寫 `docs/etf-評估.md`）：成分股、折溢價、追蹤指數、配息頻率的資料來源與可行性。
+- [x] **上櫃 TPEx 覆蓋**（先寫 `docs/tpex-評估.md`）：上櫃的日線/法人/估值來源與 TWSE 差異、要改哪些 client 方法。
+- [x] **ETF v2**（先寫 `docs/etf-評估.md`）：成分股、折溢價、追蹤指數、配息頻率的資料來源與可行性。
 - **驗收**：每個功能有純函數 + 測試；研究型先交評估文件再動手。
   - 2026-06-22 驗證（基本面趨勢）：新增 `app/analyze/fundamental_trends.py` 純函數，把多季財報整理成毛利率、營益率、淨利率、單季 ROE 四條序列；`build_stock_payload()` 回傳 `fundamental_trends`。個股頁「基本面：獲利能力」新增四張 SVG 小折線卡，只呈現歷史百分比與前季變動，不下結論。已跑 `python -m unittest discover -s tests`（192 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證使用暫存 demo DB（不改正式資料）：桌面 `C:/Users/a0976/AppData/Local/Temp/stock-fundamental-trends-desktop.png`；手機 `C:/Users/a0976/AppData/Local/Temp/stock-fundamental-trends-mobile.png`。
   - 2026-06-22 驗證（自選股看板）：新增 `app/analyze/watchlist_board.py` 純函數，`/api/watchlist` 每檔回傳 `board`（漲跌、本地體質燈號、本地地雷狀態、波段關卡）；首頁自選股卡片改成三格狀態看板。地雷狀態只整理本地已同步資料，新聞地雷仍需進個股頁抓取。已跑 `python -m unittest discover -s tests`（195 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證：桌面 `C:/Users/a0976/AppData/Local/Temp/stock-watchlist-board-desktop.png`；手機 `C:/Users/a0976/AppData/Local/Temp/stock-watchlist-board-mobile.png`，並修正手機自選股看板不再被雙欄擠壓。
   - 2026-06-22 驗證（多股比較）：新增 `app/analyze/stock_compare.py` 純函數與 `/api/compare?stock_ids=...`，首頁新增「多股比較」表單，可輸入或套用自選股前 3 檔；比較列顯示價格、近 20 日三大法人、本地體質、最新財報點與資料日期。手機版改成每檔一張緊湊比較列，避免橫向表格第一眼看不到體質/財報。已跑 `python -m unittest discover -s tests`（200 OK）、`node --check app/ui/static/app.js`、`node --check app/ui/static/sw.js`、`python -m compileall app tests`、紅線掃描 `NO_MATCHES`。前端截圖驗證：桌面 `C:/Users/a0976/AppData/Local/Temp/stock-compare-desktop-crop.png`；手機 `C:/Users/a0976/AppData/Local/Temp/stock-compare-mobile-crop.png`，瀏覽器 console error 為空。
+  - 2026-06-23 驗證（TPEx 評估）：新增 `docs/tpex-評估.md`，只做研究文件未改程式。已查 TPEx OpenAPI swagger、個股日成交資訊、三大法人買賣明細資訊，確認上櫃歷史日線 API、法人歷史 action、估值/營收/財報候選端點與 TWSE client 差異；特別標出成交仟股/仟元需乘 1000、法人欄位重複、財報產業格式與歷史股利來源不足。已跑 `git diff --check`。
+  - 2026-06-23 驗證（ETF v2 評估）：新增 `docs/etf-評估.md`，只做研究文件未改程式。已查 TWSE ETF 頁面/OpenAPI、TPEx ETF 訊息中心、SITCA ETF 專區，整理商品基本資料、淨值折溢價、配息頻率、追蹤指數與成分股/PCF 的可行性；第一版建議先做 ETF 專用頁與 profile/nav/dividend，成分股先保留官方連結。已跑 `git diff --check`。
 
 ### D. 旗艦：一鍵個股研究報告（HTML / PDF 匯出）
 
