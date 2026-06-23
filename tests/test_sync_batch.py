@@ -45,12 +45,23 @@ class SyncBatchTests(unittest.TestCase):
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
         self.assertIn('id="bulkRetryFailedBtn"', html)
+        self.assertIn('id="dataSheet"', html)
+        self.assertIn('id="bulkCard"', html)
+        self.assertLess(html.index('id="dataSheet"'), html.index('id="bulkCard"'))
         self.assertIn("bulkRetryFailed", js)
         self.assertIn('postJson("/api/bulk-download/retry-failed"', js)
         self.assertIn("formatDuration(st.eta_seconds)", js)
         self.assertIn("failedCount === 0", js)
         self.assertIn(".bulk-controls .chart-size-btn", css)
         self.assertIn("min-height: 38px", css)
+
+    def test_screener_open_stock_does_not_trigger_sync(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("async function openScreenerStock", js)
+        self.assertIn("await openScreenerStock(button.dataset.screenerStock)", js)
+        self.assertIn("await loadStock(target)", js)
+        self.assertNotIn("await syncStock(button.dataset.screenerStock)", js)
 
 
 if __name__ == "__main__":

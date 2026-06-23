@@ -99,6 +99,7 @@ const elements = {
   screenerNearCheap: document.querySelector("#screenerNearCheap"),
   screenerComplete: document.querySelector("#screenerComplete"),
   screenerUpdatedAt: document.querySelector("#screenerUpdatedAt"),
+  screenerPriceDate: document.querySelector("#screenerPriceDate"),
   screenerHighConfList: document.querySelector("#screenerHighConfList"),
   screenerLowConfList: document.querySelector("#screenerLowConfList"),
   screenerLowConfCard: document.querySelector("#screenerLowConfCard"),
@@ -867,13 +868,13 @@ async function loadValueScreener() {
 
 async function refreshValueScreener() {
   setScreenerScanning(true);
-  elements.screenerStatus.textContent = "正在批次更新全市場資料，這次不會逐檔抓日線...";
-  showMessage("雷達中心更新中：抓最新價、股利公告與近年除息資料...");
+  elements.screenerStatus.textContent = "正在更新最近收盤雷達快照，這次不會逐檔抓日線...";
+  showMessage("雷達中心更新中：抓最近收盤快照、股利公告與近年除息資料...");
   try {
     const payload = await postJson("/api/value-screener/refresh", {});
     state.screener = payload;
     renderScreener(payload);
-    showMessage(`雷達中心已更新：${formatInteger(payload.summary?.available_rows || 0)} 檔可估價`);
+    showMessage(`雷達中心已更新：${formatInteger(payload.summary?.available_rows || 0)} 檔股利資料可用`);
     window.setTimeout(hideMessage, 1800);
   } catch (error) {
     elements.screenerStatus.textContent = `更新失敗：${error.message}`;
@@ -885,6 +886,7 @@ async function refreshValueScreener() {
 
 function renderScreener(payload) {
   const summary = payload?.summary || {};
+  const priceDate = screenerPriceDate(payload);
   elements.screenerAvailable.textContent = formatInteger(summary.available_rows || 0);
   elements.screenerBelowCheap.textContent = formatInteger(summary.below_cheap_high_conf_rows || summary.below_cheap_rows || 0);
   elements.screenerNearCheap.textContent = formatInteger(summary.gainers_rows || 0);
@@ -892,9 +894,12 @@ function renderScreener(payload) {
   elements.screenerUpdatedAt.textContent = payload?.generated_at
     ? `更新 ${formatDateTime(payload.generated_at)}`
     : "尚未更新";
+  if (elements.screenerPriceDate) {
+    elements.screenerPriceDate.textContent = priceDate ? `收盤資料 ${priceDate}` : "收盤資料 --";
+  }
   elements.screenerStatus.textContent = payload?.generated_at
-    ? "資料已更新。股利情境清單只顯示殖利率法適用、資料較完整的個股；低信心與陷阱區已標記。"
-    : "尚未更新。按「更新雷達」後會直接抓 TWSE 批次資料。";
+    ? `資料已更新。排行使用${priceDate ? ` ${priceDate} ` : "最近"}收盤快照；股利情境、殖利率主榜與需複查區已分開。`
+    : "尚未更新。按「更新雷達」後會抓 TWSE 最近收盤快照與股利資料。";
 
   const highConf = Array.isArray(payload?.below_cheap_high_conf) ? payload.below_cheap_high_conf : [];
   const lowConf = Array.isArray(payload?.below_cheap_low_conf) ? payload.below_cheap_low_conf : [];
@@ -966,6 +971,29 @@ function renderScreener(payload) {
   ).join("") || stateMessageHTML("empty", "無資料", "目前沒有可顯示的下跌榜資料。", { compact: true, className: "screener-empty" });
 }
 
+function screenerPriceDate(payload) {
+  const buckets = [
+    payload?.items,
+    payload?.gainers,
+    payload?.losers,
+    payload?.yield_normal,
+    payload?.below_cheap_high_conf,
+    payload?.below_cheap_low_conf,
+  ];
+  const dates = new Set();
+  buckets.forEach((bucket) => {
+    if (!Array.isArray(bucket)) return;
+    bucket.forEach((item) => {
+      const value = String(item?.price_date || "").trim();
+      if (value) dates.add(value);
+    });
+  });
+  const sorted = Array.from(dates).sort();
+  if (sorted.length === 0) return "";
+  if (sorted.length === 1) return sorted[0];
+  return `${sorted[0]} ~ ${sorted[sorted.length - 1]}`;
+}
+
 function renderScreenerCheapRow(item, _rank, _mode) {
   const diffPct = item.difference_percent != null
     ? Number(item.difference_percent).toFixed(1) + "%"
@@ -980,7 +1008,7 @@ function renderScreenerCheapRow(item, _rank, _mode) {
       <span class="screener-name">
         <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
       </span>
-      <span class="screener-price">現價 ${formatNumber(item.current_price)}</span>
+      <span class="screener-price">收盤 ${formatNumber(item.current_price)}</span>
       <span class="screener-diff ${diffClass}">${diffLabel}</span>
       ${srBadge(item)}
       <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
@@ -1008,13 +1036,17 @@ function renderScreenerYieldRow(item, _rank) {
   const yld = item.current_yield_percent != null
     ? Number(item.current_yield_percent).toFixed(1) + "%"
     : "--";
-  const dataYears = Number(item.data_years || 0) >= 5 ? "配息穩 · 5 年完整" : "配息年份不足 5 年";
+  const years = Number(item.data_years || 0);
+  const dataYears = years >= 5 ? "5 年資料完整" : `股利資料 ${formatInteger(years)} 年`;
+  const averageCash = item.average_cash_dividend != null
+    ? `均息 ${formatNumber(item.average_cash_dividend)}`
+    : "均息 --";
   return `
     <div class="screener-row screener-row-no-rank" data-screener-stock="${escapeHtml(item.stock_id)}">
       <span class="screener-name">
         <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
       </span>
-      <span class="screener-yield-note-inline">${dataYears}</span>
+      <span class="screener-yield-note-inline">${escapeHtml(dataYears)} · ${escapeHtml(averageCash)}</span>
       <span class="screener-yield-pct tone-up">${yld}</span>
       ${srBadge(item)}
       <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
@@ -1028,7 +1060,7 @@ function renderScreenerTrapRow(item) {
     : "--";
   const trapReason = item.yield_trap_reason === "one_off_dividend"
     ? "含一次性高股利"
-    : "殖利率陷阱";
+    : "需複查";
   return `
     <div class="screener-row screener-row-no-rank screener-row-trap" data-screener-stock="${escapeHtml(item.stock_id)}">
       <span class="screener-name">
@@ -1053,7 +1085,7 @@ function renderScreenerMoverRow(item, rank, isGainer) {
       <span class="screener-name">
         <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
       </span>
-      <span class="screener-price">現價 ${formatNumber(item.current_price)}</span>
+      <span class="screener-price">收盤 ${formatNumber(item.current_price)}</span>
       <span class="${cls} screener-diff">${pct}</span>
       ${srBadge(item)}
       <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
@@ -1070,7 +1102,13 @@ async function handleScreenerAction(event) {
 
   const button = event.target.closest("[data-screener-stock]");
   if (!button) return;
-  await syncStock(button.dataset.screenerStock);
+  await openScreenerStock(button.dataset.screenerStock);
+}
+
+async function openScreenerStock(stockId) {
+  const target = String(stockId || "").trim();
+  if (!target) return;
+  await loadStock(target);
 }
 
 async function loadStock(stockId, options = {}) {

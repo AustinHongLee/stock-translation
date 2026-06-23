@@ -86,6 +86,19 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn(".compare-table", css)
         self.assertIn(".compare-pill", css)
 
+    def test_screener_labels_recent_close_and_keeps_yield_rankings(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("最近收盤排行", html)
+        self.assertIn('id="screenerPriceDate"', html)
+        self.assertIn("高殖利率觀察", html)
+        self.assertIn("殖利率需複查", html)
+        self.assertIn("最近收盤漲跌榜", html)
+        self.assertIn("function screenerPriceDate", js)
+        self.assertIn("收盤資料", js)
+        self.assertIn("均息", js)
+
     def test_stock_page_exposes_historical_frequency_backtest(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
