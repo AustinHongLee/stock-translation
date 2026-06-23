@@ -89,15 +89,24 @@ class UIThemeTests(unittest.TestCase):
     def test_screener_labels_recent_close_and_keeps_yield_rankings(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
         self.assertIn("最近收盤排行", html)
         self.assertIn('id="screenerPriceDate"', html)
         self.assertIn("高殖利率觀察", html)
         self.assertIn("殖利率需複查", html)
         self.assertIn("最近收盤漲跌榜", html)
+        self.assertIn("收盤快照排行", html)
+        self.assertIn('id="screenerTurnoverList"', html)
+        self.assertIn('id="screenerVolumeList"', html)
+        self.assertIn('id="screenerGapList"', html)
+        self.assertIn('id="screenerAmplitudeList"', html)
         self.assertIn("function screenerPriceDate", js)
+        self.assertIn("function renderScreenerSnapshotRow", js)
+        self.assertIn("formatCompactAmount", js)
         self.assertIn("收盤資料", js)
         self.assertIn("均息", js)
+        self.assertIn(".screener-snapshot-grid", css)
 
     def test_stock_page_exposes_historical_frequency_backtest(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")

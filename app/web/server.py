@@ -40,6 +40,7 @@ from app.web.api import (
     build_local_stocks_payload,
     build_cached_local_data_payload,
     build_search_payload,
+    build_sync_freshness_payload,
     build_stock_payload,
     build_value_screener_payload,
     enrich_screener_with_levels,
@@ -141,6 +142,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self._send_json(build_cached_local_data_payload(store))
             elif parsed.path == "/api/bulk-download/status":
                 self._send_json(_bulk_status(self.server.db_path))
+            elif parsed.path.startswith("/api/sync/freshness/"):
+                stock_id = unquote(parsed.path.rsplit("/", 1)[-1]).strip()
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(build_sync_freshness_payload(store, stock_id))
             elif parsed.path.startswith("/api/news/"):
                 stock_id = unquote(parsed.path.removeprefix("/api/news/")).strip()
                 if not stock_id:
@@ -202,11 +207,29 @@ class RequestHandler(BaseHTTPRequestHandler):
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()
                 lookback_days = int(body.get("lookback_days", HISTORICAL_VALUATION_DAYS))
+                skip_if_current = bool(body.get("skip_if_current", False))
                 if not stock_id:
                     self._send_error(HTTPStatus.BAD_REQUEST, "stock_id is required")
                     return
 
                 with SQLiteStore(self.server.db_path) as store:
+                    freshness = build_sync_freshness_payload(store, stock_id)
+                    if skip_if_current and freshness.get("can_skip_sync"):
+                        payload = build_stock_payload(
+                            store,
+                            stock_id,
+                            days=CHART_DAYS,
+                            quote_provider=_quote_provider(),
+                        )
+                        payload["sync"] = {
+                            "skipped": True,
+                            "rows_written": 0,
+                            "message": freshness["message"],
+                            "finished_at": datetime.now().isoformat(timespec="seconds"),
+                            "freshness": freshness,
+                        }
+                        self._send_json(payload)
+                        return
                     service = StockSyncService(
                         client=TwseClient(request_interval=0.2),
                         store=store,
@@ -222,9 +245,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                         quote_provider=_quote_provider(),
                     )
                     payload["sync"] = {
+                        "skipped": False,
                         "rows_written": result.rows_written,
                         "message": result.message,
                         "finished_at": result.finished_at.isoformat(timespec="seconds"),
+                        "freshness": freshness,
                     }
                     store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
                     self._send_json(payload)
@@ -232,6 +257,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 body = self._read_json_body()
                 stock_ids = normalize_sync_targets(body.get("stock_ids", body.get("stock_id", [])))
                 lookback_days = int(body.get("lookback_days", HISTORICAL_VALUATION_DAYS))
+                skip_if_current = bool(body.get("skip_if_current", False))
                 if lookback_days < 1:
                     self._send_error(HTTPStatus.BAD_REQUEST, "lookback_days must be positive")
                     return
@@ -244,6 +270,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     for stock_id in stock_ids:
                         try:
+                            freshness = build_sync_freshness_payload(store, stock_id)
+                            if skip_if_current and freshness.get("can_skip_sync"):
+                                results.append(
+                                    {
+                                        "stock_id": stock_id,
+                                        "ok": True,
+                                        "skipped": True,
+                                        "rows_written": 0,
+                                        "message": freshness["message"],
+                                        "finished_at": datetime.now().isoformat(timespec="seconds"),
+                                        "freshness": freshness,
+                                    }
+                                )
+                                continue
                             result = service.sync_stock_history(
                                 stock_id,
                                 lookback_days=lookback_days,
@@ -261,9 +301,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                                 {
                                     "stock_id": result.stock_id,
                                     "ok": True,
+                                    "skipped": False,
                                     "rows_written": result.rows_written,
                                     "message": result.message,
                                     "finished_at": result.finished_at.isoformat(timespec="seconds"),
+                                    "freshness": freshness,
                                 }
                             )
 

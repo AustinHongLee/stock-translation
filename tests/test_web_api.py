@@ -27,6 +27,7 @@ from app.web.api import (
     build_cached_local_data_payload,
     build_portfolio_payload,
     build_search_payload,
+    build_sync_freshness_payload,
     build_stock_payload,
     build_watchlist_payload,
     stock_brief_to_json,
@@ -34,6 +35,47 @@ from app.web.api import (
 
 
 class WebApiPayloadTests(unittest.TestCase):
+    def test_sync_freshness_uses_recent_close_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {"stock_id": "2330", "price_date": "2026-06-22"},
+                            {"stock_id": "2303", "price_date": "2026-06-21"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date(2026, 6, 22),
+                            open=100,
+                            high=105,
+                            low=99,
+                            close=104,
+                            volume=10,
+                        )
+                    ]
+                )
+
+                current = build_sync_freshness_payload(store, "2330", screener_path=screener_path)
+                stale = build_sync_freshness_payload(store, "2303", screener_path=screener_path)
+
+        self.assertTrue(current["is_current"])
+        self.assertTrue(current["can_skip_sync"])
+        self.assertEqual(current["reference_latest_date"], "2026-06-22")
+        self.assertFalse(stale["is_current"])
+        self.assertEqual(stale["status"], "stale")
+
     def test_build_stock_payload_contains_profile_prices_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"

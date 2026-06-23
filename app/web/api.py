@@ -106,6 +106,44 @@ def build_cached_local_data_payload(
     return result
 
 
+def build_sync_freshness_payload(
+    store: SQLiteStore,
+    stock_id: str,
+    *,
+    screener_path: Path = DEFAULT_SCREENER_PATH,
+) -> dict[str, object]:
+    stock_id = stock_id.strip()
+    if not stock_id:
+        raise ValueError("stock_id is required")
+
+    local_latest = store.get_daily_prices(stock_id, limit=1)
+    local_date = local_latest[-1].date if local_latest else None
+    reference = _screener_reference_item(stock_id, screener_path)
+    reference_date = _date_or_none(reference.get("price_date")) if reference else None
+    is_current = bool(local_date and reference_date and local_date >= reference_date)
+    can_decide = reference_date is not None
+    if is_current:
+        status = "current"
+        message = f"{stock_id} 本地日線已到最近收盤 {reference_date.isoformat()}，不需要重新同步。"
+    elif can_decide:
+        status = "stale"
+        message = f"{stock_id} 本地日線尚未到最近收盤 {reference_date.isoformat()}。"
+    else:
+        status = "unknown"
+        message = "目前沒有最近收盤快照可比對，會照一般同步流程處理。"
+
+    return {
+        "stock_id": stock_id,
+        "status": status,
+        "is_current": is_current,
+        "can_skip_sync": is_current,
+        "local_latest_date": local_date.isoformat() if local_date else None,
+        "reference_latest_date": reference_date.isoformat() if reference_date else None,
+        "reference_source": "value_screener_snapshot" if reference_date else None,
+        "message": message,
+    }
+
+
 def enrich_screener_with_levels(payload: dict[str, object], store: SQLiteStore) -> dict[str, object]:
     """對『本地已有日線』的個股，加上波段支撐/壓力接近狀態（其餘留空）。計算只讀本地、很快。"""
     items = payload.get("items")
@@ -120,6 +158,17 @@ def enrich_screener_with_levels(payload: dict[str, object], store: SQLiteStore) 
         elif isinstance(item, dict):
             item["sr"] = {"available": False, "status": ""}
     return payload
+
+
+def _screener_reference_item(stock_id: str, path: Path) -> dict[str, object] | None:
+    payload = load_value_screener(path)
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return None
+    for item in items:
+        if isinstance(item, dict) and str(item.get("stock_id", "")).strip() == stock_id:
+            return item
+    return None
 
 
 def build_value_screener_payload(path: Path = DEFAULT_SCREENER_PATH) -> dict[str, object]:

@@ -137,6 +137,16 @@ def build_value_screener_payload(
             if price.change is not None and previous_close and previous_close > 0
             else None
         )
+        opening_gap_percent = (
+            ((price.open - previous_close) / previous_close) * 100
+            if previous_close and previous_close > 0
+            else None
+        )
+        amplitude_percent = (
+            ((price.high - price.low) / previous_close) * 100
+            if previous_close and previous_close > 0
+            else None
+        )
         current_yield_percent = (
             (average_cash / price.close) * 100
             if average_cash is not None and average_cash > 0 and price.close > 0
@@ -171,9 +181,16 @@ def build_value_screener_payload(
                 "price_date": price.date.isoformat(),
                 "current_price": price.close,
                 "previous_close": previous_close,
+                "open_price": price.open,
+                "high_price": price.high,
+                "low_price": price.low,
                 "day_change": price.change,
                 "day_change_percent": day_change_percent,
+                "opening_gap_percent": opening_gap_percent,
+                "amplitude_percent": amplitude_percent,
                 "volume": price.volume,
+                "trade_value": price.trade_value,
+                "transaction_count": price.transaction_count,
                 "average_cash_dividend": average_cash,
                 "current_yield_percent": current_yield_percent,
                 "dividend_years": sorted(annual_cash_by_year, reverse=True)[:dividend_years],
@@ -223,6 +240,12 @@ def build_value_screener_payload(
     day_changed = [item for item in items if item["day_change_percent"] is not None]
     gainers = [item for item in day_changed if float(item["day_change_percent"]) > 0]
     losers = [item for item in day_changed if float(item["day_change_percent"]) < 0]
+    turnover_leaders = [item for item in items if item.get("trade_value") is not None]
+    volume_leaders = [item for item in items if item.get("volume") is not None]
+    amplitude_leaders = [item for item in items if item.get("amplitude_percent") is not None]
+    gap_changed = [item for item in items if item.get("opening_gap_percent") is not None]
+    gap_up = [item for item in gap_changed if float(item["opening_gap_percent"] or 0) > 0]
+    gap_down = [item for item in gap_changed if float(item["opening_gap_percent"] or 0) < 0]
 
     yield_available = [item for item in items if item["current_yield_percent"] is not None]
     yield_normal = [
@@ -253,6 +276,11 @@ def build_value_screener_payload(
             "day_changed_rows": len(day_changed),
             "gainers_rows": len(gainers),
             "losers_rows": len(losers),
+            "turnover_leaders_rows": len(turnover_leaders),
+            "volume_leaders_rows": len(volume_leaders),
+            "amplitude_leaders_rows": len(amplitude_leaders),
+            "gap_up_rows": len(gap_up),
+            "gap_down_rows": len(gap_down),
             "yield_available_rows": len(yield_available),
             "yield_normal_rows": len(yield_normal),
             "yield_trap_rows": len(yield_trap_list),
@@ -268,6 +296,11 @@ def build_value_screener_payload(
         "yield_trap": sorted(yield_trap_list, key=lambda x: -(x["current_yield_percent"] or 0))[:20],
         "gainers": sorted(gainers, key=lambda x: -float(x["day_change_percent"] or 0))[:50],
         "losers": sorted(losers, key=lambda x: float(x["day_change_percent"] or 0))[:50],
+        "turnover_leaders": sorted(turnover_leaders, key=lambda x: -(int(x["trade_value"] or 0)))[:50],
+        "volume_leaders": sorted(volume_leaders, key=lambda x: -(int(x["volume"] or 0)))[:50],
+        "amplitude_leaders": sorted(amplitude_leaders, key=lambda x: -float(x["amplitude_percent"] or 0))[:50],
+        "gap_up": sorted(gap_up, key=lambda x: -float(x["opening_gap_percent"] or 0))[:50],
+        "gap_down": sorted(gap_down, key=lambda x: float(x["opening_gap_percent"] or 0))[:50],
         "items": items,
     }
 
@@ -278,7 +311,7 @@ def load_value_screener(path: Path = DEFAULT_SCREENER_PATH) -> dict[str, object]
         if fallback.is_file():
             path = fallback
     if not path.is_file():
-        return {
+        return _with_snapshot_rankings({
             "generated_at": None,
             "method": "batch_twse_radar_center",
             "source": {},
@@ -297,8 +330,97 @@ def load_value_screener(path: Path = DEFAULT_SCREENER_PATH) -> dict[str, object]
                 "warnings": ["尚未更新雷達中心。"],
             },
             "items": [],
-        }
-    return json.loads(path.read_text(encoding="utf-8"))
+        })
+    return _with_snapshot_rankings(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _with_snapshot_rankings(payload: dict[str, object]) -> dict[str, object]:
+    """Backfill derived recent-close ranking buckets for older saved snapshots."""
+    items = payload.get("items")
+    if not isinstance(items, list):
+        items = []
+        payload["items"] = items
+
+    for raw_item in items:
+        if not isinstance(raw_item, dict):
+            continue
+        previous_close = _safe_float(raw_item.get("previous_close"))
+        if previous_close is None or previous_close <= 0:
+            continue
+        if raw_item.get("opening_gap_percent") is None:
+            open_price = _safe_float(raw_item.get("open_price"))
+            if open_price is not None:
+                raw_item["opening_gap_percent"] = ((open_price - previous_close) / previous_close) * 100
+        if raw_item.get("amplitude_percent") is None:
+            high_price = _safe_float(raw_item.get("high_price"))
+            low_price = _safe_float(raw_item.get("low_price"))
+            if high_price is not None and low_price is not None:
+                raw_item["amplitude_percent"] = ((high_price - low_price) / previous_close) * 100
+
+    day_changed = [
+        item for item in items
+        if isinstance(item, dict) and _safe_float(item.get("day_change_percent")) is not None
+    ]
+    gainers = [item for item in day_changed if (_safe_float(item.get("day_change_percent")) or 0) > 0]
+    losers = [item for item in day_changed if (_safe_float(item.get("day_change_percent")) or 0) < 0]
+    turnover_leaders = [
+        item for item in items
+        if isinstance(item, dict) and _safe_int(item.get("trade_value")) is not None
+    ]
+    volume_leaders = [
+        item for item in items
+        if isinstance(item, dict) and _safe_int(item.get("volume")) is not None
+    ]
+    amplitude_leaders = [
+        item for item in items
+        if isinstance(item, dict) and _safe_float(item.get("amplitude_percent")) is not None
+    ]
+    gap_changed = [
+        item for item in items
+        if isinstance(item, dict) and _safe_float(item.get("opening_gap_percent")) is not None
+    ]
+    gap_up = [item for item in gap_changed if (_safe_float(item.get("opening_gap_percent")) or 0) > 0]
+    gap_down = [item for item in gap_changed if (_safe_float(item.get("opening_gap_percent")) or 0) < 0]
+
+    payload.setdefault("gainers", sorted(gainers, key=lambda x: -(_safe_float(x.get("day_change_percent")) or 0))[:50])
+    payload.setdefault("losers", sorted(losers, key=lambda x: (_safe_float(x.get("day_change_percent")) or 0))[:50])
+    payload.setdefault("turnover_leaders", sorted(turnover_leaders, key=lambda x: -(_safe_int(x.get("trade_value")) or 0))[:50])
+    payload.setdefault("volume_leaders", sorted(volume_leaders, key=lambda x: -(_safe_int(x.get("volume")) or 0))[:50])
+    payload.setdefault("amplitude_leaders", sorted(amplitude_leaders, key=lambda x: -(_safe_float(x.get("amplitude_percent")) or 0))[:50])
+    payload.setdefault("gap_up", sorted(gap_up, key=lambda x: -(_safe_float(x.get("opening_gap_percent")) or 0))[:50])
+    payload.setdefault("gap_down", sorted(gap_down, key=lambda x: (_safe_float(x.get("opening_gap_percent")) or 0))[:50])
+
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        summary = {}
+        payload["summary"] = summary
+    summary.setdefault("day_changed_rows", len(day_changed))
+    summary.setdefault("gainers_rows", len(gainers))
+    summary.setdefault("losers_rows", len(losers))
+    summary.setdefault("turnover_leaders_rows", len(turnover_leaders))
+    summary.setdefault("volume_leaders_rows", len(volume_leaders))
+    summary.setdefault("amplitude_leaders_rows", len(amplitude_leaders))
+    summary.setdefault("gap_up_rows", len(gap_up))
+    summary.setdefault("gap_down_rows", len(gap_down))
+    return payload
+
+
+def _safe_float(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_int(value: object) -> int | None:
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _yield_trap_check(

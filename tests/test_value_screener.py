@@ -1,13 +1,66 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 from app.models import DailyPrice, DividendRecord, StockProfile
-from app.screener.value import build_value_screener_payload
+from app.screener.value import build_value_screener_payload, load_value_screener
 
 
 class ValueScreenerTests(unittest.TestCase):
+    def test_load_value_screener_backfills_snapshot_rankings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "value_screener.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "summary": {},
+                        "items": [
+                            {
+                                "stock_id": "2330",
+                                "short_name": "台積電",
+                                "price_date": "2026-06-22",
+                                "current_price": 2440,
+                                "previous_close": 2400,
+                                "open_price": 2420,
+                                "high_price": 2460,
+                                "low_price": 2390,
+                                "volume": 1000,
+                                "trade_value": 2_440_000,
+                                "day_change_percent": 1.6,
+                            },
+                            {
+                                "stock_id": "2303",
+                                "short_name": "聯電",
+                                "price_date": "2026-06-22",
+                                "current_price": 50,
+                                "previous_close": 52,
+                                "open_price": 51,
+                                "high_price": 53,
+                                "low_price": 49,
+                                "volume": 2000,
+                                "trade_value": 100_000,
+                                "day_change_percent": -3.8,
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = load_value_screener(path)
+
+        self.assertEqual(payload["summary"]["volume_leaders_rows"], 2)  # type: ignore[index]
+        self.assertEqual(payload["volume_leaders"][0]["stock_id"], "2303")  # type: ignore[index]
+        self.assertEqual(payload["turnover_leaders"][0]["stock_id"], "2330")  # type: ignore[index]
+        self.assertEqual(payload["gap_up"][0]["stock_id"], "2330")  # type: ignore[index]
+        self.assertEqual(payload["gap_down"][0]["stock_id"], "2303")  # type: ignore[index]
+        self.assertAlmostEqual(payload["items"][0]["amplitude_percent"], 2.9166666666666665)  # type: ignore[index]
+
     def test_build_value_screener_payload_calculates_difference(self) -> None:
         payload = build_value_screener_payload(
             profiles=[
@@ -29,6 +82,8 @@ class ValueScreenerTests(unittest.TestCase):
                     low=130,
                     close=48,
                     volume=100,
+                    trade_value=4_800_000,
+                    transaction_count=80,
                     change=1.2,
                 ),
                 DailyPrice(
@@ -38,7 +93,9 @@ class ValueScreenerTests(unittest.TestCase):
                     high=2400,
                     low=2200,
                     close=2375,
-                    volume=100,
+                    volume=200,
+                    trade_value=475_000_000,
+                    transaction_count=160,
                     change=-20,
                 ),
                 DailyPrice(
@@ -48,7 +105,9 @@ class ValueScreenerTests(unittest.TestCase):
                     high=337.5,
                     low=321,
                     close=327,
-                    volume=100,
+                    volume=50,
+                    trade_value=16_350_000,
+                    transaction_count=40,
                     change=0,
                 ),
             ],
@@ -83,6 +142,10 @@ class ValueScreenerTests(unittest.TestCase):
         self.assertLess(umc["difference_percent"], 0)
         self.assertAlmostEqual(umc["previous_close"], 46.8)
         self.assertAlmostEqual(umc["day_change_percent"], 2.564102564102564)
+        self.assertAlmostEqual(umc["opening_gap_percent"], 199.14529914529913)
+        self.assertAlmostEqual(umc["amplitude_percent"], 25.64102564102564)
+        self.assertEqual(umc["trade_value"], 4_800_000)
+        self.assertEqual(umc["transaction_count"], 80)
         self.assertAlmostEqual(umc["current_yield_percent"], 6.270833333333334)
         self.assertEqual(umc["confidence"], "high")
         self.assertEqual(by_id["7722"]["confidence"], "low")
@@ -90,6 +153,13 @@ class ValueScreenerTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["below_cheap_rows"], 1)  # type: ignore[index]
         self.assertEqual(payload["summary"]["gainers_rows"], 1)  # type: ignore[index]
         self.assertEqual(payload["summary"]["losers_rows"], 1)  # type: ignore[index]
+        self.assertEqual(payload["summary"]["turnover_leaders_rows"], 3)  # type: ignore[index]
+        self.assertEqual(payload["summary"]["volume_leaders_rows"], 3)  # type: ignore[index]
+        self.assertEqual(payload["summary"]["amplitude_leaders_rows"], 3)  # type: ignore[index]
+        self.assertEqual(payload["turnover_leaders"][0]["stock_id"], "2330")  # type: ignore[index]
+        self.assertEqual(payload["volume_leaders"][0]["stock_id"], "2330")  # type: ignore[index]
+        self.assertEqual(payload["gap_up"][0]["stock_id"], "2303")  # type: ignore[index]
+        self.assertEqual(payload["amplitude_leaders"][0]["stock_id"], "2303")  # type: ignore[index]
         self.assertEqual(payload["summary"]["low_confidence_rows"], 2)  # type: ignore[index]
 
 

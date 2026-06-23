@@ -63,6 +63,14 @@ class SyncBatchTests(unittest.TestCase):
         self.assertIn("await loadStock(target)", js)
         self.assertNotIn("await syncStock(button.dataset.screenerStock)", js)
 
+    def test_sync_stock_checks_freshness_before_posting(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('/api/sync/freshness/', js)
+        self.assertIn("freshness?.can_skip_sync", js)
+        self.assertIn("skip_if_current: true", js)
+        self.assertIn("已是最近收盤", js)
+
 
 if __name__ == "__main__":
     unittest.main()

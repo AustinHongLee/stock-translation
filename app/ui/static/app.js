@@ -111,6 +111,10 @@ const elements = {
   screenerTrapCard: document.querySelector("#screenerTrapCard"),
   screenerGainersList: document.querySelector("#screenerGainersList"),
   screenerLosersList: document.querySelector("#screenerLosersList"),
+  screenerTurnoverList: document.querySelector("#screenerTurnoverList"),
+  screenerVolumeList: document.querySelector("#screenerVolumeList"),
+  screenerGapList: document.querySelector("#screenerGapList"),
+  screenerAmplitudeList: document.querySelector("#screenerAmplitudeList"),
   message: document.querySelector("#message"),
   portfolioStatus: document.querySelector("#portfolioStatus"),
   portfolioSentence: document.querySelector("#portfolioSentence"),
@@ -907,6 +911,11 @@ function renderScreener(payload) {
   const yieldTrap = Array.isArray(payload?.yield_trap) ? payload.yield_trap : [];
   const gainers = Array.isArray(payload?.gainers) ? payload.gainers : [];
   const losers = Array.isArray(payload?.losers) ? payload.losers : [];
+  const turnoverLeaders = Array.isArray(payload?.turnover_leaders) ? payload.turnover_leaders : [];
+  const volumeLeaders = Array.isArray(payload?.volume_leaders) ? payload.volume_leaders : [];
+  const amplitudeLeaders = Array.isArray(payload?.amplitude_leaders) ? payload.amplitude_leaders : [];
+  const gapUp = Array.isArray(payload?.gap_up) ? payload.gap_up : [];
+  const gapDown = Array.isArray(payload?.gap_down) ? payload.gap_down : [];
 
   // 左欄：資料較完整的股利情境候選
   if (!highConf.length) {
@@ -969,6 +978,31 @@ function renderScreener(payload) {
   elements.screenerLosersList.innerHTML = losers.slice(0, 10).map((item, i) =>
     renderScreenerMoverRow(item, i + 1, false)
   ).join("") || stateMessageHTML("empty", "無資料", "目前沒有可顯示的下跌榜資料。", { compact: true, className: "screener-empty" });
+
+  const gapLeaders = [
+    ...gapUp.slice(0, 5).map((item) => ({ ...item, gap_direction: "up" })),
+    ...gapDown.slice(0, 5).map((item) => ({ ...item, gap_direction: "down" })),
+  ];
+  if (elements.screenerTurnoverList) {
+    elements.screenerTurnoverList.innerHTML = turnoverLeaders.slice(0, 10).map((item, i) =>
+      renderScreenerSnapshotRow(item, i + 1, "turnover")
+    ).join("") || stateMessageHTML("empty", "無資料", "目前沒有成交值資料。", { compact: true, className: "screener-empty" });
+  }
+  if (elements.screenerVolumeList) {
+    elements.screenerVolumeList.innerHTML = volumeLeaders.slice(0, 10).map((item, i) =>
+      renderScreenerSnapshotRow(item, i + 1, "volume")
+    ).join("") || stateMessageHTML("empty", "無資料", "目前沒有成交量資料。", { compact: true, className: "screener-empty" });
+  }
+  if (elements.screenerGapList) {
+    elements.screenerGapList.innerHTML = gapLeaders.map((item, i) =>
+      renderScreenerSnapshotRow(item, i + 1, "gap")
+    ).join("") || stateMessageHTML("empty", "無資料", "目前沒有跳空資料。", { compact: true, className: "screener-empty" });
+  }
+  if (elements.screenerAmplitudeList) {
+    elements.screenerAmplitudeList.innerHTML = amplitudeLeaders.slice(0, 10).map((item, i) =>
+      renderScreenerSnapshotRow(item, i + 1, "amplitude")
+    ).join("") || stateMessageHTML("empty", "無資料", "目前沒有震幅資料。", { compact: true, className: "screener-empty" });
+  }
 }
 
 function screenerPriceDate(payload) {
@@ -1093,6 +1127,40 @@ function renderScreenerMoverRow(item, rank, isGainer) {
   `;
 }
 
+function renderScreenerSnapshotRow(item, rank, type) {
+  const metric = screenerSnapshotMetric(item, type);
+  return `
+    <div class="screener-row" data-screener-stock="${escapeHtml(item.stock_id)}">
+      <span class="screener-rank">${rank}</span>
+      <span class="screener-name">
+        <strong>${escapeHtml(item.stock_id)} ${escapeHtml(item.short_name || "")}</strong>
+        <span class="screener-ctype">收盤 ${formatNumber(item.current_price)}</span>
+      </span>
+      <span class="screener-snapshot-metric ${metric.className}">
+        <span>${escapeHtml(metric.label)}</span>
+        <strong>${escapeHtml(metric.value)}</strong>
+      </span>
+      <button class="table-action" type="button" data-screener-stock="${escapeHtml(item.stock_id)}">看個股</button>
+    </div>
+  `;
+}
+
+function screenerSnapshotMetric(item, type) {
+  if (type === "turnover") {
+    return { label: "成交值", value: formatCompactAmount(item.trade_value), className: "tone-neutral" };
+  }
+  if (type === "volume") {
+    return { label: "成交量", value: formatInteger(item.volume), className: "tone-neutral" };
+  }
+  if (type === "gap") {
+    const value = item.opening_gap_percent;
+    const direction = item.gap_direction === "down" ? "下跳" : "上跳";
+    const className = Number(value) < 0 ? "tone-down" : "tone-up";
+    return { label: direction, value: formatSignedPercent(value), className };
+  }
+  return { label: "震幅", value: formatPlainPercent(item.amplitude_percent), className: "tone-neutral" };
+}
+
 async function handleScreenerAction(event) {
   const levelSyncButton = event.target.closest("[data-level-sync-stock]");
   if (levelSyncButton) {
@@ -1112,11 +1180,13 @@ async function openScreenerStock(stockId) {
 }
 
 async function loadStock(stockId, options = {}) {
-  state.activeStockId = stockId;
+  const target = String(stockId || "").trim();
+  if (!target) return;
+  state.activeStockId = target;
   if (!options.quiet) showMessage("讀取本地資料...");
   try {
-    const payload = await getJson(`/api/stocks/${encodeURIComponent(stockId)}?days=365`);
-    renderStock(payload, stockId);
+    const payload = await getJson(`/api/stocks/${encodeURIComponent(target)}?days=365`);
+    renderStock(payload, target);
     if (!options.keepSheet) showSheet("stock");
     if (!options.quiet) maybeShowNewbieGuide();
     hideMessage();
@@ -1127,19 +1197,36 @@ async function loadStock(stockId, options = {}) {
 }
 
 async function syncStock(stockId, options = {}) {
+  const target = String(stockId || "").trim();
+  if (!target) return;
   if (state.syncing) return;
+  if (!options.force) {
+    showMessage(`檢查 ${target} 本地資料日期...`);
+    try {
+      const freshness = await getJson(`/api/sync/freshness/${encodeURIComponent(target)}`);
+      if (freshness?.can_skip_sync) {
+        await loadStock(target, { quiet: true });
+        showMessage(freshness.message || `${target} 已是最近收盤資料。`);
+        window.setTimeout(hideMessage, 1800);
+        return;
+      }
+    } catch (error) {
+      showMessage(`無法確認資料日期，改走同步流程：${error.message}`);
+    }
+  }
   state.syncing = true;
   setSyncing(true);
-  state.activeStockId = stockId;
-  renderSyncLoading(stockId, options);
+  state.activeStockId = target;
+  renderSyncLoading(target, options);
   showSheet("stock");
   try {
     const payload = await postJson("/api/sync", {
-      stock_id: stockId,
+      stock_id: target,
       lookback_days: STOCK_SYNC_LOOKBACK_DAYS,
+      skip_if_current: true,
     });
-    state.activeStockId = stockId;
-    renderStock(payload, stockId);
+    state.activeStockId = target;
+    renderStock(payload, target);
     showSheet("stock");
     maybeShowNewbieGuide();
     elements.searchInput.value = "";
@@ -1147,7 +1234,7 @@ async function syncStock(stockId, options = {}) {
     showMessage(payload.sync?.message || "同步完成");
     window.setTimeout(hideMessage, 1800);
   } catch (error) {
-    renderSyncFailure(stockId, error);
+    renderSyncFailure(target, error);
     showMessage(error.message, true);
   } finally {
     state.syncing = false;
@@ -3998,6 +4085,15 @@ function formatMoney(value) {
   })}`;
 }
 
+function formatCompactAmount(value) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const amount = Number(value);
+  const absAmount = Math.abs(amount);
+  if (absAmount >= 100000000) return `${formatNumber(amount / 100000000)} 億`;
+  if (absAmount >= 10000) return `${formatNumber(amount / 10000)} 萬`;
+  return formatInteger(amount);
+}
+
 function formatSignedMoney(value) {
   if (value == null || Number.isNaN(Number(value))) return "--";
   const number = Number(value);
@@ -4743,9 +4839,13 @@ async function syncLevelsTargets() {
     const payload = await syncTargetsBatch(targets);
     const succeeded = Number(payload.succeeded || 0);
     const failed = Number(payload.failed || 0);
+    const skipped = Number(payload.skipped || 0);
+    const refreshed = Math.max(0, succeeded - skipped);
     const message = failed
       ? `波段提醒資料更新完成：${succeeded}/${payload.requested || targets.length} 檔成功，${failed} 檔失敗。`
-      : `波段提醒資料更新完成：${succeeded} 檔已更新。`;
+      : skipped
+        ? `波段提醒資料檢查完成：${refreshed} 檔更新、${skipped} 檔已是最近收盤。`
+        : `波段提醒資料更新完成：${succeeded} 檔已更新。`;
     showMessage(message, failed > 0);
     await loadLocalData();
     if (state.activeStockId && targets.includes(state.activeStockId)) {
@@ -4771,7 +4871,8 @@ async function syncLevelTarget(stockId) {
     const payload = await syncTargetsBatch([target]);
     const ok = Number(payload.succeeded || 0) > 0;
     if (ok) {
-      showMessage(`${target} 資料已更新。`);
+      const skipped = Number(payload.skipped || 0) > 0;
+      showMessage(skipped ? `${target} 已是最近收盤資料。` : `${target} 資料已更新。`);
       await loadLocalData();
       if (state.activeStockId === target) {
         await loadStock(target, { quiet: true, keepSheet: true });
@@ -4820,12 +4921,15 @@ async function syncTargetsConcurrently(targets, concurrency = LEVEL_SYNC_CONCURR
         const payload = await postJson("/api/sync", {
           stock_id: stockId,
           lookback_days: STOCK_SYNC_LOOKBACK_DAYS,
+          skip_if_current: true,
         });
         const rows = Number(payload.sync?.rows_written || 0);
+        const skipped = Boolean(payload.sync?.skipped);
         rowsWritten += rows;
         results.push({
           stock_id: stockId,
           ok: true,
+          skipped,
           rows_written: rows,
           message: payload.sync?.message || "",
         });
@@ -4845,9 +4949,11 @@ async function syncTargetsConcurrently(targets, concurrency = LEVEL_SYNC_CONCURR
 
   await Promise.all(Array.from({ length: workerCount }, () => runOne()));
   const succeeded = results.filter((item) => item.ok).length;
+  const skipped = results.filter((item) => item.ok && item.skipped).length;
   return {
     requested: safeTargets.length,
     succeeded,
+    skipped,
     failed: safeTargets.length - succeeded,
     rows_written: rowsWritten,
     results,
@@ -4860,6 +4966,7 @@ async function syncTargetsViaBatchEndpoint(targets) {
     return await postJson("/api/sync/batch", {
       stock_ids: targets,
       lookback_days: STOCK_SYNC_LOOKBACK_DAYS,
+      skip_if_current: true,
     });
   } catch (error) {
     if (!/not found|HTTP 404/i.test(error.message || "")) throw error;
