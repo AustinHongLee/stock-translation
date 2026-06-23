@@ -48,6 +48,9 @@ class StockSyncService:
             raise ValueError("lookback_days must be positive")
 
         started_at = datetime.now()
+        rows_written = 0
+        status = "success"
+        message = ""
         end_date = end_date or date.today()
         target_date = target_date or previous_business_day(end_date)
         coverage_before = self.store.refresh_data_coverage(
@@ -63,63 +66,41 @@ class StockSyncService:
             lookback_days=lookback_days,
             max_patch_business_days=45,
         )
-        if gap_plan.status == STATUS_CURRENT:
-            message = gap_plan.reason
-            self.store.record_sync_run(
-                kind="stock_history",
-                target=stock_id,
-                status="skipped",
-                rows_written=0,
-                started_at=started_at,
-                finished_at=datetime.now(),
-                message=message,
-            )
-            return SyncResult(
-                stock_id=stock_id,
-                rows_written=0,
-                started_at=started_at,
-                finished_at=datetime.now(),
-                message=message,
-                skipped=True,
-                gap_plan=gap_plan.to_json(),
-                coverage=coverage_before,
-            )
-
         start_date = gap_plan.fetch_start_date or (target_date - timedelta(days=lookback_days))
         fetch_end_date = gap_plan.fetch_end_date or target_date
-        rows_written = 0
-        status = "success"
-        message = ""
 
         try:
-            profile = self.client.fetch_profile(stock_id)
-            if profile is not None:
-                self.store.upsert_profiles([profile])
+            metadata = self._refresh_stock_metadata(stock_id, start_date, fetch_end_date)
+            rows_written += int(metadata["rows_written"])
+            if gap_plan.status == STATUS_CURRENT:
+                message = (
+                    f"{gap_plan.reason} Price rows were skipped; refreshed metadata "
+                    f"({metadata['dividend_rows']} dividends, {metadata['valuation_rows']} valuation, "
+                    f"{metadata['revenue_rows']} revenue, {metadata['financial_rows']} financial)."
+                )
+                dividend_warnings = metadata["dividend_warnings"]
+                if dividend_warnings:
+                    message += (
+                        f" Skipped {len(dividend_warnings)} dividend issue(s); "
+                        f"first skipped: {dividend_warnings[0]}"
+                    )
+                return SyncResult(
+                    stock_id=stock_id,
+                    rows_written=rows_written,
+                    started_at=started_at,
+                    finished_at=datetime.now(),
+                    message=message,
+                    skipped=False,
+                    gap_plan=gap_plan.to_json(),
+                    coverage=coverage_before,
+                )
 
             if hasattr(self.client, "last_warnings"):
                 self.client.last_warnings = []
-            dividend_warnings: list[str] = []
-            dividends = list(self.client.fetch_dividend_records(stock_id))
-            if hasattr(self.client, "fetch_historical_dividend_records"):
-                try:
-                    warning_count = len(getattr(self.client, "last_warnings", []))
-                    dividends.extend(
-                        self.client.fetch_historical_dividend_records(
-                            stock_id,
-                            start_date,
-                            fetch_end_date,
-                        )
-                    )
-                    dividend_warnings.extend(getattr(self.client, "last_warnings", [])[warning_count:])
-                except Exception as exc:
-                    dividend_warnings.append(f"Skipped historical dividends: {exc}")
-            dividends = _dedupe_dividend_records(dividends)
-            dividend_rows = self.store.upsert_dividend_records(dividends)
-
             prices = self.client.fetch_daily_prices(stock_id, start_date, fetch_end_date)
             price_warnings = list(getattr(self.client, "last_warnings", []))
             price_rows = self.store.upsert_daily_prices(prices)
-            rows_written = price_rows
+            rows_written += price_rows
             coverage_after_raw = self.store.refresh_data_coverage(
                 stock_id,
                 DATA_NODE_DAILY_PRICE,
@@ -137,14 +118,8 @@ class StockSyncService:
                 status=post_status.status,
                 suspect_reason=post_status.reason if post_status.status != "patched" else "",
             )
-            valuation = self.client.fetch_market_valuation(stock_id)
-            valuation_rows = self.store.upsert_market_valuations([valuation]) if valuation else 0
-            revenue = self.client.fetch_monthly_revenue(stock_id)
-            revenue_rows = self.store.upsert_monthly_revenues([revenue]) if revenue else 0
-            financial = self.client.fetch_financial_statement(stock_id)
-            financial_rows = self.store.upsert_financial_statements([financial]) if financial else 0
-            rows_written += dividend_rows + valuation_rows + revenue_rows + financial_rows
             warning_parts = []
+            dividend_warnings = metadata["dividend_warnings"]
             if dividend_warnings:
                 warning_parts.append(
                     f"Skipped {len(dividend_warnings)} dividend issue(s); "
@@ -159,9 +134,9 @@ class StockSyncService:
             message = (
                 f"Synced {rows_written} rows for {stock_id} "
                 f"({len(prices)} prices from {start_date.isoformat()} to {fetch_end_date.isoformat()}, "
-                f"{dividend_rows} dividends, "
-                f"{valuation_rows} valuation, {revenue_rows} revenue, "
-                f"{financial_rows} financial). Data gap: {gap_plan.reason} "
+                f"{metadata['dividend_rows']} dividends, "
+                f"{metadata['valuation_rows']} valuation, {metadata['revenue_rows']} revenue, "
+                f"{metadata['financial_rows']} financial). Data gap: {gap_plan.reason} "
                 f"Post-check: {post_status.reason}.{warning_text}"
             )
             return SyncResult(
@@ -187,6 +162,50 @@ class StockSyncService:
                 finished_at=datetime.now(),
                 message=message,
             )
+
+    def _refresh_stock_metadata(
+        self,
+        stock_id: str,
+        start_date: date,
+        fetch_end_date: date,
+    ) -> dict[str, object]:
+        profile = self.client.fetch_profile(stock_id)
+        if profile is not None:
+            self.store.upsert_profiles([profile])
+
+        if hasattr(self.client, "last_warnings"):
+            self.client.last_warnings = []
+        dividend_warnings: list[str] = []
+        dividends = list(self.client.fetch_dividend_records(stock_id))
+        if hasattr(self.client, "fetch_historical_dividend_records"):
+            try:
+                warning_count = len(getattr(self.client, "last_warnings", []))
+                dividends.extend(
+                    self.client.fetch_historical_dividend_records(
+                        stock_id,
+                        start_date,
+                        fetch_end_date,
+                    )
+                )
+                dividend_warnings.extend(getattr(self.client, "last_warnings", [])[warning_count:])
+            except Exception as exc:
+                dividend_warnings.append(f"Skipped historical dividends: {exc}")
+        dividends = _dedupe_dividend_records(dividends)
+        dividend_rows = self.store.upsert_dividend_records(dividends)
+        valuation = self.client.fetch_market_valuation(stock_id)
+        valuation_rows = self.store.upsert_market_valuations([valuation]) if valuation else 0
+        revenue = self.client.fetch_monthly_revenue(stock_id)
+        revenue_rows = self.store.upsert_monthly_revenues([revenue]) if revenue else 0
+        financial = self.client.fetch_financial_statement(stock_id)
+        financial_rows = self.store.upsert_financial_statements([financial]) if financial else 0
+        return {
+            "rows_written": dividend_rows + valuation_rows + revenue_rows + financial_rows,
+            "dividend_rows": dividend_rows,
+            "valuation_rows": valuation_rows,
+            "revenue_rows": revenue_rows,
+            "financial_rows": financial_rows,
+            "dividend_warnings": dividend_warnings,
+        }
 
 
     def sync_institutional(

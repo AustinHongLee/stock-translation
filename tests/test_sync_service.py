@@ -289,9 +289,14 @@ class StockSyncServiceTests(unittest.TestCase):
                     lookback_days=365,
                     end_date=date(2026, 6, 21),
                 )
+                self.assertEqual(store.get_profile("2330").short_name, "台積電")  # type: ignore[union-attr]
+                self.assertEqual(store.get_latest_market_valuation("2330").pe_ratio, 30.25)  # type: ignore[union-attr]
+                self.assertEqual(store.get_monthly_revenues("2330")[0].year_month, "2026-05")
+                self.assertEqual(store.get_latest_financial_statement("2330").eps, 22.08)  # type: ignore[union-attr]
 
             self.assertEqual(client.price_ranges, [])
-            self.assertTrue(result.skipped)
+            self.assertFalse(result.skipped)
+            self.assertGreater(result.rows_written, 0)
             self.assertEqual(result.gap_plan["target_date"], "2026-06-18")  # type: ignore[index]
 
     def test_sync_institutional_uses_gap_plan(self) -> None:
