@@ -260,9 +260,9 @@ class StockSyncServiceTests(unittest.TestCase):
                     target_date=date(2026, 6, 22),
                 )
 
-            self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 19), date(2026, 6, 22))])
+            self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 22), date(2026, 6, 22))])
             self.assertFalse(result.skipped)
-            self.assertEqual(result.gap_plan["fetch_start_date"], "2026-06-19")  # type: ignore[index]
+            self.assertEqual(result.gap_plan["fetch_start_date"], "2026-06-22")  # type: ignore[index]
             self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
 
     def test_sync_stock_history_defaults_weekend_target_to_previous_business_day(self) -> None:
@@ -290,8 +290,9 @@ class StockSyncServiceTests(unittest.TestCase):
                     end_date=date(2026, 6, 21),
                 )
 
-            self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 19), date(2026, 6, 19))])
-            self.assertEqual(result.gap_plan["target_date"], "2026-06-19")  # type: ignore[index]
+            self.assertEqual(client.price_ranges, [])
+            self.assertTrue(result.skipped)
+            self.assertEqual(result.gap_plan["target_date"], "2026-06-18")  # type: ignore[index]
 
     def test_sync_institutional_uses_gap_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -320,7 +321,7 @@ class StockSyncServiceTests(unittest.TestCase):
 
             self.assertEqual(
                 client.institutional_ranges,
-                [("2330", date(2026, 6, 19), date(2026, 6, 22), 20)],
+                [("2330", date(2026, 6, 22), date(2026, 6, 22), 20)],
             )
             self.assertFalse(result.skipped)
             self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]

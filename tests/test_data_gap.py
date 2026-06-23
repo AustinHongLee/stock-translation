@@ -12,7 +12,9 @@ from app.analyze.data_gap import (
     STATUS_SOURCE_PENDING,
     STATUS_SUSPECT,
     count_business_days,
+    next_business_day,
     plan_data_gap,
+    previous_business_day,
     resolve_post_patch_status,
 )
 
@@ -42,9 +44,9 @@ class DataGapTests(unittest.TestCase):
         )
 
         self.assertEqual(plan.status, STATUS_GAP)
-        self.assertEqual(plan.fetch_start_date, date(2026, 6, 19))
+        self.assertEqual(plan.fetch_start_date, date(2026, 6, 22))
         self.assertEqual(plan.fetch_end_date, date(2026, 6, 22))
-        self.assertEqual(plan.gap_business_days, 2)
+        self.assertEqual(plan.gap_business_days, 1)
         self.assertTrue(plan.can_patch)
 
     def test_large_gap_trips_refresh_gate(self) -> None:
@@ -95,8 +97,10 @@ class DataGapTests(unittest.TestCase):
             STATUS_SUSPECT,
         )
 
-    def test_business_day_count_skips_weekends(self) -> None:
-        self.assertEqual(count_business_days(date(2026, 6, 19), date(2026, 6, 22)), 2)
+    def test_business_day_count_skips_weekends_and_twse_holidays(self) -> None:
+        self.assertEqual(count_business_days(date(2026, 6, 19), date(2026, 6, 22)), 1)
+        self.assertEqual(previous_business_day(date(2026, 6, 21)), date(2026, 6, 18))
+        self.assertEqual(next_business_day(date(2026, 6, 19)), date(2026, 6, 22))
 
 
 if __name__ == "__main__":

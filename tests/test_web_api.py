@@ -92,7 +92,7 @@ class WebApiPayloadTests(unittest.TestCase):
                 json.dumps(
                     {
                         "items": [
-                            {"stock_id": "2330", "price_date": "2026-06-18"},
+                            {"stock_id": "2330", "price_date": "2026-06-17"},
                         ]
                     },
                     ensure_ascii=False,
@@ -102,7 +102,7 @@ class WebApiPayloadTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 store.upsert_daily_prices(
                     [
-                        DailyPrice("2330", date(2026, 6, 18), 100, 105, 99, 104, 10),
+                        DailyPrice("2330", date(2026, 6, 17), 100, 105, 99, 104, 10),
                     ]
                 )
 
@@ -117,7 +117,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertFalse(payload["can_skip_sync"])
         self.assertTrue(payload["snapshot_stale"])
         self.assertEqual(payload["snapshot_lag_business_days"], 2)
-        self.assertEqual(payload["reference_latest_date"], "2026-06-18")
+        self.assertEqual(payload["reference_latest_date"], "2026-06-17")
         self.assertEqual(payload["target_latest_date"], "2026-06-22")
         self.assertEqual(payload["daily_price"]["gap"]["target_date"], "2026-06-22")
 
@@ -131,7 +131,7 @@ class WebApiPayloadTests(unittest.TestCase):
                     {
                         "generated_at": "2026-06-23T08:30:00+00:00",
                         "items": [
-                            {"stock_id": "2330", "price_date": "2026-06-18"},
+                            {"stock_id": "2330", "price_date": "2026-06-17"},
                         ],
                     },
                     ensure_ascii=False,
@@ -141,7 +141,7 @@ class WebApiPayloadTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 store.upsert_daily_prices(
                     [
-                        DailyPrice("2330", date(2026, 6, 18), 100, 105, 99, 104, 10),
+                        DailyPrice("2330", date(2026, 6, 17), 100, 105, 99, 104, 10),
                     ]
                 )
 
@@ -155,7 +155,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(payload["status"], "current")
         self.assertTrue(payload["can_skip_sync"])
         self.assertFalse(payload["snapshot_stale"])
-        self.assertEqual(payload["target_latest_date"], "2026-06-18")
+        self.assertEqual(payload["target_latest_date"], "2026-06-17")
         self.assertEqual(payload["target_source"], "stock_snapshot")
 
     def test_local_data_payload_exposes_report_date_and_target_date(self) -> None:
@@ -167,7 +167,7 @@ class WebApiPayloadTests(unittest.TestCase):
                 json.dumps(
                     {
                         "items": [
-                            {"stock_id": "2330", "price_date": "2026-06-18"},
+                            {"stock_id": "2330", "price_date": "2026-06-17"},
                         ]
                     },
                     ensure_ascii=False,
@@ -177,7 +177,7 @@ class WebApiPayloadTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 store.upsert_daily_prices(
                     [
-                        DailyPrice("2330", date(2026, 6, 18), 100, 105, 99, 104, 10),
+                        DailyPrice("2330", date(2026, 6, 17), 100, 105, 99, 104, 10),
                     ]
                 )
 

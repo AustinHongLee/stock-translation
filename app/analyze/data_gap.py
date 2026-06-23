@@ -4,6 +4,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from app.analyze.twse_calendar import (
+    count_twse_trading_days,
+    next_twse_trading_day,
+    previous_twse_trading_day,
+)
+
 DATA_NODE_DAILY_PRICE = "daily_price"
 DATA_NODE_INSTITUTIONAL = "institutional"
 
@@ -119,7 +125,7 @@ def plan_data_gap(
             reason=f"No local {node} coverage; initial backfill is required.",
         )
 
-    fetch_start = latest + timedelta(days=1)
+    fetch_start = next_business_day(latest + timedelta(days=1))
     gap_days = count_business_days(fetch_start, target)
     if gap_days > max_patch_business_days:
         wide_start = target - timedelta(days=lookback_days)
@@ -180,22 +186,15 @@ def resolve_post_patch_status(
 
 
 def count_business_days(start_date: date, end_date: date) -> int:
-    if end_date < start_date:
-        return 0
-    total = 0
-    day = start_date
-    while day <= end_date:
-        if day.weekday() < 5:
-            total += 1
-        day += timedelta(days=1)
-    return total
+    return count_twse_trading_days(start_date, end_date)
 
 
 def previous_business_day(day: date) -> date:
-    current = day
-    while current.weekday() >= 5:
-        current -= timedelta(days=1)
-    return current
+    return previous_twse_trading_day(day)
+
+
+def next_business_day(day: date) -> date:
+    return next_twse_trading_day(day)
 
 
 def _as_date(value: date | str | None) -> date | None:
