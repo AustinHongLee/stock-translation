@@ -166,6 +166,7 @@ def resolve_post_patch_status(
     *,
     latest_date: date | str | None,
     rows_written: int,
+    source_pending_grace_business_days: int = 1,
 ) -> PostPatchStatus:
     latest = _as_date(latest_date)
     if plan.target_date is None:
@@ -179,6 +180,13 @@ def resolve_post_patch_status(
             STATUS_SOURCE_PENDING,
             "The source returned no newer rows; it may not have published the target date yet.",
         )
+    if latest is not None:
+        lag_days = count_business_days(latest + timedelta(days=1), plan.target_date)
+        if 0 < lag_days <= source_pending_grace_business_days:
+            return PostPatchStatus(
+                STATUS_SOURCE_PENDING,
+                "Rows were written, but the source is still within the publication grace window.",
+            )
     return PostPatchStatus(
         STATUS_SUSPECT,
         "Rows were written but coverage still did not reach the target date.",

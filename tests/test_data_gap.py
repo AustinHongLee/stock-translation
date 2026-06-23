@@ -93,7 +93,11 @@ class DataGapTests(unittest.TestCase):
             STATUS_SOURCE_PENDING,
         )
         self.assertEqual(
-            resolve_post_patch_status(plan, latest_date=date(2026, 6, 20), rows_written=1).status,
+            resolve_post_patch_status(plan, latest_date=date(2026, 6, 18), rows_written=1).status,
+            STATUS_SOURCE_PENDING,
+        )
+        self.assertEqual(
+            resolve_post_patch_status(plan, latest_date=date(2026, 6, 17), rows_written=1).status,
             STATUS_SUSPECT,
         )
 
