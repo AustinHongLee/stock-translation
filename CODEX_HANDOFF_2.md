@@ -80,6 +80,7 @@ python -m compileall app tests              # 編譯掃描
   - 2026-06-23 驗證（2026 台股休市日）：新增 `app/analyze/twse_calendar.py`，將 TWSE 2026 休市日接入 `count_business_days()`、`previous_business_day()` 與新增的 `next_business_day()`；資料缺口補正會跳過 2026 國定假日，6/19 端午休市不再被算成缺 1 日，增量抓取也會從下一個交易日開始。`RISK_REVIEW_2026-06-23.md` 已改成原始審查 + 修正追蹤，標出 B3 目前是「部分修」，後續仍需官方 CSV/多年度交易日曆。已跑 `python -m unittest tests.test_data_gap tests.test_market_calendar tests.test_sync_service tests.test_web_api tests.test_local_data`（31 OK）、`python -m py_compile app/analyze/twse_calendar.py app/analyze/data_gap.py app/analyze/market_calendar.py app/sync/service.py`。
   - 2026-06-23 驗證（日線 current 仍刷新 metadata）：`StockSyncService.sync_stock_history()` 改成先刷新 profile、股利、估值、月營收、財報 metadata；若日線已到 target，只跳過 `fetch_daily_prices()`，不再整包早退。已補測試確認價格 range 不會被打、但 profile/估值/月營收/財報仍寫入。已跑 `python -m unittest tests.test_sync_service tests.test_data_gap tests.test_web_api`（24 OK）、`python -m py_compile app/sync/service.py`。
   - 2026-06-23 驗證（雷達 latest_close 欄位）：雷達 payload 新增 `latest_close`，`current_price` 保留作為舊 UI/匯出相容 alias；`load_value_screener()` 會為舊快照 backfill `latest_close`，Excel 匯出優先讀新欄位。`RISK_REVIEW_2026-06-23.md` 將 F2 標成「部分修」，後續可逐步淘汰 `current_price` alias。已跑 `python -m unittest tests.test_value_screener tests.test_excel_screener_export tests.test_web_api tests.test_ui_theme`（29 OK）、`python -m py_compile app/screener/value.py app/exporters/excel.py`。
+  - 2026-06-23 驗證（歷史頻率措辭降風險）：個股頁歷史頻率卡片將「最近一日符合」改為「近期出現」，且當近期命中時加上「不代表後續走勢」旁註；`RISK_REVIEW_2026-06-23.md` 將 E2 更新為部分修。
 
 ### C. 深化既有功能（挑著做，研究型先出文件）
 

@@ -117,7 +117,9 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("payload.historical_frequency", js)
         self.assertIn("function renderHistoricalFrequency", js)
         self.assertIn("normal_positive_area_percent", js)
+        self.assertIn("不代表後續走勢", js)
         self.assertIn(".historical-frequency-grid", css)
+        self.assertIn(".historical-current-note", css)
 
     def test_local_data_table_exposes_gap_status(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")

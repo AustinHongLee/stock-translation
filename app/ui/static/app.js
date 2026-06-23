@@ -2281,7 +2281,10 @@ function renderHistoricalFrequency(report) {
 
 function renderHistoricalFrequencyEvent(event) {
   const windows = Array.isArray(event.windows) ? event.windows : [];
-  const current = event.current_match ? `<span class="historical-current">最近一日符合</span>` : "";
+  const current = event.current_match ? `<span class="historical-current">近期出現</span>` : "";
+  const currentNote = event.current_match
+    ? `<p class="historical-current-note">只表示最近一日也命中此條件，不代表後續走勢。</p>`
+    : "";
   const latest = event.latest_trigger_date ? `最近樣本 ${event.latest_trigger_date}` : "樣本內未命中";
   return `
     <article class="historical-event-card">
@@ -2296,6 +2299,7 @@ function renderHistoricalFrequencyEvent(event) {
         <span>觸發 ${formatInteger(event.trigger_count || 0)} 次</span>
         <span>${escapeHtml(latest)}</span>
       </div>
+      ${currentNote}
       <div class="historical-window-grid">
         ${windows.map(renderHistoricalWindow).join("")}
       </div>
