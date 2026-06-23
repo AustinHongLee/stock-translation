@@ -12,6 +12,7 @@ from app.analyze.dividends import (
     dedupe_dividend_records as _dedupe_dividend_records,
     dividend_history_start_date,
 )
+from app.analyze.data_gap import DATA_NODE_DAILY_PRICE, previous_business_day
 from app.analyze.twse_calendar import is_twse_trading_day
 from app.sync.bulk import BulkPlan
 from app.sync.twse import TwseClient
@@ -30,6 +31,7 @@ def build_bulk_plan(
 ) -> BulkPlan:
     ctx: dict = {}
     today = date.today()
+    target_date = previous_business_day(today)
     start = today - timedelta(days=max(1, lookback_days))
 
     def prelude(stop_event) -> None:
@@ -118,6 +120,7 @@ def build_bulk_plan(
             prices = client.fetch_daily_prices(sid, start, today)
             if prices:
                 store.upsert_daily_prices(prices)
+                store.refresh_data_coverage(sid, DATA_NODE_DAILY_PRICE, target_date=target_date)
         except Exception as exc:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "failed", error=str(exc))
             raise

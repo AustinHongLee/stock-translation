@@ -3,6 +3,7 @@
 與前端 K 線同一套 swing-pivot 邏輯：在近 window 個交易日找波段轉折點（前後各 k 天都
     更高/更低），取最接近現價的『上方壓力』與『下方支撐』，再判斷目前是否接近其中之一。
     若價格已突破所有樞紐高或跌破所有樞紐低，不把錯邊舊關卡硬當壓力/支撐。
+    末端轉折會在至少 1 根右側 K 線確認後先納入，並過濾單一長影線噪音。
 
 紅線：只描述價位與接近狀態的事實，不預測股價、不給買賣建議。
 """
@@ -15,6 +16,8 @@ SR_WINDOW = 60       # 波段：近 60 個交易日
 SR_PIVOT_K = 3       # 樞紐強度：前後各 3 天
 SR_TOLERANCE = 2.0   # 接近門檻（%）
 _LIMIT_LOCK_GAP = 0.07
+_PIVOT_TOUCH_TOLERANCE = 0.025
+_PIVOT_CLOSE_TOLERANCE = 0.03
 
 
 def _get(obj: Any, key: str) -> Any:
@@ -38,9 +41,15 @@ def _f(value: Any) -> float | None:
     return f if math.isfinite(f) else None
 
 
-def swing_pivots(highs: Sequence[float], lows: Sequence[float], k: int) -> tuple[list[float], list[float]]:
-    pivot_highs: list[float] = []
-    pivot_lows: list[float] = []
+def swing_pivot_points(
+    highs: Sequence[float],
+    lows: Sequence[float],
+    k: int,
+    *,
+    include_terminal: bool = False,
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    pivot_highs: list[tuple[int, float]] = []
+    pivot_lows: list[tuple[int, float]] = []
     n = min(len(highs), len(lows))
     for i in range(k, n - k):
         h = highs[i]
@@ -48,10 +57,83 @@ def swing_pivots(highs: Sequence[float], lows: Sequence[float], k: int) -> tuple
         is_high = all(highs[j] < h for j in range(i - k, i + k + 1) if j != i)
         is_low = all(lows[j] > l for j in range(i - k, i + k + 1) if j != i)
         if is_high:
-            pivot_highs.append(h)
+            pivot_highs.append((i, h))
         if is_low:
-            pivot_lows.append(l)
+            pivot_lows.append((i, l))
+    if include_terminal:
+        terminal_highs, terminal_lows = _terminal_pivot_points(highs, lows, k)
+        by_high_index = {idx: value for idx, value in pivot_highs}
+        by_low_index = {idx: value for idx, value in pivot_lows}
+        by_high_index.update(terminal_highs)
+        by_low_index.update(terminal_lows)
+        pivot_highs = sorted(by_high_index.items())
+        pivot_lows = sorted(by_low_index.items())
     return pivot_highs, pivot_lows
+
+
+def swing_pivots(highs: Sequence[float], lows: Sequence[float], k: int) -> tuple[list[float], list[float]]:
+    pivot_highs, pivot_lows = swing_pivot_points(highs, lows, k)
+    return [value for _, value in pivot_highs], [value for _, value in pivot_lows]
+
+
+def _terminal_pivot_points(
+    highs: Sequence[float],
+    lows: Sequence[float],
+    k: int,
+) -> tuple[dict[int, float], dict[int, float]]:
+    terminal_highs: dict[int, float] = {}
+    terminal_lows: dict[int, float] = {}
+    n = min(len(highs), len(lows))
+    if n < k + 2:
+        return terminal_highs, terminal_lows
+    start = max(k, n - k)
+    # The latest bar itself has no right-side confirmation; wait for at least
+    # one subsequent bar before treating a fresh turn as provisional.
+    for i in range(start, n - 1):
+        left = range(i - k, i)
+        right = range(i + 1, n)
+        h = highs[i]
+        l = lows[i]
+        if all(highs[j] < h for j in left) and all(highs[j] < h for j in right):
+            terminal_highs[i] = h
+        if all(lows[j] > l for j in left) and all(lows[j] > l for j in right):
+            terminal_lows[i] = l
+    return terminal_highs, terminal_lows
+
+
+def _filter_noisy_pivots(
+    pivots: list[tuple[int, float]],
+    rows: list[dict[str, Any]],
+    *,
+    side: str,
+) -> list[float]:
+    return [
+        value
+        for index, value in pivots
+        if _has_nearby_touch(value, rows, side=side)
+        or _pivot_close_confirms(rows[index], value, side=side)
+    ]
+
+
+def _has_nearby_touch(level: float, rows: list[dict[str, Any]], *, side: str) -> bool:
+    key = "high" if side == "high" else "low"
+    touches = 0
+    for row in rows:
+        value = row[key]
+        if level > 0 and abs(value - level) / level <= _PIVOT_TOUCH_TOLERANCE:
+            touches += 1
+            if touches >= 2:
+                return True
+    return False
+
+
+def _pivot_close_confirms(row: dict[str, Any], level: float, *, side: str) -> bool:
+    close = row["close"]
+    if level <= 0 or close <= 0:
+        return False
+    if side == "high":
+        return (level - close) / level <= _PIVOT_CLOSE_TOLERANCE
+    return (close - level) / level <= _PIVOT_CLOSE_TOLERANCE
 
 
 def compute_support_resistance(
@@ -63,7 +145,8 @@ def compute_support_resistance(
 ) -> dict[str, Any]:
     """回傳 {available, support, resistance, dist_support_pct, dist_resistance_pct, status}。
 
-    status: 接近波撐 / 接近波壓 / 創區間新高 / 創區間新低 / 區間中 / 資料不足。固定輸入→固定輸出。
+    status: 接近波撐 / 接近波壓 / 創區間新高 / 創區間新低 / 支撐上方 / 壓力下方 / 關卡待確認 / 區間中 / 資料不足。
+    固定輸入→固定輸出。
     prices 由舊到新（chronological），可為 dict 或物件（有 high/low/close）。
     """
     rows = _valid_price_rows(prices)
@@ -78,7 +161,9 @@ def compute_support_resistance(
         return {"available": False, "status": "資料不足", "support": None, "resistance": None,
                 "dist_support_pct": None, "dist_resistance_pct": None}
 
-    pivot_highs, pivot_lows = swing_pivots(highs, lows, k)
+    pivot_high_points, pivot_low_points = swing_pivot_points(highs, lows, k, include_terminal=True)
+    pivot_highs = _filter_noisy_pivots(pivot_high_points, seg, side="high")
+    pivot_lows = _filter_noisy_pivots(pivot_low_points, seg, side="low")
     above = [p for p in pivot_highs if p > close]
     resistance = min(above) if above else None
     below = [p for p in pivot_lows if p < close]
@@ -98,6 +183,12 @@ def compute_support_resistance(
         status = "接近波撐"
     elif near_r:
         status = "接近波壓"
+    elif support is not None and resistance is None:
+        status = "支撐上方"
+    elif resistance is not None and support is None:
+        status = "壓力下方"
+    elif support is None and resistance is None:
+        status = "關卡待確認"
 
     return {
         "available": True,

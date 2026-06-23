@@ -207,6 +207,7 @@ class SQLiteStoreTests(unittest.TestCase):
                     "institutional",
                     target_date=date(2026, 6, 23),
                 )
+                coverage_map = store.get_data_coverage_map("daily_price")
 
             self.assertEqual(computed["latest_date"], "2026-06-22")
             self.assertEqual(computed["status"], "current")
@@ -217,6 +218,8 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(inst_coverage["latest_date"], "2026-06-22")
             self.assertEqual(inst_coverage["hole_count"], 0)
             self.assertEqual(inst_coverage["status"], "gap")
+            self.assertEqual(coverage_map["2330"]["latest_date"], "2026-06-22")
+            self.assertEqual(coverage_map["2330"]["row_count"], 2)
 
     def test_portfolio_transactions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -63,6 +63,8 @@ def build_local_data_payload(
     today = today or date.today()
     inst_ids = store.get_institutional_stock_ids()
     reference_targets, default_target = _screener_reference_targets(screener_path, today=today)
+    price_coverage_by_stock = store.get_data_coverage_map(DATA_NODE_DAILY_PRICE)
+    institutional_coverage_by_stock = store.get_data_coverage_map(DATA_NODE_INSTITUTIONAL)
     items: list[dict[str, object]] = []
     for sid in sorted(store.get_price_stock_ids()):
         prices = store.get_daily_prices(sid, limit=140)
@@ -76,12 +78,14 @@ def build_local_data_payload(
             sid,
             DATA_NODE_DAILY_PRICE,
             target_date=target_date,
+            cached=price_coverage_by_stock.get(sid),
         )
         institutional_coverage = _coverage_snapshot(
             store,
             sid,
             DATA_NODE_INSTITUTIONAL,
             target_date=target_date,
+            cached=institutional_coverage_by_stock.get(sid),
         )
         price_gap = plan_data_gap(
             stock_id=sid,
@@ -349,7 +353,12 @@ def _coverage_snapshot(
     node: str,
     *,
     target_date: date | None,
+    cached: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    if cached is not None:
+        snapshot = dict(cached)
+        snapshot["target_date"] = target_date.isoformat() if target_date else None
+        return snapshot
     return store.compute_data_coverage(
         stock_id,
         node,

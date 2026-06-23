@@ -37,7 +37,7 @@ class LevelsTest(unittest.TestCase):
 
         self.assertEqual(near["resistance"], 12.0)
         self.assertEqual(near["status"], "接近波壓")
-        self.assertEqual(middle["status"], "區間中")
+        self.assertEqual(middle["status"], "支撐上方")
 
     def test_isolated_limit_lock_does_not_become_resistance(self):
         seq = _ohlc([
@@ -97,6 +97,40 @@ class LevelsTest(unittest.TestCase):
         self.assertIsNone(result["support"])
         self.assertIsNone(result["dist_support_pct"])
         self.assertIsNotNone(result["resistance"])
+
+    def test_recent_turn_can_be_used_after_one_confirmation_bar(self):
+        seq = _p([
+            (12.0, 10.0, 11.2),
+            (12.2, 10.3, 11.5),
+            (12.4, 10.5, 11.8),
+            (12.0, 10.2, 11.0),
+            (11.8, 9.8, 10.4),
+            (11.5, 9.2, 9.8),
+            (11.2, 8.6, 9.2),
+            (11.0, 8.0, 8.15),
+            (10.8, 8.3, 8.5),
+        ])
+
+        result = compute_support_resistance(seq, k=3, tolerance=7.0)
+
+        self.assertEqual(result["support"], 8.0)
+        self.assertEqual(result["status"], "接近波撐")
+
+    def test_single_long_upper_shadow_is_not_used_as_resistance(self):
+        seq = _ohlc([
+            (100, 103, 98, 101, 1000),
+            (101, 105, 100, 104, 1000),
+            (104, 107, 102, 105, 1000),
+            (105, 130, 103, 104, 1000),  # single long upper shadow
+            (104, 108, 102, 106, 1000),
+            (106, 109, 104, 108, 1000),
+            (108, 112, 107, 111, 1000),
+        ])
+
+        result = compute_support_resistance(seq, k=2, tolerance=3.0)
+
+        self.assertNotEqual(result["resistance"], 130.0)
+        self.assertEqual(result["status"], "關卡待確認")
 
     def test_bad_rows_keep_high_low_pairs_aligned(self):
         seq = _p([

@@ -764,6 +764,19 @@ class SQLiteStore:
         ).fetchone()
         return _coverage_from_row(row) if row is not None else None
 
+    def get_data_coverage_map(self, node: str) -> dict[str, dict[str, object]]:
+        rows = self.conn.execute(
+            """
+            SELECT stock_id, node, earliest_date, latest_date, row_count, hole_count,
+                   status, suspect_reason, target_date, last_checked_at,
+                   last_success_at, updated_at
+            FROM data_coverage
+            WHERE node = ?
+            """,
+            (node,),
+        ).fetchall()
+        return {row["stock_id"]: _coverage_from_row(row) for row in rows}
+
     def record_data_coverage(
         self,
         *,
