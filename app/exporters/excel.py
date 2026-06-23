@@ -142,7 +142,7 @@ def _write_screener_table(
                 item.get("short_name") or item.get("name"),
                 item.get("market"),
                 item.get("price_date"),
-                item.get("current_price"),
+                item.get("latest_close", item.get("current_price")),
                 item.get("previous_close"),
                 item.get("day_change"),
                 _as_percent_ratio(item.get("day_change_percent")),
@@ -240,7 +240,7 @@ def _write_legacy_valuation_table(
             [
                 item.get("stock_id"),
                 item.get("short_name") or item.get("name"),
-                item.get("current_price"),
+                item.get("latest_close", item.get("current_price")),
             ]
             + [by_year.get(str(y)) for y in years]
             + [

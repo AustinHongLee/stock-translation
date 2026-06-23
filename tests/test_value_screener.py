@@ -59,6 +59,7 @@ class ValueScreenerTests(unittest.TestCase):
         self.assertEqual(payload["turnover_leaders"][0]["stock_id"], "2330")  # type: ignore[index]
         self.assertEqual(payload["gap_up"][0]["stock_id"], "2330")  # type: ignore[index]
         self.assertEqual(payload["gap_down"][0]["stock_id"], "2303")  # type: ignore[index]
+        self.assertEqual(payload["items"][0]["latest_close"], 2440)  # type: ignore[index]
         self.assertAlmostEqual(payload["items"][0]["amplitude_percent"], 2.9166666666666665)  # type: ignore[index]
 
     def test_build_value_screener_payload_calculates_difference(self) -> None:
@@ -136,6 +137,8 @@ class ValueScreenerTests(unittest.TestCase):
         umc = by_id["2303"]
 
         self.assertEqual(first["stock_id"], "2303")
+        self.assertEqual(umc["latest_close"], 48)
+        self.assertEqual(umc["current_price"], 48)
         self.assertAlmostEqual(umc["average_cash_dividend"], 3.01)
         self.assertAlmostEqual(umc["cheap_price"], 48.16)
         self.assertAlmostEqual(umc["difference"], -0.16)

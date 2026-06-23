@@ -160,7 +160,7 @@ def build_value_screener_payload(
         data_years = len(annual_values)
         confidence, confidence_notes = _confidence(
             average_cash=average_cash,
-            current_price=price.close,
+            latest_close=price.close,
             data_years=data_years,
             target_years=dividend_years,
             profile=profile,
@@ -184,6 +184,8 @@ def build_value_screener_payload(
                 "short_name": profile.short_name,
                 "market": profile.market,
                 "price_date": price.date.isoformat(),
+                "latest_close": price.close,
+                # Backward-compatible alias for older UI/export code. Prefer latest_close in new code.
                 "current_price": price.close,
                 "previous_close": previous_close,
                 "open_price": price.open,
@@ -349,6 +351,10 @@ def _with_snapshot_rankings(payload: dict[str, object]) -> dict[str, object]:
     for raw_item in items:
         if not isinstance(raw_item, dict):
             continue
+        if raw_item.get("latest_close") is None and raw_item.get("current_price") is not None:
+            raw_item["latest_close"] = raw_item.get("current_price")
+        if raw_item.get("current_price") is None and raw_item.get("latest_close") is not None:
+            raw_item["current_price"] = raw_item.get("latest_close")
         previous_close = _safe_float(raw_item.get("previous_close"))
         if previous_close is None or previous_close <= 0:
             continue
@@ -476,7 +482,7 @@ def _status(average_cash: float | None, data_years: int, target_years: int) -> s
 def _confidence(
     *,
     average_cash: float | None,
-    current_price: float,
+    latest_close: float,
     data_years: int,
     target_years: int,
     profile: StockProfile,
@@ -500,7 +506,7 @@ def _confidence(
         confidence = "low"
         notes.append("上市未滿 3 年。")
 
-    current_yield = (average_cash / current_price) * 100 if current_price > 0 else None
+    current_yield = (average_cash / latest_close) * 100 if latest_close > 0 else None
     if current_yield is not None and current_yield < 1:
         confidence = "low"
         notes.append("估計殖利率低於 1%。")
