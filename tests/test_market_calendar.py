@@ -25,6 +25,20 @@ class MarketCalendarTests(unittest.TestCase):
         self.assertEqual(target.source, "stock_snapshot")
         self.assertFalse(target.snapshot_stale)
 
+    def test_one_business_day_old_snapshot_falls_back_next_day(self) -> None:
+        target = resolve_market_target_date(
+            reference_date=date(2026, 6, 22),
+            market_latest_date=date(2026, 6, 22),
+            snapshot_checked_date=date(2026, 6, 23),
+            as_of=date(2026, 6, 24),
+        )
+
+        self.assertEqual(target.target_date, date(2026, 6, 23))
+        self.assertEqual(target.source, "calendar_fallback")
+        self.assertEqual(target.snapshot_lag_business_days, 1)
+        self.assertEqual(target.snapshot_checked_lag_business_days, 0)
+        self.assertTrue(target.snapshot_stale)
+
     def test_stale_snapshot_falls_back_to_expected_close_date(self) -> None:
         target = resolve_market_target_date(
             reference_date=date(2026, 6, 17),
@@ -37,7 +51,7 @@ class MarketCalendarTests(unittest.TestCase):
         self.assertEqual(target.snapshot_lag_business_days, 2)
         self.assertTrue(target.snapshot_stale)
 
-    def test_recently_checked_snapshot_can_stay_on_old_price_date(self) -> None:
+    def test_recently_checked_snapshot_does_not_hide_old_price_date(self) -> None:
         target = resolve_market_target_date(
             reference_date=date(2026, 6, 17),
             market_latest_date=date(2026, 6, 17),
@@ -45,10 +59,11 @@ class MarketCalendarTests(unittest.TestCase):
             as_of=date(2026, 6, 23),
         )
 
-        self.assertEqual(target.target_date, date(2026, 6, 17))
+        self.assertEqual(target.target_date, date(2026, 6, 22))
+        self.assertEqual(target.source, "calendar_fallback")
         self.assertEqual(target.snapshot_lag_business_days, 2)
         self.assertEqual(target.snapshot_checked_lag_business_days, 0)
-        self.assertFalse(target.snapshot_stale)
+        self.assertTrue(target.snapshot_stale)
 
 
 if __name__ == "__main__":

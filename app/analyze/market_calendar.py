@@ -42,7 +42,7 @@ def resolve_market_target_date(
     market_latest_date: date | None = None,
     snapshot_checked_date: date | None = None,
     as_of: date | None = None,
-    tolerated_snapshot_lag_business_days: int = 1,
+    tolerated_snapshot_lag_business_days: int = 0,
 ) -> MarketTargetDate:
     today = as_of or date.today()
     expected = previous_completed_business_day(today)
@@ -62,10 +62,7 @@ def resolve_market_target_date(
 
     lag = _business_lag(snapshot_date, expected)
     checked_lag = _business_lag(snapshot_checked_date, expected) if snapshot_checked_date else lag
-    snapshot_stale = (
-        lag > tolerated_snapshot_lag_business_days
-        and checked_lag > tolerated_snapshot_lag_business_days
-    )
+    snapshot_stale = lag > tolerated_snapshot_lag_business_days
     if snapshot_stale:
         target_date = expected
         source = "calendar_fallback"

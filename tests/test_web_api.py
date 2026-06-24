@@ -139,7 +139,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(payload["target_latest_date"], "2026-06-22")
         self.assertEqual(payload["daily_price"]["gap"]["target_date"], "2026-06-22")
 
-    def test_sync_freshness_trusts_recently_checked_snapshot(self) -> None:
+    def test_sync_freshness_does_not_trust_recently_checked_old_price_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             db_path = root / "stock.sqlite3"
@@ -170,11 +170,51 @@ class WebApiPayloadTests(unittest.TestCase):
                     today=date(2026, 6, 23),
                 )
 
-        self.assertEqual(payload["status"], "current")
-        self.assertTrue(payload["can_skip_sync"])
-        self.assertFalse(payload["snapshot_stale"])
-        self.assertEqual(payload["target_latest_date"], "2026-06-17")
-        self.assertEqual(payload["target_source"], "stock_snapshot")
+        self.assertEqual(payload["status"], "stale_snapshot")
+        self.assertFalse(payload["can_skip_sync"])
+        self.assertTrue(payload["snapshot_stale"])
+        self.assertEqual(payload["target_latest_date"], "2026-06-22")
+        self.assertEqual(payload["target_source"], "calendar_fallback")
+
+    def test_sync_freshness_targets_yesterday_when_snapshot_stops_one_day_short(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-06-23T08:30:00+00:00",
+                        "items": [
+                            {"stock_id": "2330", "price_date": "2026-06-22"},
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 22), 100, 105, 99, 104, 10),
+                    ]
+                )
+
+                payload = build_sync_freshness_payload(
+                    store,
+                    "2330",
+                    screener_path=screener_path,
+                    today=date(2026, 6, 24),
+                )
+
+        self.assertEqual(payload["status"], "stale_snapshot")
+        self.assertFalse(payload["can_skip_sync"])
+        self.assertEqual(payload["local_latest_date"], "2026-06-22")
+        self.assertEqual(payload["reference_latest_date"], "2026-06-22")
+        self.assertEqual(payload["expected_latest_close_date"], "2026-06-23")
+        self.assertEqual(payload["target_latest_date"], "2026-06-23")
+        self.assertEqual(payload["daily_price"]["gap"]["status"], "gap")
+        self.assertEqual(payload["daily_price"]["gap"]["target_date"], "2026-06-23")
 
     def test_local_data_payload_exposes_report_date_and_target_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
