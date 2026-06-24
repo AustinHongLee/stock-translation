@@ -228,6 +228,23 @@
 
             <p id="screenerStatus" class="screener-status-text">用最近收盤快照整理股利情境、殖利率與漲跌排行；要補日線、三大法人與波段關卡，請到「本地資料」跑全市場資料下載。</p>
 
+            <nav class="screener-tabs" aria-label="雷達中心分頁">
+              <a href="#marketRadarPanel">市場心智雷達</a>
+              <a href="#screenerSnapshotPanel">收盤快照排行</a>
+            </nav>
+
+            <section id="marketRadarPanel" class="surface market-radar-panel">
+              <div class="surface-head">
+                <div>
+                  <h3>市場心智雷達</h3>
+                  <p id="marketRadarStatus" class="card-note">讀取跨股結構狀態中。</p>
+                </div>
+                <span class="muted-tag">描述現在 · 非預測</span>
+              </div>
+              <div id="marketRadarBody" class="market-radar-body"></div>
+              <p class="disclaimer">市場心智雷達只描述本地日線資料中的市場連動結構，不是方向、時點或操作訊號。</p>
+            </section>
+
             <section class="surface levels-card" id="levelsCard">
               <div class="surface-head compact">
                 <h3>波段關卡提醒</h3>
@@ -305,7 +322,7 @@
               <p class="disclaimer">漲跌榜使用最近收盤快照，不是盤中排行；漲跌只是事實，要進個股頁看體質。</p>
             </section>
 
-            <section class="surface screener-snapshot">
+            <section id="screenerSnapshotPanel" class="surface screener-snapshot">
               <div class="surface-head">
                 <h3>收盤快照排行</h3>
                 <span class="muted-tag">成交值 · 成交量 · 跳空 · 震幅</span>

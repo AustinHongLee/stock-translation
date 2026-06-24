@@ -31,6 +31,7 @@ from app.web.api import (
     build_indicator_catalog_payload,
     build_indicator_prefs_payload,
     build_local_data_payload,
+    build_market_radar_payload,
     build_portfolio_payload,
     build_search_payload,
     build_sync_freshness_payload,
@@ -455,6 +456,38 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertGreaterEqual(payload["count"], 1)
         self.assertEqual(payload["items"][0]["stock_id"], "2330")  # type: ignore[index]
 
+    def test_market_radar_payload_degrades_when_local_universe_is_small(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(_market_radar_prices(stock_count=5, days=80))
+
+                payload = build_market_radar_payload(store)
+
+        self.assertFalse(payload["available"])
+        self.assertIn("資料不足", payload["reason"])  # type: ignore[operator]
+        self.assertEqual(payload["metrics"], [])
+
+    def test_market_radar_payload_builds_metrics_and_reuses_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(_market_radar_prices(stock_count=35, days=90))
+
+                payload = build_market_radar_payload(store, window=80, universe_size=30)
+                cache_key = payload["cache_key"]  # type: ignore[index]
+                cached = store.get_json_cache(str(cache_key))
+
+                with patch("app.web.api.build_market_radar_metrics", side_effect=AssertionError("recomputed")):
+                    cached_payload = build_market_radar_payload(store, window=80, universe_size=30)
+
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["title"], "市場心智雷達")
+        self.assertEqual(payload["universe_size"], 30)
+        self.assertEqual([item["key"] for item in payload["metrics"]], ["dispersion", "herding", "synchrony"])  # type: ignore[index]
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached_payload["cache_key"], cache_key)
+
     def test_glossary_payload_is_available_for_ui_terms(self) -> None:
         payload = glossary_payload()
 
@@ -727,6 +760,30 @@ class FakeQuoteProvider:
             bid_prices=(107.5,),
             ask_prices=(108,),
         )
+
+
+def _market_radar_prices(*, stock_count: int, days: int) -> list[DailyPrice]:
+    start = date(2026, 1, 1)
+    rows: list[DailyPrice] = []
+    for stock_idx in range(stock_count):
+        stock_id = f"{1000 + stock_idx}"
+        base = 40 + stock_idx * 1.7
+        for day_idx in range(days):
+            close = base + day_idx * 0.05 + ((stock_idx + day_idx) % 7) * 0.03
+            volume = 1000 + stock_idx * 10 + day_idx
+            rows.append(
+                DailyPrice(
+                    stock_id=stock_id,
+                    date=start + timedelta(days=day_idx),
+                    open=close - 0.2,
+                    high=close + 0.4,
+                    low=close - 0.5,
+                    close=close,
+                    volume=volume,
+                    trade_value=int(volume * close),
+                )
+            )
+    return rows
 
 
 if __name__ == "__main__":

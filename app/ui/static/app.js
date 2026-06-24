@@ -10,6 +10,7 @@ const state = {
   watchlist: [],
   comparison: null,
   screener: null,
+  marketRadar: null,
   screenerFilter: "value",
   localDataSort: "stock_id",
   localDataFilter: "all",
@@ -129,6 +130,9 @@ const elements = {
   screenerVolumeList: document.querySelector("#screenerVolumeList"),
   screenerGapList: document.querySelector("#screenerGapList"),
   screenerAmplitudeList: document.querySelector("#screenerAmplitudeList"),
+  marketRadarPanel: document.querySelector("#marketRadarPanel"),
+  marketRadarStatus: document.querySelector("#marketRadarStatus"),
+  marketRadarBody: document.querySelector("#marketRadarBody"),
   message: document.querySelector("#message"),
   portfolioStatus: document.querySelector("#portfolioStatus"),
   portfolioSentence: document.querySelector("#portfolioSentence"),
@@ -412,6 +416,7 @@ async function init() {
   await loadWatchlist();
   await loadDefaultComparison();
   await loadValueScreener();
+  await loadMarketRadar();
   renderDashboard();
 }
 
@@ -530,6 +535,7 @@ function showSheet(sheet, options = {}) {
   let visibleSheet = elements.dashboardSheet;
   if (target === "screener") {
     visibleSheet = elements.screenerSheet;
+    loadMarketRadar();
   } else if (target === "portfolio") {
     visibleSheet = elements.portfolioPanel;
   } else if (target === "stock") {
@@ -909,6 +915,76 @@ async function loadValueScreener() {
   } catch (error) {
     elements.screenerStatus.textContent = `雷達中心讀取失敗：${error.message}`;
   }
+}
+
+async function loadMarketRadar() {
+  if (!elements.marketRadarBody) return;
+  try {
+    const payload = await getJson("/api/market/radar");
+    state.marketRadar = payload;
+    renderMarketRadar(payload);
+  } catch (error) {
+    if (elements.marketRadarStatus) elements.marketRadarStatus.textContent = `市場心智雷達讀取失敗：${error.message}`;
+    elements.marketRadarBody.innerHTML = stateMessageHTML("error", "讀取失敗", "稍後再試，或先確認本地資料庫可讀。", {
+      compact: true,
+      className: "screener-empty",
+    });
+  }
+}
+
+function renderMarketRadar(payload) {
+  if (!elements.marketRadarBody) return;
+  const metrics = Array.isArray(payload?.metrics) ? payload.metrics : [];
+  if (elements.marketRadarStatus) {
+    elements.marketRadarStatus.textContent = payload?.available
+      ? `${payload.title || "市場心智雷達"} · 資料日 ${payload.as_of_date || "--"} · 宇宙 ${formatInteger(payload.universe_size || 0)} 檔 · ${payload.window || 120} 日視窗`
+      : payload?.reason || "資料不足，請先在本地資料完成全市場下載。";
+  }
+  if (!payload?.available || !metrics.length) {
+    elements.marketRadarBody.innerHTML = `
+      ${stateMessageHTML("empty", "資料不足", payload?.reason || "請先在本地資料完成全市場下載。", {
+        compact: true,
+        className: "screener-empty",
+      })}
+      <button class="secondary-button market-radar-cta" type="button" onclick="showSheet('data')">去本地資料下載</button>
+    `;
+    return;
+  }
+  elements.marketRadarBody.innerHTML = metrics.map(renderMarketRadarMetric).join("");
+}
+
+function renderMarketRadarMetric(metric) {
+  const value = Number(metric?.value);
+  const percent = marketRadarMeterPercent(metric);
+  const valueText = Number.isFinite(value)
+    ? (metric.key === "dispersion" ? `${(value * 100).toFixed(2)}%` : value.toFixed(2))
+    : "--";
+  const label = metric?.glossary_term
+    ? `<button class="term-link" type="button" data-glossary-term="${escapeHtml(metric.glossary_term)}">${escapeHtml(metric.label || metric.key || "--")}</button>`
+    : escapeHtml(metric?.label || metric?.key || "--");
+  return `
+    <article class="market-radar-card" title="${escapeHtml(metric?.forbidden || "")}">
+      <div class="market-radar-card-head">
+        <h4>${label}</h4>
+        <strong>${escapeHtml(valueText)}</strong>
+      </div>
+      <div class="market-radar-meter" aria-label="${escapeHtml(metric?.label || "")}">
+        <span style="width:${percent}%"></span>
+      </div>
+      <p>${escapeHtml(metric?.summary || "--")}</p>
+      <small>${escapeHtml(metric?.forbidden || "不得當成方向或操作訊號。")}</small>
+    </article>
+  `;
+}
+
+function marketRadarMeterPercent(metric) {
+  if (metric?.key === "dispersion" && metric.percentile != null) {
+    return Math.max(3, Math.min(100, Number(metric.percentile)));
+  }
+  const value = Number(metric?.value);
+  if (!Number.isFinite(value)) return 3;
+  if (metric?.key === "herding") return Math.max(3, Math.min(100, ((value + 1) / 2) * 100));
+  return Math.max(3, Math.min(100, value * 100));
 }
 
 async function refreshValueScreener() {

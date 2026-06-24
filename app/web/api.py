@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from app.analyze.cross_section import build_returns_matrix
 from app.analyze.financial import (
     FinancialMetrics,
     calculate_financial_metrics,
@@ -42,6 +44,13 @@ from app.chips import build_institutional_summary
 from app.analyze.assessment import build_assessment
 from app.analyze.levels import compute_support_resistance
 from app.analyze.local_data import SORT_STOCK_ID, filter_sort_local_data_items
+from app.analyze.market_structure import (
+    DISCLAIMER as MARKET_RADAR_DISCLAIMER,
+    INSUFFICIENT_REASON as MARKET_RADAR_INSUFFICIENT_REASON,
+    SUBTITLE as MARKET_RADAR_SUBTITLE,
+    TITLE as MARKET_RADAR_TITLE,
+    build_market_radar_metrics,
+)
 from app.models import DailyPrice, FinancialStatement, IntradayQuote, MonthlyRevenue, StockProfile
 from app.portfolio import PriceSnapshot, calculate_portfolio
 from app.portfolio.performance import PortfolioPerformance, calculate_portfolio_performance
@@ -57,6 +66,11 @@ CHART_MA_WARMUP_ROWS = 260
 LOCAL_DATA_CACHE_KEY = "local_data_v2"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
 STRUCTURE_CACHE_PREFIX = "structure"
+MARKET_RADAR_CACHE_PREFIX = "market_radar"
+MARKET_RADAR_WINDOW = 120
+MARKET_RADAR_UNIVERSE_SIZE = 150
+MARKET_RADAR_MIN_STOCKS = 30
+MARKET_RADAR_MIN_DAYS = 60
 
 
 def build_indicator_catalog_payload() -> dict[str, object]:
@@ -468,6 +482,90 @@ def _coverage_snapshot(
 
 def build_value_screener_payload(path: Path = DEFAULT_SCREENER_PATH) -> dict[str, object]:
     return load_value_screener(path)
+
+
+def build_market_radar_payload(
+    store: SQLiteStore,
+    *,
+    window: int = MARKET_RADAR_WINDOW,
+    universe_size: int = MARKET_RADAR_UNIVERSE_SIZE,
+) -> dict[str, object]:
+    selected = _market_radar_universe(store, universe_size=universe_size)
+    if len(selected) < MARKET_RADAR_MIN_STOCKS:
+        return _market_radar_unavailable(len(selected), window=window)
+
+    series_by_stock: dict[str, list[tuple[str, float]]] = {}
+    for stock_id in selected:
+        prices = store.get_daily_prices(stock_id, limit=window)
+        if prices:
+            series_by_stock[stock_id] = [(item.date.isoformat(), item.close) for item in prices]
+    matrix = build_returns_matrix(
+        series_by_stock,
+        window=window,
+        min_stocks=MARKET_RADAR_MIN_STOCKS,
+        min_days=MARKET_RADAR_MIN_DAYS,
+    )
+    if matrix is None:
+        return _market_radar_unavailable(len(series_by_stock), window=window)
+
+    as_of_date = matrix.dates[-1] if matrix.dates else None
+    signature = _universe_signature(matrix.stock_ids)
+    cache_key = f"{MARKET_RADAR_CACHE_PREFIX}::{as_of_date}::{signature}::{window}"
+    cached = store.get_json_cache(cache_key)
+    if cached is not None and isinstance(cached[0], dict):
+        return cached[0]  # type: ignore[return-value]
+
+    payload = {
+        "available": True,
+        "as_of_date": as_of_date,
+        "universe_size": len(matrix.stock_ids),
+        "requested_universe_size": universe_size,
+        "window": window,
+        "title": MARKET_RADAR_TITLE,
+        "subtitle": MARKET_RADAR_SUBTITLE,
+        "disclaimer": MARKET_RADAR_DISCLAIMER,
+        "cache_key": cache_key,
+        "metrics": build_market_radar_metrics(matrix),
+    }
+    store.set_json_cache(cache_key, payload)
+    return payload
+
+
+def _market_radar_universe(store: SQLiteStore, *, universe_size: int) -> list[str]:
+    candidates: list[tuple[float, str]] = []
+    for stock_id in store.get_price_stock_ids():
+        latest = store.get_daily_prices(stock_id, limit=1)
+        if not latest:
+            continue
+        price = latest[-1]
+        turnover = price.trade_value if price.trade_value is not None else price.close * price.volume
+        try:
+            score = float(turnover or 0)
+        except (TypeError, ValueError):
+            score = 0.0
+        candidates.append((score, stock_id))
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    return [stock_id for _, stock_id in candidates[: max(0, int(universe_size))]]
+
+
+def _market_radar_unavailable(local_count: int, *, window: int) -> dict[str, object]:
+    return {
+        "available": False,
+        "reason": MARKET_RADAR_INSUFFICIENT_REASON,
+        "local_stock_count": local_count,
+        "min_stocks": MARKET_RADAR_MIN_STOCKS,
+        "min_days": MARKET_RADAR_MIN_DAYS,
+        "window": window,
+        "title": MARKET_RADAR_TITLE,
+        "subtitle": MARKET_RADAR_SUBTITLE,
+        "disclaimer": MARKET_RADAR_DISCLAIMER,
+        "metrics": [],
+    }
+
+
+def _universe_signature(stock_ids: list[str]) -> str:
+    blob = ",".join(sorted(stock_ids)).encode("utf-8")
+    return hashlib.sha1(blob).hexdigest()[:12]
 
 
 def build_local_stocks_payload(store: SQLiteStore) -> dict[str, object]:

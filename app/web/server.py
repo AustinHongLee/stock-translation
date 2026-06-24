@@ -39,6 +39,7 @@ from app.web.api import (
     build_portfolio_payload,
     build_quote_payload,
     build_local_stocks_payload,
+    build_market_radar_payload,
     build_cached_local_data_payload,
     build_chart_annotations_payload,
     build_search_payload,
@@ -153,6 +154,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/value-screener":
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(enrich_screener_with_levels(build_value_screener_payload(), store))
+            elif parsed.path == "/api/market/radar":
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(build_market_radar_payload(store))
             elif parsed.path == "/api/export/screener.xlsx":
                 content = build_screener_workbook_bytes(build_value_screener_payload())
                 self._send_xlsx(content, "雷達中心匯出.xlsx")

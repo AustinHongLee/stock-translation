@@ -15,6 +15,7 @@ from app.web.api import (
     build_daily_price_payload,
     build_local_data_payload,
     build_local_stocks_payload,
+    build_market_radar_payload,
     build_quote_payload,
     build_search_payload,
     build_stock_payload,
@@ -106,6 +107,8 @@ class PublicReadOnlyASGIApp:
                 await self._send_json(send, build_compare_payload(store, _first(query, "stock_ids")))
             elif path == "/api/value-screener":
                 await self._send_json(send, enrich_screener_with_levels(build_value_screener_payload(), store))
+            elif path == "/api/market/radar":
+                await self._send_json(send, build_market_radar_payload(store))
             elif path == "/api/search":
                 await self._send_json(send, build_search_payload(store, _first(query, "q")))
             elif path == "/api/daily-price":

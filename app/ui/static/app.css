@@ -612,6 +612,57 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   border-radius: 50%; background: var(--brand-2); animation: statusPulse 1s ease-in-out infinite;
 }
 
+.screener-tabs {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px;
+}
+.screener-tabs a {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 6px 12px;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-2); text-decoration: none;
+  font-size: 12.5px; font-weight: 700;
+}
+.screener-tabs a:hover {
+  border-color: var(--brand-soft-line); background: var(--brand-soft); color: var(--brand);
+}
+.market-radar-panel { margin-bottom: 16px; }
+.market-radar-body {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+}
+.market-radar-card {
+  min-height: 146px; padding: 13px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2);
+}
+.market-radar-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px;
+}
+.market-radar-card h4 {
+  min-width: 0; font-size: 13.5px; line-height: 1.35;
+}
+.market-radar-card h4 .term-link {
+  padding: 0; border: 0; background: transparent; color: var(--brand); font-size: inherit;
+  font-weight: 800; text-align: left; cursor: pointer;
+}
+.market-radar-card h4 .term-link:hover { text-decoration: underline; }
+.market-radar-card strong {
+  color: var(--ink); font-size: 19px; line-height: 1; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.market-radar-meter {
+  height: 7px; margin-bottom: 10px; overflow: hidden;
+  border-radius: 999px; background: var(--line);
+}
+.market-radar-meter span {
+  display: block; height: 100%; border-radius: inherit; background: var(--brand-2);
+}
+.market-radar-card p {
+  min-height: 42px; color: var(--ink-2); font-size: 12.5px; line-height: 1.55;
+}
+.market-radar-card small {
+  display: block; margin-top: 8px; color: var(--muted); font-size: 11.5px; line-height: 1.45;
+}
+.market-radar-cta { margin-top: 8px; }
+
 .screener-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .screener-col { display: flex; flex-direction: column; gap: 14px; }
 .screener-card.is-dim { background: var(--surface-2); border-style: dashed; }
@@ -2132,6 +2183,7 @@ td.down { color: var(--down); font-weight: 600; }
   .surface { padding: 14px; border-radius: 12px; }
   .screener-board,
   .screener-cols,
+  .market-radar-body,
   .screener-snapshot-grid {
     grid-template-columns: 1fr;
   }
