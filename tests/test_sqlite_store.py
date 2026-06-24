@@ -174,6 +174,50 @@ class SQLiteStoreTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 self.assertIsNone(store.get_json_cache("local_data_v1"))
 
+    def test_indicator_prefs_and_chart_annotations_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                prefs = store.put_indicator_prefs(
+                    {
+                        "preset": "technical",
+                        "enabled": ["ma20", "rsi_14"],
+                        "chart_height": "tall",
+                        "scale": "log",
+                        "ux_mode": "advanced",
+                        "experimental_ack": True,
+                    }
+                )
+                loaded_prefs = store.get_indicator_prefs()
+                self.assertEqual(prefs["ux_mode"], "advanced")
+                self.assertEqual(loaded_prefs["ux_mode"], "advanced")  # type: ignore[index]
+                annotation = store.add_chart_annotation(
+                    "2330",
+                    {
+                        "kind": "note",
+                        "anchor_date": "2026-06-22",
+                        "anchor_price": 100,
+                        "text": "觀察缺口",
+                        "color": "#2C5475",
+                    },
+                )
+                updated = store.update_chart_annotation(
+                    "2330",
+                    int(annotation["id"]),
+                    {"text": "更新後筆記", "kind": "hline"},
+                )
+                annotations = store.get_chart_annotations("2330")
+                store.delete_chart_annotation("2330", int(annotation["id"]))
+                empty = store.get_chart_annotations("2330")
+
+        self.assertEqual(prefs["preset"], "technical")
+        self.assertEqual(loaded_prefs["enabled"], ["ma20", "rsi_14"])  # type: ignore[index]
+        self.assertEqual(annotation["text"], "觀察缺口")
+        self.assertEqual(updated["kind"], "hline")
+        self.assertEqual(updated["text"], "更新後筆記")
+        self.assertEqual(len(annotations), 1)
+        self.assertEqual(empty, [])
+
     def test_data_coverage_refreshes_from_prices_and_institutional(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"

@@ -35,16 +35,23 @@ from app.web.api import (
     LOCAL_DATA_CACHE_KEY,
     build_compare_payload,
     build_daily_price_payload,
+    build_indicator_catalog_payload,
     build_portfolio_payload,
     build_quote_payload,
     build_local_stocks_payload,
     build_cached_local_data_payload,
+    build_chart_annotations_payload,
     build_search_payload,
     build_sync_freshness_payload,
     build_stock_payload,
+    build_indicator_prefs_payload,
     build_value_screener_payload,
     enrich_screener_with_levels,
     build_watchlist_payload,
+    create_chart_annotation_payload,
+    delete_chart_annotation_payload,
+    save_indicator_prefs_payload,
+    update_chart_annotation_payload,
 )
 from app.web.sync_batch import normalize_sync_targets
 
@@ -92,6 +99,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                     self._send_json(build_watchlist_payload(store))
             elif parsed.path == "/api/glossary":
                 self._send_json(glossary_payload())
+            elif parsed.path == "/api/indicators/catalog":
+                self._send_json(build_indicator_catalog_payload())
+            elif parsed.path == "/api/indicator-prefs":
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(build_indicator_prefs_payload(store))
             elif parsed.path == "/api/portfolio":
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(build_portfolio_payload(store))
@@ -176,6 +188,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                             params.get("date", [""])[0],
                         )
                     )
+            elif parsed.path.startswith("/api/stocks/") and parsed.path.endswith("/annotations"):
+                stock_id = unquote(parsed.path.removeprefix("/api/stocks/").removesuffix("/annotations")).strip()
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(build_chart_annotations_payload(store, stock_id))
             elif parsed.path.startswith("/api/stocks/"):
                 stock_id = unquote(parsed.path.rsplit("/", 1)[-1]).strip()
                 days = int(parse_qs(parsed.query).get("days", ["365"])[0])
@@ -213,7 +229,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             if _bulk_blocks_twse_fetch(parsed.path):
                 self._send_error(HTTPStatus.CONFLICT, TWSE_FETCH_DURING_BULK_MESSAGE)
                 return
-            if parsed.path == "/api/sync":
+            if parsed.path.startswith("/api/stocks/") and parsed.path.endswith("/annotations"):
+                stock_id = unquote(parsed.path.removeprefix("/api/stocks/").removesuffix("/annotations")).strip()
+                body = self._read_json_body()
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(create_chart_annotation_payload(store, stock_id, body), status=HTTPStatus.CREATED)
+            elif parsed.path == "/api/sync":
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()
                 lookback_days = int(body.get("lookback_days", HISTORICAL_VALUATION_DAYS))
@@ -467,7 +488,11 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_PUT(self) -> None:
         parsed = urlparse(self.path)
         try:
-            if parsed.path.startswith("/api/portfolio/transactions/"):
+            if parsed.path == "/api/indicator-prefs":
+                body = self._read_json_body()
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(save_indicator_prefs_payload(store, body))
+            elif parsed.path.startswith("/api/portfolio/transactions/"):
                 transaction_id = int(unquote(parsed.path.rsplit("/", 1)[-1]).strip())
                 body = self._read_json_body()
                 transaction = self._portfolio_transaction_from_body(body, transaction_id=transaction_id)
@@ -482,6 +507,25 @@ class RequestHandler(BaseHTTPRequestHandler):
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "Not found")
         except (ValueError, PortfolioCalculationError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except KeyError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except Exception as exc:
+            self._send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
+
+    def do_PATCH(self) -> None:
+        parsed = urlparse(self.path)
+        try:
+            if parsed.path.startswith("/api/stocks/") and "/annotations/" in parsed.path:
+                prefix, annotation_id_text = parsed.path.rsplit("/annotations/", 1)
+                stock_id = unquote(prefix.removeprefix("/api/stocks/")).strip()
+                annotation_id = int(unquote(annotation_id_text).strip())
+                body = self._read_json_body()
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(update_chart_annotation_payload(store, stock_id, annotation_id, body))
+            else:
+                self._send_error(HTTPStatus.NOT_FOUND, "Not found")
+        except ValueError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
         except KeyError as exc:
             self._send_error(HTTPStatus.NOT_FOUND, str(exc))
@@ -506,6 +550,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                     )
                     store.delete_portfolio_transaction(transaction_id)
                     self._send_json(build_portfolio_payload(store))
+            elif parsed.path.startswith("/api/stocks/") and "/annotations/" in parsed.path:
+                prefix, annotation_id_text = parsed.path.rsplit("/annotations/", 1)
+                stock_id = unquote(prefix.removeprefix("/api/stocks/")).strip()
+                annotation_id = int(unquote(annotation_id_text).strip())
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(delete_chart_annotation_payload(store, stock_id, annotation_id))
             else:
                 self._send_error(HTTPStatus.NOT_FOUND, "Not found")
         except (ValueError, PortfolioCalculationError) as exc:

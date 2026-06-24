@@ -17,10 +17,11 @@ class HtmlReportExportTests(unittest.TestCase):
 
         self.assertTrue(html.startswith("<!doctype html>"))
         self.assertIn("2330 台積電 個股研究報告", html)
-        for section in ("體質總評", "三大法人", "估值情境", "消息 / 地雷雷達", "價量摘要", "重點名詞教學"):
+        for section in ("體質總評", "三大法人", "估值情境", "消息 / 地雷雷達", "價量摘要", "圖表標註", "重點名詞教學"):
             self.assertIn(section, html)
         self.assertIn("資料日 2026-06-16", html)
         self.assertIn("價格位階 92%", html)
+        self.assertIn("觀察缺口", html)
         self.assertIn("不構成投資建議", html)
         self.assertIn("區間統計預設整理最近 60 筆日線", html)
         self.assertEqual([], contains_forbidden(html))
@@ -39,6 +40,23 @@ class HtmlReportExportTests(unittest.TestCase):
 
         self.assertNotIn("<script>", html)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
+        self.assertEqual([], contains_forbidden(html))
+
+    def test_stock_report_escapes_and_sanitizes_chart_annotations(self) -> None:
+        payload = _sample_payload()
+        payload["annotations"] = [
+            {
+                "kind": "note",
+                "anchor_date": "2026-06-16",
+                "anchor_price": 117,
+                "text": "<b>該買 目標價</b>",
+            }
+        ]
+
+        html = build_stock_report_html(payload)
+
+        self.assertNotIn("<b>", html)
+        self.assertIn("&lt;b&gt;（已略） （已略）&lt;/b&gt;", html)
         self.assertEqual([], contains_forbidden(html))
 
 
@@ -77,6 +95,15 @@ def _sample_payload() -> dict[str, object]:
             "actual_end": "2026-06-16",
         },
         "prices": prices,
+        "annotations": [
+            {
+                "kind": "gap",
+                "anchor_date": "2026-06-16",
+                "anchor_price": 117,
+                "text": "觀察缺口",
+                "color": "#2C5475",
+            }
+        ],
         "assessment": {
             "title": "體質總評",
             "summary": "多數因子偏正向，但仍需搭配資料日期閱讀。",

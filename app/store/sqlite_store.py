@@ -222,6 +222,29 @@ CREATE TABLE IF NOT EXISTS data_coverage (
 
 CREATE INDEX IF NOT EXISTS idx_data_coverage_node_status
     ON data_coverage(node, status);
+
+CREATE TABLE IF NOT EXISTS chart_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    anchor_date TEXT,
+    anchor_price REAL,
+    anchor_date2 TEXT,
+    anchor_price2 REAL,
+    text TEXT,
+    color TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chart_annotations_stock
+    ON chart_annotations(stock_id, updated_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS indicator_prefs (
+    profile_key TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -1179,6 +1202,131 @@ class SQLiteStore:
         self.conn.execute("DELETE FROM app_cache WHERE key = ?", (key,))
         self.conn.commit()
 
+    def get_indicator_prefs(self, profile_key: str = "default") -> dict[str, object] | None:
+        row = self.conn.execute(
+            "SELECT payload, updated_at FROM indicator_prefs WHERE profile_key = ?",
+            (profile_key,),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["payload"])
+        if isinstance(payload, dict):
+            payload["updated_at"] = row["updated_at"]
+            payload["profile_key"] = profile_key
+            return payload
+        return {"profile_key": profile_key, "payload": payload, "updated_at": row["updated_at"]}
+
+    def put_indicator_prefs(self, payload: dict[str, object], profile_key: str = "default") -> dict[str, object]:
+        now = _dt(datetime.now())
+        self.conn.execute(
+            """
+            INSERT INTO indicator_prefs (profile_key, payload, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(profile_key) DO UPDATE SET
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            (profile_key, json.dumps(payload, ensure_ascii=False), now),
+        )
+        self.conn.commit()
+        saved = self.get_indicator_prefs(profile_key)
+        return saved or {"profile_key": profile_key, **payload, "updated_at": now}
+
+    def get_chart_annotations(self, stock_id: str) -> list[dict[str, object]]:
+        rows = self.conn.execute(
+            """
+            SELECT id, stock_id, kind, anchor_date, anchor_price, anchor_date2,
+                   anchor_price2, text, color, created_at, updated_at
+            FROM chart_annotations
+            WHERE stock_id = ?
+            ORDER BY COALESCE(anchor_date, ''), id
+            """,
+            (stock_id,),
+        ).fetchall()
+        return [_annotation_from_row(row) for row in rows]
+
+    def add_chart_annotation(self, stock_id: str, annotation: dict[str, object]) -> dict[str, object]:
+        now = _dt(datetime.now())
+        cursor = self.conn.execute(
+            """
+            INSERT INTO chart_annotations (
+                stock_id, kind, anchor_date, anchor_price, anchor_date2,
+                anchor_price2, text, color, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                stock_id,
+                str(annotation.get("kind") or "note"),
+                _str_or_none(annotation.get("anchor_date")),
+                _float_or_none(annotation.get("anchor_price")),
+                _str_or_none(annotation.get("anchor_date2")),
+                _float_or_none(annotation.get("anchor_price2")),
+                str(annotation.get("text") or ""),
+                str(annotation.get("color") or "#2C5475"),
+                now,
+                now,
+            ),
+        )
+        self.conn.commit()
+        return self.get_chart_annotation(int(cursor.lastrowid))
+
+    def get_chart_annotation(self, annotation_id: int) -> dict[str, object]:
+        row = self.conn.execute(
+            """
+            SELECT id, stock_id, kind, anchor_date, anchor_price, anchor_date2,
+                   anchor_price2, text, color, created_at, updated_at
+            FROM chart_annotations
+            WHERE id = ?
+            """,
+            (annotation_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"chart annotation {annotation_id} not found")
+        return _annotation_from_row(row)
+
+    def update_chart_annotation(
+        self,
+        stock_id: str,
+        annotation_id: int,
+        patch: dict[str, object],
+    ) -> dict[str, object]:
+        current = self.get_chart_annotation(annotation_id)
+        if current["stock_id"] != stock_id:
+            raise KeyError(f"chart annotation {annotation_id} not found")
+        merged = {**current, **patch}
+        self.conn.execute(
+            """
+            UPDATE chart_annotations
+            SET kind = ?, anchor_date = ?, anchor_price = ?, anchor_date2 = ?,
+                anchor_price2 = ?, text = ?, color = ?, updated_at = ?
+            WHERE id = ? AND stock_id = ?
+            """,
+            (
+                str(merged.get("kind") or "note"),
+                _str_or_none(merged.get("anchor_date")),
+                _float_or_none(merged.get("anchor_price")),
+                _str_or_none(merged.get("anchor_date2")),
+                _float_or_none(merged.get("anchor_price2")),
+                str(merged.get("text") or ""),
+                str(merged.get("color") or "#2C5475"),
+                _dt(datetime.now()),
+                annotation_id,
+                stock_id,
+            ),
+        )
+        self.conn.commit()
+        return self.get_chart_annotation(annotation_id)
+
+    def delete_chart_annotation(self, stock_id: str, annotation_id: int) -> None:
+        cursor = self.conn.execute(
+            "DELETE FROM chart_annotations WHERE stock_id = ? AND id = ?",
+            (stock_id, annotation_id),
+        )
+        if cursor.rowcount == 0:
+            raise KeyError(f"chart annotation {annotation_id} not found")
+        self.conn.commit()
+
 
 def _profile_from_row(row: sqlite3.Row) -> StockProfile:
     return StockProfile(
@@ -1313,6 +1461,22 @@ def _coverage_from_row(row: sqlite3.Row) -> dict[str, object]:
     }
 
 
+def _annotation_from_row(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": int(row["id"]),
+        "stock_id": row["stock_id"],
+        "kind": row["kind"],
+        "anchor_date": row["anchor_date"],
+        "anchor_price": row["anchor_price"],
+        "anchor_date2": row["anchor_date2"],
+        "anchor_price2": row["anchor_price2"],
+        "text": row["text"] or "",
+        "color": row["color"] or "#2C5475",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
 def _coverage_table_for_node(node: str) -> str:
     if node == "daily_price":
         return "daily_prices"
@@ -1335,3 +1499,17 @@ def _dt(value: datetime) -> str:
 
 def _date_or_none(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
+
+
+def _str_or_none(value: object) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

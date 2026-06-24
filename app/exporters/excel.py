@@ -61,6 +61,9 @@ def build_stock_workbook_bytes(
     prices = workbook.create_sheet("日線資料")
     _write_prices(prices, payload, generated_at=generated_at)
 
+    annotations = workbook.create_sheet("圖表標註")
+    _write_chart_annotations(annotations, payload, generated_at=generated_at)
+
     dividends = workbook.create_sheet("股利資料")
     _write_dividends(dividends, payload, generated_at=generated_at)
 
@@ -517,6 +520,33 @@ def _write_prices(
     _finish_sheet(sheet)
 
 
+def _write_chart_annotations(
+    sheet: Worksheet,
+    payload: dict[str, Any],
+    *,
+    generated_at: datetime | None,
+) -> None:
+    _setup_sheet(sheet, "圖表標註", generated_at=generated_at, last_column=8)
+    headers = ["類型", "起點日期", "起點價格", "終點日期", "終點價格", "文字", "顏色", "更新時間"]
+    rows = [
+        [
+            _annotation_kind_label(item.get("kind")),
+            item.get("anchor_date"),
+            item.get("anchor_price"),
+            item.get("anchor_date2"),
+            item.get("anchor_price2"),
+            item.get("text"),
+            item.get("color"),
+            item.get("updated_at"),
+        ]
+        for item in payload.get("annotations") or []
+        if isinstance(item, dict)
+    ]
+    _write_table(sheet, 4, headers, rows or [["尚無圖表標註", None, None, None, None, None, None, None]])
+    _format_numeric_columns(sheet, 5, sheet.max_row, {3, 5}, "#,##0.00")
+    _finish_sheet(sheet)
+
+
 def _write_dividends(
     sheet: Worksheet,
     payload: dict[str, Any],
@@ -809,6 +839,17 @@ def json_dumps(value: Any) -> str:
     import json
 
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _annotation_kind_label(value: Any) -> str:
+    labels = {
+        "note": "文字",
+        "line": "線段",
+        "arrow": "箭頭",
+        "range": "區間",
+        "gap": "缺口",
+    }
+    return labels.get(str(value or "note"), str(value or "文字"))
 
 
 def _dividend_scenario_label(scenario: Any) -> str:

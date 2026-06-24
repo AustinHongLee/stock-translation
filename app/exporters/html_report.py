@@ -38,6 +38,7 @@ def build_stock_report_html(
             _valuation_section(payload.get("valuation"), data_date),
             _news_section(news_payload, data_date),
             _price_section(payload, data_date),
+            _annotations_section(payload, data_date),
             _glossary_section(),
         ]
     )
@@ -326,6 +327,28 @@ def _price_section(payload: dict[str, Any], data_date: str) -> str:
     )
 
 
+def _annotations_section(payload: dict[str, Any], data_date: str) -> str:
+    annotations = [item for item in payload.get("annotations") or [] if isinstance(item, dict)]
+    if not annotations:
+        return ""
+    rows = [
+        [
+            _annotation_kind_label(item.get("kind")),
+            _annotation_anchor(item),
+            _text(item.get("text")),
+        ]
+        for item in annotations[:80]
+    ]
+    return _section(
+        "圖表標註",
+        data_date,
+        f"""
+        {_simple_table(["類型", "位置", "文字"], rows)}
+        <p class="muted">標註來自本機圖表工作區，作為複盤註記；不是系統產生的買賣建議。</p>
+        """,
+    )
+
+
 def _glossary_section() -> str:
     entries = {entry.term: entry for entry in load_glossary()}
     cards = []
@@ -388,6 +411,29 @@ def _bullet_list(items: list[str]) -> str:
 
 def _empty_card(text: str) -> str:
     return f'<article class="mini-card is-empty"><p>{_escape(_text(text))}</p></article>'
+
+
+def _annotation_kind_label(value: Any) -> str:
+    labels = {
+        "note": "文字",
+        "line": "線段",
+        "arrow": "箭頭",
+        "range": "區間",
+        "gap": "缺口",
+    }
+    return labels.get(str(value or "note"), str(value or "文字"))
+
+
+def _annotation_anchor(item: dict[str, Any]) -> str:
+    start = _join_nonempty(
+        [_text(item.get("anchor_date")), _fmt_number(item.get("anchor_price"))],
+        " @ ",
+    )
+    end = _join_nonempty(
+        [_text(item.get("anchor_date2")), _fmt_number(item.get("anchor_price2"))],
+        " @ ",
+    )
+    return _join_nonempty([start, end], " -> ") or "--"
 
 
 def _safe_stock_id(payload: dict[str, Any]) -> str:

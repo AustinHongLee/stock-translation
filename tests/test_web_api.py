@@ -26,13 +26,19 @@ from app.web.api import (
     LOCAL_DATA_CACHE_KEY,
     build_compare_payload,
     build_cached_local_data_payload,
+    build_chart_annotations_payload,
+    build_indicator_catalog_payload,
+    build_indicator_prefs_payload,
     build_local_data_payload,
     build_portfolio_payload,
     build_search_payload,
     build_sync_freshness_payload,
     build_stock_payload,
     build_watchlist_payload,
+    create_chart_annotation_payload,
+    save_indicator_prefs_payload,
     stock_brief_to_json,
+    update_chart_annotation_payload,
 )
 
 
@@ -69,8 +75,18 @@ class WebApiPayloadTests(unittest.TestCase):
                     ]
                 )
 
-                current = build_sync_freshness_payload(store, "2330", screener_path=screener_path)
-                stale = build_sync_freshness_payload(store, "2303", screener_path=screener_path)
+                current = build_sync_freshness_payload(
+                    store,
+                    "2330",
+                    screener_path=screener_path,
+                    today=date(2026, 6, 22),
+                )
+                stale = build_sync_freshness_payload(
+                    store,
+                    "2303",
+                    screener_path=screener_path,
+                    today=date(2026, 6, 22),
+                )
                 self.assertIsNone(store.get_data_coverage("2330", DATA_NODE_DAILY_PRICE))
                 self.assertIsNone(store.get_data_coverage("2330", DATA_NODE_INSTITUTIONAL))
 
@@ -342,6 +358,9 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(len(payload["valuation"]["vital_signs"]["facts"]), 4)  # type: ignore[index]
         self.assertGreaterEqual(len(payload["valuation"]["relative"]["methods"]), 1)  # type: ignore[index]
         self.assertTrue(payload["is_watchlisted"])
+        self.assertIn("features", payload)
+        self.assertIn("ma20", payload["features"]["series"])  # type: ignore[index]
+        self.assertEqual(len(payload["features"]["dates"]), len(payload["prices"]))  # type: ignore[index,arg-type]
         self.assertEqual(portfolio_payload["summary"]["positions_count"], 1)  # type: ignore[index]
         self.assertEqual(portfolio_payload["positions"][0]["shares"], 1000)  # type: ignore[index]
         self.assertEqual(portfolio_payload["positions"][0]["latest_close"], 107)  # type: ignore[index]
@@ -357,6 +376,64 @@ class WebApiPayloadTests(unittest.TestCase):
 
         self.assertIn("entries", payload)
         self.assertIn("收盤", payload["aliases"])
+
+    def test_indicator_catalog_payload_is_registry_driven(self) -> None:
+        payload = build_indicator_catalog_payload()
+        keys = {item["key"] for item in payload["features"]}  # type: ignore[index]
+
+        self.assertIn("ma20", keys)
+        self.assertIn("ema200", keys)
+        self.assertIn("newbie", payload["presets"])  # type: ignore[operator]
+
+    def test_indicator_prefs_and_annotations_payloads_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_profiles([StockProfile("2330", "台積電", "台積電")])
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 20), 100, 101, 99, 100, 1000),
+                        DailyPrice("2330", date(2026, 6, 21), 101, 102, 100, 101, 1100),
+                    ]
+                )
+                prefs = save_indicator_prefs_payload(
+                    store,
+                    {
+                        "preset": "technical",
+                        "enabled": ["ma20", "rsi_14"],
+                        "chart_height": "tall",
+                        "scale": "percent",
+                        "ux_mode": "advanced",
+                    },
+                )
+                annotation = create_chart_annotation_payload(
+                    store,
+                    "2330",
+                    {
+                        "kind": "note",
+                        "anchor_date": "2026-06-21",
+                        "anchor_price": 101,
+                        "text": "測試筆記",
+                    },
+                )
+                updated = update_chart_annotation_payload(
+                    store,
+                    "2330",
+                    int(annotation["id"]),
+                    {"text": "更新筆記"},
+                )
+                annotations = build_chart_annotations_payload(store, "2330")
+                loaded_prefs = build_indicator_prefs_payload(store)
+                stock_payload = build_stock_payload(store, "2330", days=10, quote_provider=FakeQuoteProvider())
+
+        self.assertEqual(prefs["preset"], "technical")
+        self.assertEqual(loaded_prefs["chart_height"], "tall")
+        self.assertEqual(loaded_prefs["ux_mode"], "advanced")
+        self.assertEqual(updated["text"], "更新筆記")
+        self.assertEqual(annotations["items"][0]["text"], "更新筆記")  # type: ignore[index]
+        self.assertEqual(stock_payload["indicator_prefs"]["scale"], "percent")  # type: ignore[index]
+        self.assertEqual(stock_payload["indicator_prefs"]["ux_mode"], "advanced")  # type: ignore[index]
+        self.assertEqual(stock_payload["annotations"][0]["text"], "更新筆記")  # type: ignore[index]
 
     def test_stock_payload_includes_ma_warmup_prices_without_expanding_visible_prices(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -385,6 +462,9 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(len(payload["ma_prices"]), 80)  # type: ignore[arg-type]
         self.assertEqual(payload["prices"][0]["date"], "2026-03-12")  # type: ignore[index]
         self.assertEqual(payload["ma_prices"][0]["date"], "2026-01-01")  # type: ignore[index]
+        self.assertEqual(len(payload["features"]["dates"]), 10)  # type: ignore[index,arg-type]
+        self.assertIsNotNone(payload["features"]["series"]["ma60"][0])  # type: ignore[index]
+        self.assertEqual(payload["features"]["dates"][0], payload["prices"][0]["date"])  # type: ignore[index]
 
     def test_cached_local_data_payload_reuses_recent_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

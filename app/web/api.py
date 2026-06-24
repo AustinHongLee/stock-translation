@@ -17,6 +17,8 @@ from app.analyze.data_gap import (
 )
 from app.analyze.fundamental_trends import build_fundamental_trends
 from app.analyze.historical_frequency import build_historical_frequency_report
+from app.analyze.indicator_registry import indicator_catalog
+from app.analyze.indicators import compute_features
 from app.analyze.market_calendar import MarketTargetDate, resolve_market_target_date
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
@@ -48,9 +50,104 @@ from app.store.sqlite_store import SQLiteStore
 
 
 HISTORICAL_VALUATION_DAYS = 365 * 5
-CHART_MA_WARMUP_DAYS = 140
+CHART_MA_WARMUP_DAYS = 400
+CHART_MA_WARMUP_ROWS = 260
 LOCAL_DATA_CACHE_KEY = "local_data_v2"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
+
+
+def build_indicator_catalog_payload() -> dict[str, object]:
+    return indicator_catalog()
+
+
+DEFAULT_INDICATOR_PREFS: dict[str, object] = {
+    "preset": "newbie",
+    "enabled": ["ma20", "ma60", "volume_ma20", "rsi_14"],
+    "chart_height": "standard",
+    "scale": "price",
+    "ux_mode": "translate",
+    "experimental_ack": False,
+}
+
+
+def build_indicator_prefs_payload(store: SQLiteStore, profile_key: str = "default") -> dict[str, object]:
+    prefs = store.get_indicator_prefs(profile_key)
+    if prefs is None:
+        return {"profile_key": profile_key, **DEFAULT_INDICATOR_PREFS, "updated_at": None}
+    return {**DEFAULT_INDICATOR_PREFS, **prefs, "profile_key": profile_key}
+
+
+def save_indicator_prefs_payload(
+    store: SQLiteStore,
+    body: dict[str, object],
+    profile_key: str = "default",
+) -> dict[str, object]:
+    enabled = body.get("enabled")
+    ux_mode = str(body.get("ux_mode") or DEFAULT_INDICATOR_PREFS["ux_mode"])
+    if ux_mode not in {"translate", "advanced"}:
+        ux_mode = str(DEFAULT_INDICATOR_PREFS["ux_mode"])
+    payload = {
+        "preset": str(body.get("preset") or "custom"),
+        "enabled": [str(item) for item in enabled] if isinstance(enabled, list) else list(DEFAULT_INDICATOR_PREFS["enabled"]),  # type: ignore[arg-type]
+        "chart_height": str(body.get("chart_height") or DEFAULT_INDICATOR_PREFS["chart_height"]),
+        "scale": str(body.get("scale") or DEFAULT_INDICATOR_PREFS["scale"]),
+        "ux_mode": ux_mode,
+        "experimental_ack": bool(body.get("experimental_ack", False)),
+    }
+    return store.put_indicator_prefs(payload, profile_key)
+
+
+ALLOWED_ANNOTATION_KINDS = {"note", "hline", "trendline", "arrow", "textbox"}
+
+
+def build_chart_annotations_payload(store: SQLiteStore, stock_id: str) -> dict[str, object]:
+    stock_id = stock_id.strip()
+    return {"stock_id": stock_id, "items": store.get_chart_annotations(stock_id)}
+
+
+def create_chart_annotation_payload(
+    store: SQLiteStore,
+    stock_id: str,
+    body: dict[str, object],
+) -> dict[str, object]:
+    stock_id = stock_id.strip()
+    annotation = _normalize_annotation_body(body)
+    return store.add_chart_annotation(stock_id, annotation)
+
+
+def update_chart_annotation_payload(
+    store: SQLiteStore,
+    stock_id: str,
+    annotation_id: int,
+    body: dict[str, object],
+) -> dict[str, object]:
+    return store.update_chart_annotation(stock_id.strip(), annotation_id, _normalize_annotation_body(body, partial=True))
+
+
+def delete_chart_annotation_payload(store: SQLiteStore, stock_id: str, annotation_id: int) -> dict[str, object]:
+    stock_id = stock_id.strip()
+    store.delete_chart_annotation(stock_id, annotation_id)
+    return {"ok": True, "stock_id": stock_id, "deleted_id": annotation_id}
+
+
+def _normalize_annotation_body(body: dict[str, object], *, partial: bool = False) -> dict[str, object]:
+    result: dict[str, object] = {}
+    if not partial or "kind" in body:
+        kind = str(body.get("kind") or "note").strip()
+        if kind not in ALLOWED_ANNOTATION_KINDS:
+            raise ValueError("unsupported annotation kind")
+        result["kind"] = kind
+    for key in ("anchor_date", "anchor_date2", "text", "color"):
+        if key in body:
+            result[key] = str(body.get(key) or "").strip()
+    for key in ("anchor_price", "anchor_price2"):
+        if key in body:
+            value = body.get(key)
+            result[key] = None if value in (None, "") else float(value)  # type: ignore[arg-type]
+    if not partial:
+        result.setdefault("text", "")
+        result.setdefault("color", "#2C5475")
+    return result
 
 
 def build_local_data_payload(
@@ -606,13 +703,18 @@ def build_stock_payload(
         prices = store.get_daily_prices(stock_id, limit=days)
         used_price_limit_fallback = True
     if used_price_limit_fallback:
-        ma_prices = store.get_daily_prices(stock_id, limit=days + CHART_MA_WARMUP_DAYS)
+        ma_prices = store.get_daily_prices(stock_id, limit=days + CHART_MA_WARMUP_ROWS)
     else:
         ma_prices = store.get_daily_prices(
             stock_id,
             start_date=start_date - timedelta(days=CHART_MA_WARMUP_DAYS),
             end_date=end_date,
         )
+    visible_price_dates = [item.date.isoformat() for item in prices]
+    feature_payload = compute_features(
+        [price_to_json(item) for item in ma_prices],
+        visible_dates=visible_price_dates,
+    ).to_json()
     latest_close = prices[-1].close if prices else None
     valuation_prices = store.get_daily_prices(
         stock_id,
@@ -686,6 +788,7 @@ def build_stock_payload(
         "profile": profile_to_json(profile) if profile else None,
         "prices": [price_to_json(item) for item in prices],
         "ma_prices": [price_to_json(item) for item in ma_prices],
+        "features": feature_payload,
         "summary": summary_to_json(summary),
         "price_window": price_window_to_json(
             summary,
@@ -720,6 +823,8 @@ def build_stock_payload(
         "chips_series": [institutional_to_json(t) for t in chips_trades],
         "assessment": assessment_payload,
         "is_watchlisted": store.is_watchlisted(stock_id),
+        "indicator_prefs": build_indicator_prefs_payload(store),
+        "annotations": store.get_chart_annotations(stock_id),
     }
 
 

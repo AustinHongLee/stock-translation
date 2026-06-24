@@ -937,10 +937,41 @@
                 <div class="surface-head">
                   <h3 id="priceChartTitle">近一年收盤價（日線）</h3>
                   <div class="chart-head-right">
+                    <button id="chartLargeBtn" type="button" class="chart-size-btn chart-large-btn" onclick="toggleLargeChart()">大型K線圖</button>
+                    <select id="chartHeightSelect" class="chart-select chart-lab-only" aria-label="圖表高度">
+                      <option value="standard">標準</option>
+                      <option value="tall">高</option>
+                      <option value="xlarge">超高</option>
+                    </select>
+                    <select id="chartScaleSelect" class="chart-select chart-lab-only" aria-label="圖表座標">
+                      <option value="price">價格</option>
+                      <option value="log">對數</option>
+                      <option value="percent">%變化</option>
+                    </select>
                     <button id="chartRangeBtn" type="button" class="chart-size-btn" onclick="toggleChartRangeMode()">框選區間</button>
                     <button id="chartClearRangeBtn" type="button" class="chart-size-btn hidden" onclick="clearChartRange()">清除區間</button>
                     <button id="chartResetBtn" type="button" class="chart-size-btn" onclick="resetChartZoom()">重設縮放</button>
                     <span id="dateRange">--</span>
+                  </div>
+                </div>
+                <div id="chartTranslationPanel" class="chart-translation-panel" aria-live="polite">
+                  <div class="chart-translation-main">
+                    <div class="chart-weather-row">
+                      <span id="chartWeatherBadge" class="chart-weather-badge weather-cloudy">多雲</span>
+                      <p id="chartTranslationLine">開啟大型 K 線圖後，這裡會把目前圖表翻成一句白話。</p>
+                    </div>
+                    <div id="chartInsightList" class="chart-insight-list"></div>
+                  </div>
+                  <div class="chart-translation-tools">
+                    <div class="chart-mode-switch" aria-label="大型 K 線圖模式">
+                      <button id="chartModeTranslateBtn" type="button" class="chart-mode-btn is-active" onclick="setChartUxMode('translate', { persist: true })">翻譯模式</button>
+                      <button id="chartModeAdvancedBtn" type="button" class="chart-mode-btn" onclick="setChartUxMode('advanced', { persist: true })">進階資料室</button>
+                    </div>
+                    <div id="chartExplainCard" class="chart-explain-card">
+                      <strong>點圖例、指標或三重點</strong>
+                      <p>我會用「我是誰、現在多少、代表什麼、怎麼看」四句話解釋。</p>
+                    </div>
+                    <div id="scenarioRangePanel" class="scenario-range-panel"></div>
                   </div>
                 </div>
                 <div class="chart-legend" aria-label="走勢圖圖例">
@@ -955,6 +986,33 @@
                   <button type="button" class="legend-toggle" data-series="sr_l" onclick="toggleChartSeries('sr_l')"><i class="legend-sr legend-sr-l"></i>長線支壓</button>
                   <span class="legend-hint">滾輪縮放・拖曳平移・點圖例開關</span>
                 </div>
+                <details class="indicator-panel chart-lab-panel" open>
+                  <summary>
+                    <span>進階資料室</span>
+                    <small>圖層控制與全部指標讀值</small>
+                  </summary>
+                  <div class="indicator-presets" id="indicatorPresets"></div>
+                  <div id="experimentalNotice" class="experimental-notice hidden">
+                    <strong>實驗室指標已開啟</strong>
+                    <span>型態與分數只描述目前歷史資料形狀，非投資建議、不預測股價。</span>
+                    <button type="button" class="chart-size-btn" onclick="ackExperimentalIndicators()">知道了</button>
+                  </div>
+                  <div id="indicatorGroups" class="indicator-groups"></div>
+                  <div class="annotation-workbench">
+                    <div class="annotation-controls">
+                      <select id="annotationKind" class="chart-select" aria-label="標註類型">
+                        <option value="note">筆記</option>
+                        <option value="hline">水平線</option>
+                        <option value="trendline">趨勢線</option>
+                        <option value="arrow">箭頭</option>
+                        <option value="textbox">文字框</option>
+                      </select>
+                      <input id="annotationText" type="text" placeholder="標註文字">
+                      <button id="annotationAddBtn" type="button" class="chart-size-btn" onclick="addChartAnnotationFromUI()">加入標註</button>
+                    </div>
+                    <div id="annotationList" class="annotation-list"></div>
+                  </div>
+                </details>
                 <details class="explain">
                   <summary>這是什麼？怎麼看 K 線？</summary>
                   <div>

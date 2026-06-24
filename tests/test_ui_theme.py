@@ -39,7 +39,10 @@ class UIThemeTests(unittest.TestCase):
 
         self.assertIn("payload.ma_prices || prices", js)
         self.assertIn("function calculateAlignedMovingAverage", js)
-        self.assertIn("setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices)", js)
+        self.assertIn(
+            "setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices, payload.features || null)",
+            js,
+        )
         self.assertIn("未滿 N 根日線就不畫該條均線", js)
 
     def test_app_js_documents_single_file_sections_and_error_state(self) -> None:
@@ -59,6 +62,54 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("stockReportButton", js)
         self.assertIn("function exportStockReport", js)
         self.assertIn(".html", js)
+
+    def test_chart_advanced_controls_are_large_chart_only(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="chartLargeBtn"', html)
+        self.assertIn("大型K線圖", html)
+        self.assertIn("chart-lab-only", html)
+        self.assertIn('id="chartTranslationPanel"', html)
+        self.assertIn('id="chartWeatherBadge"', html)
+        self.assertIn('id="chartInsightList"', html)
+        self.assertIn('id="chartExplainCard"', html)
+        self.assertIn('id="scenarioRangePanel"', html)
+        self.assertIn("翻譯模式", html)
+        self.assertIn("進階資料室", html)
+        self.assertIn(".indicator-panel { display: none; }", css)
+        self.assertIn(".chart-panel.chart-lab-mode .indicator-panel", css)
+        self.assertIn(".chart-panel.chart-lab-mode.chart-mode-translate", css)
+        self.assertIn(".chart-translation-panel", css)
+        self.assertIn(".chart-explain-card", css)
+        self.assertIn(".scenario-range-panel", css)
+        self.assertIn(".indicator-data-room", css)
+        self.assertIn("chartLargeMode", js)
+        self.assertIn("chartUxMode", js)
+        self.assertIn("function toggleLargeChart", js)
+        self.assertIn("function setChartUxMode", js)
+        self.assertIn("function renderChartTranslation", js)
+        self.assertIn("function showChartLayerExplanation", js)
+        self.assertIn("function renderScenarioRange", js)
+        self.assertIn("function chartScenarioFanData", js)
+        self.assertIn("function drawScenarioFan", js)
+        self.assertIn("function drawHoverFeatureBadge", js)
+        self.assertIn("function collectIndicatorOpenState", js)
+        self.assertIn("function subplotAxisDefaults", js)
+        self.assertIn("function findSupportResistanceLine", js)
+        self.assertIn("state.chartHoverFeatureKey", js)
+        self.assertIn("if (!state.chartLargeMode) return [];", js)
+        self.assertIn("圖層控制與全部指標讀值", html)
+        self.assertIn("function isChartVisualFeature", js)
+        self.assertIn("filter(isChartVisualFeature)", js)
+        self.assertIn("renderIndicatorDataRoom", js)
+        self.assertIn("function chartVolumeLayerEnabled", js)
+        self.assertIn('feature.display_type === "subplot"', js)
+        self.assertIn("!CHART_VOLUME_MA_KEYS.includes(feature.key)", js)
+        self.assertIn("歷史範圍", js)
+        self.assertIn("非預測", js)
+        self.assertIn("近${windowSize}日", js)
 
     def test_stock_page_exposes_fundamental_trend_cards(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")

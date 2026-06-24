@@ -134,6 +134,16 @@ class ExcelExportTests(unittest.TestCase):
                 },
             },
             "prices": [{"date": "2026-06-16", "open": 1000, "high": 1100, "low": 990, "close": 1080, "volume": 1, "change": 80, "source": "test"}],
+            "annotations": [
+                {
+                    "kind": "gap",
+                    "anchor_date": "2026-06-16",
+                    "anchor_price": 1080,
+                    "text": "觀察缺口",
+                    "color": "#2C5475",
+                    "updated_at": "2026-06-16T08:30:00",
+                }
+            ],
             "dividends": [{"year": 115, "period": "年度", "cash_dividend": 15, "stock_dividend": 0, "status": "除息", "board_date": "2026-06-01", "source_updated_at": "2026-06-01", "source": "test"}],
             "report": {"sections": [{"title": "價格位階", "tone": "neutral", "summary": "中性", "details": ["不等於可買"]}]},
             "monthly_revenues": [],
@@ -154,9 +164,12 @@ class ExcelExportTests(unittest.TestCase):
         )
 
         self.assertIn("估值情境", workbook.sheetnames)
+        self.assertIn("圖表標註", workbook.sheetnames)
         self.assertIn("非投資建議", workbook["個股摘要"]["A1"].value)
         self.assertEqual(workbook["估值情境"]["A15"].value, "高殖利率情境")
         self.assertAlmostEqual(workbook["估值情境"]["B15"].value, 0.0625)
+        self.assertEqual(workbook["圖表標註"]["A5"].value, "缺口")
+        self.assertEqual(workbook["圖表標註"]["F5"].value, "觀察缺口")
         self.assertNotIn("便宜價", text)
         self.assertNotIn("合理價", text)
         self.assertNotIn("昂貴價", text)

@@ -21,6 +21,20 @@ const state = {
   quoteTimer: null,
   chartPrices: [],
   chartHoverIndex: null,
+  chartFeatures: null,
+  chartCatalog: null,
+  chartIndicatorEnabled: {},
+  chartPrefs: null,
+  chartAnnotations: [],
+  chartHeight: "standard",
+  chartScale: "price",
+  chartLargeMode: false,
+  chartUxMode: "translate",
+  chartHoverFeatureKey: null,
+  chartHoverFeatureIndex: null,
+  chartHoverPoint: null,
+  chartSRLines: [],
+  chartPrefsTimer: null,
   glossary: {
     entries: new Map(),
     aliases: new Map(),
@@ -212,8 +226,26 @@ const elements = {
   historicalFrequency: document.querySelector("#historicalFrequency"),
   priceChartTitle: document.querySelector("#priceChartTitle"),
   dateRange: document.querySelector("#dateRange"),
+  chartLargeBtn: document.querySelector("#chartLargeBtn"),
+  chartHeightSelect: document.querySelector("#chartHeightSelect"),
+  chartScaleSelect: document.querySelector("#chartScaleSelect"),
   chartRangeBtn: document.querySelector("#chartRangeBtn"),
   chartClearRangeBtn: document.querySelector("#chartClearRangeBtn"),
+  chartTranslationPanel: document.querySelector("#chartTranslationPanel"),
+  chartWeatherBadge: document.querySelector("#chartWeatherBadge"),
+  chartTranslationLine: document.querySelector("#chartTranslationLine"),
+  chartInsightList: document.querySelector("#chartInsightList"),
+  chartExplainCard: document.querySelector("#chartExplainCard"),
+  scenarioRangePanel: document.querySelector("#scenarioRangePanel"),
+  chartModeTranslateBtn: document.querySelector("#chartModeTranslateBtn"),
+  chartModeAdvancedBtn: document.querySelector("#chartModeAdvancedBtn"),
+  indicatorPresets: document.querySelector("#indicatorPresets"),
+  indicatorGroups: document.querySelector("#indicatorGroups"),
+  experimentalNotice: document.querySelector("#experimentalNotice"),
+  annotationKind: document.querySelector("#annotationKind"),
+  annotationText: document.querySelector("#annotationText"),
+  annotationAddBtn: document.querySelector("#annotationAddBtn"),
+  annotationList: document.querySelector("#annotationList"),
   rangeStatsPanel: document.querySelector("#rangeStatsPanel"),
   validationItems: document.querySelector("#validationItems"),
   reportEngine: document.querySelector("#reportEngine"),
@@ -328,14 +360,21 @@ elements.buyStockButton.addEventListener("click", () => {
 });
 elements.stockExportButton.addEventListener("click", exportStockExcel);
 elements.stockReportButton.addEventListener("click", exportStockReport);
+elements.chartHeightSelect?.addEventListener("change", () => setChartHeight(elements.chartHeightSelect.value, { persist: true }));
+elements.chartScaleSelect?.addEventListener("change", () => setChartScale(elements.chartScaleSelect.value, { persist: true }));
+elements.indicatorGroups?.addEventListener("change", handleIndicatorToggleChange);
 elements.priceChart.addEventListener("mousemove", handleChartPointerMove);
 elements.priceChart.addEventListener("mouseleave", () => {
   state.chartHoverIndex = null;
+  state.chartHoverFeatureKey = null;
+  state.chartHoverFeatureIndex = null;
+  state.chartHoverPoint = null;
   if (!state.chartSelectingRange) state.chartDragging = false;
   drawChart();
 });
 elements.priceChart.addEventListener("wheel", handleChartWheel, { passive: false });
 elements.priceChart.addEventListener("mousedown", handleChartMouseDown);
+elements.priceChart.addEventListener("click", handleChartClick);
 window.addEventListener("mouseup", handleChartMouseUp);
 elements.newbieGuideClose?.addEventListener("click", () => hideNewbieGuide(true));
 elements.glossaryClose.addEventListener("click", hideGlossary);
@@ -344,6 +383,7 @@ elements.glossaryOverlay.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    if (state.chartLargeMode) toggleLargeChart(false);
     hideGlossary();
     hideSearchSuggestions();
   }
@@ -2025,11 +2065,15 @@ function renderStock(payload, fallbackStockId) {
   renderWatchlistButton(Boolean(payload.is_watchlisted));
   renderRows(prices.filter(isTradingRow));
   state.activeChips = payload.chips || null;
-  state.chartNewsEvents = [];
-  setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices);
-  renderDateEvent((state.chartAll || []).length - 1);
-  renderChipsCard(payload.chips);
   state.activeAssessment = payload.assessment;
+  state.chartNewsEvents = [];
+  state.chartPrefs = normalizeChartPrefs(payload.indicator_prefs);
+  state.chartAnnotations = Array.isArray(payload.annotations) ? payload.annotations : [];
+  setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices, payload.features || null);
+  renderDateEvent((state.chartAll || []).length - 1);
+  renderAnnotationList();
+  renderChipsCard(payload.chips);
+  renderChartTranslation(payload);
   state.newsRiskSummary = null;
   renderAssessmentMerged();
   scheduleQuoteRefresh();
@@ -3278,6 +3322,51 @@ const PRICE_MOVING_AVERAGES = [
   { key: "ma20", label: "月線 MA20", window: 20, color: "#2f63a3", width: 1.5 },
   { key: "ma60", label: "季線 MA60", window: 60, color: "#7a4fb0", width: 1.6 },
 ];
+const CHART_OVERLAY_STYLES = {
+  ma5: { color: "#8f5f00", width: 1.4 },
+  ma10: { color: "#b26a00", width: 1.2 },
+  ma20: { color: "#2f63a3", width: 1.5 },
+  ma60: { color: "#7a4fb0", width: 1.6 },
+  ma120: { color: "#59656f", width: 1.2 },
+  ma240: { color: "#2f7a78", width: 1.2 },
+  ema5: { color: "#c47b2a", width: 1 },
+  ema12: { color: "#d08c60", width: 1 },
+  ema26: { color: "#8b6f47", width: 1 },
+  ema50: { color: "#5b8bbd", width: 1.1 },
+  ema200: { color: "#46636f", width: 1.1 },
+  bb_upper: { color: "#577590", width: 1, dash: [4, 3] },
+  bb_middle: { color: "#90a4ae", width: 1, dash: [2, 3] },
+  bb_lower: { color: "#577590", width: 1, dash: [4, 3] },
+  high_20: { color: "#b0820b", width: 1, dash: [6, 4] },
+  low_20: { color: "#1f7a5f", width: 1, dash: [6, 4] },
+  high_60: { color: "#8a6d1b", width: 1, dash: [3, 4] },
+  low_60: { color: "#2f7a68", width: 1, dash: [3, 4] },
+  high_120: { color: "#a15c38", width: 1, dash: [2, 5] },
+  low_120: { color: "#307b9d", width: 1, dash: [2, 5] },
+  high_250: { color: "#7f5539", width: 1, dash: [8, 5] },
+  low_250: { color: "#315b7c", width: 1, dash: [8, 5] },
+};
+const CHART_SUBPLOT_GROUPS = [
+  { key: "rsi", label: "RSI", keys: ["rsi_14", "rsi_6", "rsi_12", "rsi_24"], min: 0, max: 100, color: "#2f63a3" },
+  { key: "macd", label: "MACD", keys: ["macd", "macd_signal", "macd_histogram"], color: "#6B4FA0" },
+  { key: "kd", label: "KD", keys: ["kd_k", "kd_d", "kd_j"], min: 0, max: 100, color: "#C77D11" },
+  { key: "volatility", label: "ATR / HV", keys: ["atr_5", "atr_14", "atr_20", "hv_20", "hv_60", "hv_120"], color: "#B0820B" },
+  { key: "obv", label: "OBV", keys: ["obv"], color: "#1C3D5A" },
+];
+const CHART_VOLUME_MA_KEYS = ["volume_ma5", "volume_ma20", "volume_ma60"];
+const CHART_VOLUME_MA_STYLES = {
+  volume_ma5: { color: "#8f5f00", width: 1.1 },
+  volume_ma20: { color: "#2f63a3", width: 1.2 },
+  volume_ma60: { color: "#7a4fb0", width: 1.2 },
+};
+const CHART_DEFAULT_PREFS = {
+  preset: "newbie",
+  enabled: ["ma20", "ma60", "volume_ma20", "rsi_14"],
+  chart_height: "standard",
+  scale: "price",
+  ux_mode: "translate",
+  experimental_ack: false,
+};
 const CANDLE_UP_COLOR = "#E03131";   // 台股慣例：收漲為紅
 const CANDLE_DOWN_COLOR = "#2F9E44"; // 收跌為綠
 const CANDLE_FLAT_COLOR = "#8a96a3";
@@ -3387,31 +3476,716 @@ function rangeVwap(rows) {
   return null;
 }
 
+function normalizeChartPrefs(prefs) {
+  const merged = { ...CHART_DEFAULT_PREFS, ...(prefs || {}) };
+  const enabled = Array.isArray(merged.enabled) ? merged.enabled.map(String) : [...CHART_DEFAULT_PREFS.enabled];
+  return {
+    preset: String(merged.preset || "newbie"),
+    enabled,
+    chart_height: ["standard", "tall", "xlarge"].includes(merged.chart_height) ? merged.chart_height : "standard",
+    scale: ["price", "log", "percent"].includes(merged.scale) ? merged.scale : "price",
+    ux_mode: ["translate", "advanced"].includes(merged.ux_mode) ? merged.ux_mode : "translate",
+    experimental_ack: Boolean(merged.experimental_ack),
+  };
+}
+
+function isChartVisualFeature(feature) {
+  return Boolean(feature) && ["overlay", "subplot"].includes(feature.display_type);
+}
+
+function chartVisualFeatureKeys() {
+  const features = Array.isArray(state.chartCatalog?.features) ? state.chartCatalog.features : [];
+  return new Set(features.filter(isChartVisualFeature).map((feature) => feature.key));
+}
+
+function applyChartEnabledKeys(keys) {
+  const allowed = chartVisualFeatureKeys();
+  const source = Array.isArray(keys) ? keys : [];
+  state.chartIndicatorEnabled = {};
+  source.forEach((key) => {
+    const normalized = String(key);
+    if (!allowed.size || allowed.has(normalized)) state.chartIndicatorEnabled[normalized] = true;
+  });
+}
+
+function setupChartPreferences() {
+  const prefs = normalizeChartPrefs(state.chartPrefs);
+  state.chartPrefs = prefs;
+  applyChartEnabledKeys(prefs.enabled || []);
+  setChartHeight(prefs.chart_height, { persist: false });
+  setChartScale(prefs.scale, { persist: false });
+  setChartUxMode(prefs.ux_mode, { persist: false, redraw: false });
+}
+
+function setChartHeight(value, options = {}) {
+  const height = ["standard", "tall", "xlarge"].includes(value) ? value : "standard";
+  state.chartHeight = height;
+  if (elements.chartHeightSelect) elements.chartHeightSelect.value = height;
+  if (elements.priceChart) {
+    elements.priceChart.classList.remove("chart-height-standard", "chart-height-tall", "chart-height-xlarge");
+    elements.priceChart.classList.add(`chart-height-${height}`);
+  }
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), chart_height: height };
+  drawChart();
+  if (options.persist) saveChartPrefsSoon();
+}
+
+function setChartScale(value, options = {}) {
+  const scale = ["price", "log", "percent"].includes(value) ? value : "price";
+  state.chartScale = scale;
+  if (elements.chartScaleSelect) elements.chartScaleSelect.value = scale;
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), scale };
+  drawChart();
+  if (options.persist) saveChartPrefsSoon();
+}
+
+function setChartUxMode(value, options = {}) {
+  const mode = value === "advanced" ? "advanced" : "translate";
+  state.chartUxMode = mode;
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), ux_mode: mode };
+  const panel = elements.priceChart?.closest(".chart-panel");
+  if (panel) {
+    panel.classList.toggle("chart-mode-translate", mode === "translate");
+    panel.classList.toggle("chart-mode-advanced", mode === "advanced");
+  }
+  elements.chartModeTranslateBtn?.classList.toggle("is-active", mode === "translate");
+  elements.chartModeAdvancedBtn?.classList.toggle("is-active", mode === "advanced");
+  if (mode === "advanced") {
+    const labPanel = elements.indicatorGroups?.closest(".indicator-panel");
+    if (labPanel) labPanel.open = true;
+  }
+  if (options.redraw !== false) window.setTimeout(drawChart, 40);
+  if (options.persist) saveChartPrefsSoon();
+}
+
+function saveChartPrefsSoon() {
+  window.clearTimeout(state.chartPrefsTimer);
+  state.chartPrefsTimer = window.setTimeout(saveChartPrefs, 250);
+}
+
+async function saveChartPrefs() {
+  try {
+    const enabled = Object.entries(state.chartIndicatorEnabled || {})
+      .filter(([, value]) => Boolean(value))
+      .map(([key]) => key);
+    const payload = {
+      ...normalizeChartPrefs(state.chartPrefs),
+      enabled,
+      chart_height: state.chartHeight,
+      scale: state.chartScale,
+      ux_mode: state.chartUxMode,
+    };
+    state.chartPrefs = await putJson("/api/indicator-prefs", payload);
+  } catch (error) {
+    console.warn("indicator prefs save failed", error);
+  }
+}
+
+function renderIndicatorPanel() {
+  const catalog = state.chartCatalog || {};
+  const allFeatures = Array.isArray(catalog.features) ? catalog.features : [];
+  const features = allFeatures.filter(isChartVisualFeature);
+  const categories = Array.isArray(catalog.categories) ? catalog.categories : [];
+  const presets = catalog.presets || {};
+  const openState = collectIndicatorOpenState();
+  if (elements.indicatorPresets) {
+    elements.indicatorPresets.innerHTML = Object.entries(presets).map(([key, preset]) => `
+      <button type="button" class="indicator-preset ${state.chartPrefs?.preset === key ? "is-active" : ""}" onclick="applyIndicatorPreset('${escapeHtml(key)}')">${escapeHtml(preset.label || key)}</button>
+    `).join("");
+  }
+  if (elements.indicatorGroups) {
+    const byCategory = new Map();
+    features.forEach((feature) => {
+      if (!byCategory.has(feature.category)) byCategory.set(feature.category, []);
+      byCategory.get(feature.category).push(feature);
+    });
+    const visualHtml = categories
+      .filter((category) => byCategory.has(category.key))
+      .map((category) => {
+        const categoryFeatures = byCategory.get(category.key);
+        const enabledCount = categoryFeatures.filter((feature) => Boolean(state.chartIndicatorEnabled?.[feature.key])).length;
+        const items = categoryFeatures.map((feature) => {
+          const checked = Boolean(state.chartIndicatorEnabled?.[feature.key]);
+          const risk = Number(feature.risk_level || 1);
+          return `
+            <label class="indicator-toggle" title="${escapeHtml(feature.description || "")}">
+              <input type="checkbox" data-indicator-key="${escapeHtml(feature.key)}" ${checked ? "checked" : ""}>
+              <span>${escapeHtml(feature.label || feature.key)}</span>
+              ${risk >= 3 ? `<em class="indicator-risk">實驗</em>` : ""}
+            </label>
+          `;
+        }).join("");
+        const open = openState.visual.has(category.key)
+          ? openState.visual.get(category.key)
+          : (["sma", "rsi"].includes(category.key) && enabledCount > 0);
+        return `<details class="indicator-group" data-indicator-category="${escapeHtml(category.key)}" ${open ? "open" : ""}><summary>${escapeHtml(category.label || category.key)}<span class="indicator-group-count">${enabledCount}/${categoryFeatures.length}</span></summary><div class="indicator-toggle-list">${items}</div></details>`;
+      })
+      .join("");
+    elements.indicatorGroups.innerHTML = visualHtml + renderIndicatorDataRoom(
+      allFeatures.filter((feature) => !isChartVisualFeature(feature)),
+      categories,
+      openState,
+    );
+  }
+  updateExperimentalNotice();
+}
+
+function collectIndicatorOpenState() {
+  const visual = new Map();
+  const data = new Map();
+  elements.indicatorGroups?.querySelectorAll(".indicator-group[data-indicator-category]").forEach((item) => {
+    visual.set(item.dataset.indicatorCategory, item.open);
+  });
+  elements.indicatorGroups?.querySelectorAll(".indicator-data-category[data-indicator-data-category]").forEach((item) => {
+    data.set(item.dataset.indicatorDataCategory, item.open);
+  });
+  const room = elements.indicatorGroups?.querySelector(".indicator-data-room");
+  return { visual, data, dataRoomOpen: room ? room.open : false };
+}
+
+function renderIndicatorDataRoom(features, categories, openState = null) {
+  const items = Array.isArray(features) ? features : [];
+  if (!items.length) return "";
+  const categoryMeta = Array.isArray(categories) ? categories : [];
+  const byCategory = new Map();
+  items.forEach((feature) => {
+    if (!byCategory.has(feature.category)) byCategory.set(feature.category, []);
+    byCategory.get(feature.category).push(feature);
+  });
+  const categoryHtml = categoryMeta
+    .filter((category) => byCategory.has(category.key))
+    .map((category) => {
+      const rows = byCategory.get(category.key).map((feature) => {
+        const value = latestFeatureRawValue(feature.key);
+        return `
+          <div class="indicator-data-row" title="${escapeHtml(feature.description || "")}">
+            <span>${escapeHtml(feature.label || feature.key)}</span>
+            <strong>${escapeHtml(formatIndicatorValue(feature.key, value))}</strong>
+          </div>
+        `;
+      }).join("");
+      const open = openState?.data?.has(category.key) ? openState.data.get(category.key) : false;
+      return `<details class="indicator-data-category" data-indicator-data-category="${escapeHtml(category.key)}" ${open ? "open" : ""}><summary>${escapeHtml(category.label || category.key)}<span class="indicator-group-count">${byCategory.get(category.key).length}</span></summary><div class="indicator-data-list">${rows}</div></details>`;
+    })
+    .join("");
+  return `
+    <details class="indicator-data-room" ${openState?.dataRoomOpen ? "open" : ""}>
+      <summary>全部數據讀值</summary>
+      <div class="indicator-data-room-grid">${categoryHtml}</div>
+    </details>
+  `;
+}
+
+function renderChartTranslation(payload = state.activePayload) {
+  if (!elements.chartTranslationPanel) return;
+  const assessment = state.activeAssessment || payload?.assessment;
+  const available = Boolean(assessment?.available);
+  const factors = available ? selectTranslationFactors(assessment.factors || []) : [];
+  const weather = chartWeatherFromAssessment(assessment);
+  if (elements.chartWeatherBadge) {
+    elements.chartWeatherBadge.textContent = weather.label;
+    elements.chartWeatherBadge.className = `chart-weather-badge weather-${weather.tone}`;
+  }
+  if (elements.chartTranslationLine) {
+    const details = factors.length
+      ? factors.map((factor) => compactFactorReading(factor, 16)).filter(Boolean).join(" · ")
+      : "資料還不夠，先同步更多日線再判讀";
+    elements.chartTranslationLine.textContent = `${weather.summary} · ${details}`;
+  }
+  if (elements.chartInsightList) {
+    elements.chartInsightList.innerHTML = factors.length
+      ? factors.map(renderChartInsightCard).join("")
+      : `<article class="chart-insight-card"><strong>資料待補</strong><p>同步更多日線後，這裡只挑三個最值得先看的重點。</p></article>`;
+  }
+  if (factors[0]) {
+    showChartFactorExplanation(factors[0].key, { redraw: false });
+  } else {
+    renderChartExplainCard({
+      title: "大型 K 線圖翻譯機",
+      who: "這裡會把圖上的線、指標與當下讀數翻成白話。",
+      current: "等待可解讀資料",
+      context: "預設只給少量重點；想看全部欄位時再切進進階資料室。",
+      caution: "所有判讀只整理歷史資料與傳統解讀，不是預測，也不是買賣建議。",
+    });
+  }
+  renderScenarioRange(payload);
+}
+
+function renderChartInsightCard(factor) {
+  const title = translationFactorTitle(factor);
+  const tone = factorToneClass(factor);
+  const reading = compactFactorReading(factor, 48) || factor.lean || "目前沒有明確偏向";
+  return `
+    <article class="chart-insight-card tone-${escapeHtml(tone)}">
+      <strong>${escapeHtml(title)}：${escapeHtml(factor.lean || "觀察")}</strong>
+      <p>${escapeHtml(reading)}${factor.value ? `（${escapeHtml(String(factor.value))}）` : ""}</p>
+      <button type="button" class="chart-help-btn" aria-label="解釋 ${escapeHtml(title)}" onclick="showChartFactorExplanation('${escapeHtml(factor.key)}')">?</button>
+    </article>
+  `;
+}
+
+function selectTranslationFactors(factors) {
+  const source = Array.isArray(factors) ? factors.filter(Boolean) : [];
+  const picked = [];
+  const used = new Set();
+  [["ma"], ["bias", "position"], ["volume"]].forEach((group) => {
+    const candidate = source
+      .filter((factor) => group.includes(factor.key) && !used.has(factor.key))
+      .sort((a, b) => factorImportance(b) - factorImportance(a))[0];
+    if (candidate) {
+      picked.push(candidate);
+      used.add(candidate.key);
+    }
+  });
+  source
+    .filter((factor) => !used.has(factor.key))
+    .sort((a, b) => factorImportance(b) - factorImportance(a))
+    .forEach((factor) => {
+      if (picked.length < 3) {
+        picked.push(factor);
+        used.add(factor.key);
+      }
+    });
+  return picked.slice(0, 3);
+}
+
+function factorImportance(factor) {
+  const base = {
+    ma: 100,
+    bias: 92,
+    position: 90,
+    volume: 86,
+    chips: 74,
+    valuation: 70,
+    fundamental: 68,
+    rsi: 60,
+    kd: 58,
+    news: 56,
+  }[factor?.key] || 40;
+  const tone = factorToneClass(factor);
+  return base + (tone === "neutral" ? 0 : 14);
+}
+
+function chartWeatherFromAssessment(assessment) {
+  if (!assessment?.available) {
+    return { label: "多雲", tone: "cloudy", summary: "資料不足，先不硬判斷" };
+  }
+  const counts = assessment.counts || recountAssessment(assessment.factors || []);
+  const bull = Number(counts.bull || 0);
+  const bear = Number(counts.bear || 0);
+  if (bull - bear >= 2) return { label: "晴", tone: "sunny", summary: "中期偏多但仍看風險" };
+  if (bear - bull >= 2) return { label: "雨", tone: "rainy", summary: "偏弱或風險較多" };
+  return { label: "多雲", tone: "cloudy", summary: "多空混合，先看關鍵線" };
+}
+
+function translationFactorTitle(factor) {
+  return {
+    ma: "趨勢",
+    bias: "位置",
+    position: "位置",
+    volume: "量能",
+    chips: "籌碼",
+    valuation: "估值",
+    fundamental: "基本面",
+    rsi: "動能",
+    kd: "轉折",
+    news: "消息",
+  }[factor?.key] || (factor?.label || "重點");
+}
+
+function compactFactorReading(factor, maxLength = 28) {
+  const text = String(factor?.reading || factor?.traditional || factor?.label || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const first = text.split(/[。；]/)[0] || text;
+  return first.length > maxLength ? `${first.slice(0, maxLength)}...` : first;
+}
+
+function factorToneClass(factor) {
+  return factor?.tone || assessTone(factor?.lean);
+}
+
+function showChartFactorExplanation(key, options = {}) {
+  const factor = findAssessmentFactor(key);
+  if (!factor) return;
+  renderChartExplainCard({
+    title: factor.label || translationFactorTitle(factor),
+    who: `${factor.label || factor.key} 是體質總評裡的一個面向。`,
+    current: factor.value ? `${factor.lean || "觀察"}，${factor.value}` : (factor.lean || "觀察"),
+    context: factor.reading || "目前沒有更細的白話解讀。",
+    caution: factor.traditional || "這只是傳統解讀的清點，不是預測。",
+    guideKey: factor.key,
+  });
+  state.chartFocusedFeature = null;
+  if (options.redraw !== false) drawChart();
+}
+
+function showChartLayerExplanation(key, options = {}) {
+  if (!key) return;
+  const feature = chartFeatureSpec(key);
+  const factor = findAssessmentFactor(factorKeyForChartFeature(key));
+  const latest = latestFeatureRawValue(key);
+  renderChartExplainCard({
+    title: feature.label || key,
+    who: `${feature.label || key}：${feature.description || "圖上的一個資料層。"}`,
+    current: formatIndicatorValue(key, latest),
+    context: factor?.reading || feature.context_note || feature.description || "這條線只把歷史資料畫出來，需搭配其他面向看。",
+    caution: factor?.traditional || feature.caution || "線條穿越與位置只是傳統看法，不代表未來一定照走。",
+    guideKey: indicatorGuideKeyForFeature(key),
+  });
+  state.chartFocusedFeature = key;
+  if (options.redraw !== false) drawChart();
+}
+
+function showChartCandleExplanation(index) {
+  const all = state.chartAll || [];
+  const item = all[index] || all[all.length - 1];
+  if (!item) return;
+  const open = Number(item.open), high = Number(item.high), low = Number(item.low), close = Number(item.close);
+  const direction = close > open ? "收漲" : close < open ? "收跌" : "平盤";
+  renderChartExplainCard({
+    title: `${item.date || "當日"} K 棒`,
+    who: "K 棒是一個交易日的開盤、最高、最低、收盤。",
+    current: `開 ${formatNumber(open)}、高 ${formatNumber(high)}、低 ${formatNumber(low)}、收 ${formatNumber(close)}，${direction}`,
+    context: "實體表示開盤到收盤的距離，上下影線表示盤中碰過的高低價。",
+    caution: "單根 K 棒容易誤讀，通常要搭配趨勢、位置與量能一起看。",
+    guideKey: "candle",
+  });
+  state.chartFocusedFeature = null;
+  drawChart();
+}
+
+function renderChartExplainCard(detail) {
+  const el = elements.chartExplainCard;
+  if (!el) return;
+  const guide = detail.guideKey && INDICATOR_GUIDES[detail.guideKey]
+    ? `<button type="button" class="guide-link" onclick="openIndicatorGuide('${escapeHtml(detail.guideKey)}')">深入名詞小教室</button>`
+    : "";
+  el.innerHTML = `
+    <strong>${escapeHtml(detail.title || "圖表解釋")}</strong>
+    <dl>
+      <div><dt>我是誰</dt><dd>${escapeHtml(detail.who || "--")}</dd></div>
+      <div><dt>現在多少</dt><dd>${escapeHtml(detail.current || "--")}</dd></div>
+      <div><dt>對這檔代表什麼</dt><dd>${escapeHtml(detail.context || "--")}</dd></div>
+      <div><dt>怎麼看 / 注意</dt><dd>${escapeHtml(detail.caution || "--")}</dd></div>
+    </dl>
+    ${guide}
+  `;
+}
+
+function renderScenarioRange(payload = state.activePayload) {
+  const panel = elements.scenarioRangePanel;
+  if (!panel) return;
+  const report = payload?.historical_frequency;
+  if (!report?.available) {
+    panel.innerHTML = `
+      <div class="scenario-head"><strong>歷史情境範圍</strong><span>待補</span></div>
+      <p>同步更多日線後，才會顯示類似事件後的歷史分布。</p>
+      <div class="scenario-disclaimer">這是歷史統計，不是預測，也不是買賣建議。</div>
+    `;
+    return;
+  }
+  const events = Array.isArray(report.events) ? report.events : [];
+  const event = pickScenarioEvent(events);
+  if (!event) {
+    panel.innerHTML = `
+      <div class="scenario-head"><strong>歷史情境範圍</strong><span>無命中</span></div>
+      <p>目前樣本內沒有可展示的事件分布。</p>
+      <div class="scenario-disclaimer">這是歷史統計，不是預測，也不是買賣建議。</div>
+    `;
+    return;
+  }
+  const windows = (Array.isArray(event.windows) ? event.windows : [])
+    .filter((item) => item?.available)
+    .filter((item) => [5, 20].includes(Number(item.days)))
+    .slice(0, 2);
+  const count = Number(event.completed_sample_count || event.trigger_count || 0);
+  panel.innerHTML = `
+    <div class="scenario-head">
+      <strong>歷史情境（不是預測）</strong>
+      <span>${escapeHtml(event.current_match ? "現在剛好符合" : "歷史樣本")}</span>
+    </div>
+    <p class="scenario-lead">過去這檔出現「${escapeHtml(event.label || "類似型態")}」的情況共 <strong>${formatInteger(count)}</strong> 次。看那之後：</p>
+    ${windows.map((windowStats) => renderScenarioWindow(windowStats)).join("")}
+    <div class="scenario-disclaimer">這是把過去 ${formatInteger(count)} 次整理出來的範圍，<strong>不是預測、也不是買賣建議</strong>。</div>
+  `;
+}
+
+function pickScenarioEvent(events) {
+  const candidates = (Array.isArray(events) ? events : [])
+    .filter((event) => (event.windows || []).some((item) => item?.available));
+  return candidates
+    .sort((a, b) => {
+      if (Boolean(a.current_match) !== Boolean(b.current_match)) return a.current_match ? -1 : 1;
+      return Number(b.completed_sample_count || 0) - Number(a.completed_sample_count || 0);
+    })[0] || null;
+}
+
+function renderScenarioWindow(windowStats) {
+  const count = Number(windowStats.count || 0);
+  const lo = Number(windowStats.p10_return_percent);
+  const hi = Number(windowStats.p90_return_percent);
+  const p25 = Number(windowStats.p25_return_percent);
+  const p75 = Number(windowStats.p75_return_percent);
+  const median = Number(windowStats.median_return_percent);
+  const range = Number.isFinite(hi - lo) && hi !== lo ? hi - lo : 1;
+  const left = clamp(((p25 - lo) / range) * 100, 0, 100);
+  const right = clamp(((p75 - lo) / range) * 100, 0, 100);
+  const mid = clamp(((median - lo) / range) * 100, 0, 100);
+  const showMedian = count >= 8 && Number.isFinite(median);
+  const latestClose = Number(state.activeSummary?.latest_close || (state.chartAll || []).at?.(-1)?.close);
+  const priceAt = (pct) => (Number.isFinite(latestClose) && Number.isFinite(pct))
+    ? formatNumber(latestClose * (1 + pct / 100))
+    : null;
+  const goodPx = priceAt(hi);
+  const badPx = priceAt(lo);
+  const midPx = priceAt(median);
+  const days = formatInteger(windowStats.days);
+  const rangeText = (badPx && goodPx) ? `${badPx} ~ ${goodPx}` : `${formatSignedPercent(lo)} ~ ${formatSignedPercent(hi)}`;
+  const plainRows = [
+    showMedian ? `<li><span>最常見</span><b>${midPx ? `約 ${midPx} ` : ""}（${formatSignedPercent(median)}）</b></li>` : "",
+    `<li><span>比較好的時候</span><b>${goodPx ? `約 ${goodPx} ` : ""}（${formatSignedPercent(hi)}）</b></li>`,
+    `<li><span>比較差的時候</span><b>${badPx ? `約 ${badPx} ` : ""}（${formatSignedPercent(lo)}）</b></li>`,
+  ].join("");
+  return `
+    <div class="scenario-window">
+      <div class="scenario-window-head"><span>${days} 天後</span><span>過去 ${formatInteger(count)} 次</span></div>
+      <div class="scenario-band" aria-label="${days} 天後歷史範圍">
+        <span class="scenario-band-outer"></span>
+        <span class="scenario-band-inner" style="left:${left.toFixed(1)}%;right:${(100 - right).toFixed(1)}%"></span>
+        ${showMedian ? `<span class="scenario-band-median" style="left:${mid.toFixed(1)}%"></span>` : ""}
+      </div>
+      <ul class="scenario-plain">${plainRows}</ul>
+      <p class="scenario-oneliner">👉 歷史上這種情況，${days} 天後多半落在 <b>${rangeText}</b> 之間${showMedian ? "" : "（樣本少，只看範圍）"}。</p>
+      <details class="scenario-advanced"><summary>進階數字</summary><div class="scenario-advanced-body">p10 ${formatSignedPercent(lo)}・p25 ${formatSignedPercent(p25)}・中位 ${formatSignedPercent(median)}・p75 ${formatSignedPercent(p75)}・p90 ${formatSignedPercent(hi)}</div></details>
+    </div>
+  `;
+}
+
+function chartScenarioFanData(payload = state.activePayload) {
+  const report = payload?.historical_frequency;
+  const events = Array.isArray(report?.events) ? report.events : [];
+  if (!report?.available || !events.length) return null;
+  const event = pickScenarioEvent(events);
+  if (!event) return null;
+  const windows = (Array.isArray(event.windows) ? event.windows : [])
+    .filter((item) => item?.available)
+    .filter((item) => [5, 20].includes(Number(item.days)))
+    .map((item) => ({
+      days: Number(item.days),
+      count: Number(item.count || 0),
+      p10: Number(item.p10_return_percent),
+      p25: Number(item.p25_return_percent),
+      median: Number(item.median_return_percent),
+      p75: Number(item.p75_return_percent),
+      p90: Number(item.p90_return_percent),
+    }))
+    .filter((item) => [item.p10, item.p25, item.p75, item.p90].every(Number.isFinite))
+    .sort((a, b) => a.days - b.days);
+  const latestClose = Number(state.activeSummary?.latest_close || (state.chartAll || []).at?.(-1)?.close);
+  if (!windows.length || !Number.isFinite(latestClose) || latestClose <= 0) return null;
+  return { event, windows, latestClose };
+}
+
+function scenarioPriceAtReturn(close, returnPercent) {
+  const pct = Number(returnPercent);
+  return Number.isFinite(pct) ? close * (1 + pct / 100) : NaN;
+}
+
+function findAssessmentFactor(key) {
+  if (!key) return null;
+  const factors = Array.isArray(state.activeAssessment?.factors) ? state.activeAssessment.factors : [];
+  return factors.find((factor) => factor.key === key) || null;
+}
+
+function chartFeatureSpec(key) {
+  const srLine = findSupportResistanceLine(key);
+  if (srLine) {
+    return {
+      key,
+      label: srLine.label,
+      description: `${srLine.label} 是近 ${srLine.window} 日波段高低點形成的${srLine.kindLabel}參考線。`,
+      context_note: `這條線來自 ${srLine.window} 日範圍內的樞紐 K 棒，用來看股價靠近支撐或壓力的位置。`,
+      caution: "支撐壓力只是歷史轉折點整理，不代表一定守住或一定突破。",
+    };
+  }
+  const features = Array.isArray(state.chartCatalog?.features) ? state.chartCatalog.features : [];
+  const feature = features.find((item) => item.key === key);
+  if (feature) return feature;
+  if (key === "vol") return { key, label: "成交量", description: "每天市場實際成交的股數，常用來確認價格變動是否有量能支持。" };
+  if (String(key).startsWith("sr_")) return { key, label: "支撐 / 壓力", description: "用近期波段高低點畫出的參考區，協助觀察價格靠近哪一側。" };
+  if (key === "candle") return { key, label: "K 棒", description: "單日開高低收的價格範圍。" };
+  return { key, label: key, description: "圖表資料層。" };
+}
+
+function factorKeyForChartFeature(key) {
+  const k = String(key || "");
+  if (findSupportResistanceLine(k) || k.startsWith("sr_")) return "position";
+  if (k === "vol" || k.startsWith("volume") || k === "obv" || k.startsWith("price_up_volume") || k.startsWith("price_down_volume")) return "volume";
+  if (/^(ma|ema)\d+/.test(k) || ["bull_alignment", "bear_alignment", "golden_cross", "death_cross", "bb_middle"].includes(k)) return "ma";
+  if (k.startsWith("price_to_ma") || k.startsWith("distance_to") || k.startsWith("high_") || k.startsWith("low_") || k.startsWith("bb_")) return "bias";
+  if (k.startsWith("rsi")) return "rsi";
+  if (k.startsWith("kd")) return "kd";
+  if (k.startsWith("trend")) return "ma";
+  return null;
+}
+
+function indicatorGuideKeyForFeature(key) {
+  const factorKey = factorKeyForChartFeature(key);
+  if (factorKey && INDICATOR_GUIDES[factorKey]) return factorKey;
+  if (String(key).startsWith("sr_")) return "sr";
+  if (String(key).startsWith("ma") || String(key).startsWith("ema")) return "ma";
+  return null;
+}
+
+function latestFeatureRawValue(key) {
+  const srLine = findSupportResistanceLine(key);
+  if (srLine) return srLine.price;
+  if (key === "vol") {
+    const latest = (state.chartAll || []).at?.(-1);
+    return latest ? latest.volume : null;
+  }
+  const latest = state.chartFeatures?.latest || {};
+  if (Object.prototype.hasOwnProperty.call(latest, key)) return latest[key];
+  const values = featureSeries(key);
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    if (values[i] != null) return values[i];
+  }
+  return null;
+}
+
+function formatIndicatorValue(key, value) {
+  if (value == null || value === "") return "資料不足";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    if (value.score != null) return `${formatNumber(value.score)} 分`;
+    if (value.label) return String(value.label);
+    if (value.direction) return String(value.direction);
+    return "有資料";
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  const k = String(key || "");
+  if (k.includes("percent") || k.startsWith("return_") || k.startsWith("roc_") || k.includes("_slope") || k.startsWith("distance_to") || k.startsWith("hv_") || k === "annualized_volatility") {
+    return `${formatNumber(number)}%`;
+  }
+  if (k === "volume_ratio") return `${formatNumber(number)} 倍`;
+  if (k.startsWith("volume_ma") || k === "vol" || k === "obv") return formatInteger(Math.round(number));
+  return formatNumber(number);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function applyIndicatorPreset(key) {
+  const catalog = state.chartCatalog || {};
+  const preset = (catalog.presets || {})[key];
+  if (!preset) return;
+  applyChartEnabledKeys(preset.enabled || []);
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), preset: key };
+  renderIndicatorPanel();
+  updateChartLegendState();
+  drawChart();
+  saveChartPrefsSoon();
+}
+
+function handleIndicatorToggleChange(event) {
+  const input = event.target.closest?.("[data-indicator-key]");
+  if (!input) return;
+  const key = input.dataset.indicatorKey;
+  state.chartIndicatorEnabled[key] = Boolean(input.checked);
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), preset: "custom" };
+  renderIndicatorPanel();
+  updateChartLegendState();
+  if (state.chartLargeMode) showChartLayerExplanation(key, { redraw: false });
+  drawChart();
+  saveChartPrefsSoon();
+}
+
+function indicatorEnabled(key) {
+  if (!key) return false;
+  if (state.chartLargeMode && chartVisualFeatureKeys().has(key)) {
+    return Boolean(state.chartIndicatorEnabled?.[key]);
+  }
+  if (state.chartIndicatorEnabled && Object.prototype.hasOwnProperty.call(state.chartIndicatorEnabled, key)) {
+    return Boolean(state.chartIndicatorEnabled[key]);
+  }
+  const hidden = state.chartSeriesHidden || {};
+  return !hidden[key];
+}
+
+function updateExperimentalNotice() {
+  if (!elements.experimentalNotice) return;
+  const features = (Array.isArray(state.chartCatalog?.features) ? state.chartCatalog.features : []).filter(isChartVisualFeature);
+  const hasExperimental = features.some((feature) => Number(feature.risk_level || 1) >= 3 && indicatorEnabled(feature.key));
+  elements.experimentalNotice.classList.toggle("hidden", !hasExperimental || Boolean(state.chartPrefs?.experimental_ack));
+}
+
+function ackExperimentalIndicators() {
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), experimental_ack: true };
+  updateExperimentalNotice();
+  saveChartPrefsSoon();
+}
+
+function featureSeries(key) {
+  const values = state.chartFeatures?.series?.[key];
+  return Array.isArray(values) ? values : [];
+}
+
+function buildOverlaySeries(valid, maSource) {
+  const catalog = state.chartCatalog || {};
+  const features = Array.isArray(catalog.features) ? catalog.features : [];
+  const overlayFeatures = features.filter((feature) => feature.display_type === "overlay" && featureSeries(feature.key).length);
+  if (overlayFeatures.length) {
+    return overlayFeatures.map((feature) => ({
+      key: feature.key,
+      label: feature.label || feature.key,
+      values: featureSeries(feature.key),
+      ...(CHART_OVERLAY_STYLES[feature.key] || { color: "#64748B", width: 1 }),
+    }));
+  }
+  return PRICE_MOVING_AVERAGES.map((s) => ({
+    ...s,
+    values: calculateAlignedMovingAverage(valid, maSource, s.window),
+  }));
+}
+
 // ---- 設定整合圖（價格 + 三大法人 + 事件），預設顯示全部，可滾輪縮放、拖曳平移 ----
-function setupChart(prices, chipsSeries, localEvents, maPrices = null) {
+function setupChart(prices, chipsSeries, localEvents, maPrices = null, features = null) {
   const valid = (prices || []).filter(isTradingRow);
   const maSource = (maPrices || prices || []).filter(isTradingRow);
   if (!state.chartSeriesHidden) state.chartSeriesHidden = { vol: true, sr_s: true, sr_l: true };
+  state.chartFeatures = features || null;
+  state.chartCatalog = features?.catalog || state.chartCatalog || null;
+  setupChartPreferences();
   state.chartAll = valid;
   state.chartPrices = valid; // 與 renderDateEvent 等相容
   const chipsMap = {};
   (chipsSeries || []).forEach((c) => { if (c && c.date) chipsMap[c.date] = c; });
   state.chartChips = chipsMap;
-  state.chartMA = PRICE_MOVING_AVERAGES.map((s) => ({
+  state.chartClassicMA = PRICE_MOVING_AVERAGES.map((s) => ({
     ...s,
     values: calculateAlignedMovingAverage(valid, maSource, s.window),
   }));
+  state.chartMA = buildOverlaySeries(valid, maSource);
   state.chartLocalEvents = localEvents || [];
   state.chartNewsEvents = state.chartNewsEvents || [];
   rebuildEventIndex();
   const n = valid.length;
   state.chartView = { start: 0, end: Math.max(0, n - 1) };
   state.chartHoverIndex = null;
+  state.chartHoverFeatureKey = null;
+  state.chartHoverFeatureIndex = null;
+  state.chartHoverPoint = null;
+  state.chartFocusedFeature = null;
   state.chartDragging = false;
   state.chartSelectingRange = false;
   state.chartRangeSelection = null;
   state.chartRangeDraft = null;
   drawChart();
+  renderIndicatorPanel();
+  renderAnnotationList();
   renderRangeStatsPanel();
   updateChartLegendState();
 }
@@ -3478,18 +4252,83 @@ function chartLayout(canvas) {
   const width = canvas.width ? canvas.width / scale : canvas.getBoundingClientRect().width;
   const height = canvas.height ? canvas.height / scale : 440;
   const padding = { top: 16, right: 66, bottom: 24, left: 56 };
-  const innerWidth = width - padding.left - padding.right;
+  const scenario = chartScenarioFanData();
+  const futureWidth = state.chartLargeMode && scenario ? Math.min(150, Math.max(96, width * 0.12)) : 0;
+  const innerWidth = Math.max(180, width - padding.left - padding.right - futureWidth);
   const hidden = state.chartSeriesHidden || {};
-  const showVol = !hidden.vol;
+  const showVol = state.chartLargeMode ? chartVolumeLayerEnabled() : !hidden.vol;
+  const subplots = state.chartLargeMode ? activeChartSubplots() : [];
   const gap = 14;
   const volH = showVol ? 72 : 0;
-  const extra = showVol ? gap : 0;
-  const priceH = height - padding.top - padding.bottom - volH - extra;
+  const subH = subplots.length ? subplots.length * 76 : 0;
+  const extra = (showVol ? gap : 0) + (subplots.length ? gap * subplots.length : 0);
+  const priceH = Math.max(160, height - padding.top - padding.bottom - volH - subH - extra);
   let y = padding.top;
   const price = { top: y, height: priceH }; y += priceH;
   let vol = null;
   if (showVol) { y += gap; vol = { top: y, height: volH }; y += volH; }
-  return { width, height, padding, innerWidth, price, vol, chips: null };
+  const subplotLayouts = [];
+  subplots.forEach((subplot) => {
+    y += gap;
+    subplotLayouts.push({ ...subplot, top: y, height: 76 });
+    y += 76;
+  });
+  return {
+    width,
+    height,
+    padding,
+    innerWidth,
+    futureWidth,
+    plotRight: padding.left + innerWidth,
+    price,
+    vol,
+    subplots: subplotLayouts,
+    chips: null,
+  };
+}
+
+function activeChartSubplots() {
+  if (!state.chartLargeMode) return [];
+  const catalog = state.chartCatalog || {};
+  const features = Array.isArray(catalog.features) ? catalog.features : [];
+  const categories = new Map((Array.isArray(catalog.categories) ? catalog.categories : []).map((item) => [item.key, item]));
+  const groups = new Map();
+  features
+    .filter((feature) => feature.display_type === "subplot")
+    .filter((feature) => !CHART_VOLUME_MA_KEYS.includes(feature.key))
+    .filter((feature) => indicatorEnabled(feature.key) && featureSeries(feature.key).some((value) => value != null))
+    .forEach((feature) => {
+      const groupKey = feature.category || "subplot";
+      if (!groups.has(groupKey)) {
+        const axis = subplotAxisDefaults(groupKey);
+        groups.set(groupKey, {
+          key: groupKey,
+          label: categories.get(groupKey)?.label || feature.category || "副圖",
+          keys: [],
+          color: axis.color,
+          min: axis.min,
+          max: axis.max,
+        });
+      }
+      groups.get(groupKey).keys.push(feature.key);
+    });
+  return Array.from(groups.values());
+}
+
+function subplotAxisDefaults(groupKey) {
+  const defaults = {
+    rsi: { min: 0, max: 100, color: "#2f63a3" },
+    kd: { min: 0, max: 100, color: "#C77D11" },
+    macd: { color: "#6B4FA0" },
+    volatility: { color: "#B0820B" },
+    volume_price: { color: "#1C3D5A" },
+    trend: { color: "#7a4fb0" },
+  };
+  return defaults[groupKey] || { color: "#2f63a3" };
+}
+
+function chartVolumeLayerEnabled() {
+  return indicatorEnabled("vol") || CHART_VOLUME_MA_KEYS.some((key) => indicatorEnabled(key));
 }
 
 function chartView() {
@@ -3506,6 +4345,22 @@ function chartXOf(i, view, layout) {
   return layout.padding.left + (layout.innerWidth * (i - view.start)) / denom;
 }
 
+function chartValueForScale(value, basePrice = state._chartBasePrice || 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return NaN;
+  const scaleMode = state.chartLargeMode ? state.chartScale : "price";
+  if (scaleMode === "log") return Math.log(number);
+  if (scaleMode === "percent") return basePrice > 0 ? (number / basePrice - 1) * 100 : NaN;
+  return number;
+}
+
+function formatChartAxisValue(value, basePrice = state._chartBasePrice || 1) {
+  const scaleMode = state.chartLargeMode ? state.chartScale : "price";
+  if (scaleMode === "log") return formatNumber(Math.exp(value));
+  if (scaleMode === "percent") return `${value > 0 ? "+" : ""}${formatNumber(value)}%`;
+  return formatNumber(value);
+}
+
 function drawChart() {
   const canvas = elements.priceChart;
   if (!canvas) return;
@@ -3514,7 +4369,7 @@ function drawChart() {
   const rect = canvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
   canvas.width = Math.max(720, Math.floor((rect.width || 960) * scale));
-  canvas.height = Math.floor(440 * scale);
+  canvas.height = Math.floor((rect.height || 440) * scale);
   const ctx = canvas.getContext("2d");
   ctx.scale(scale, scale);
   const layout = chartLayout(canvas);
@@ -3531,11 +4386,18 @@ function drawChart() {
   const slot = layout.innerWidth / Math.max(1, view.end - view.start + 1);
 
   drawPricePanel(ctx, layout, view, slot);
+  state.chartSRLines = [];
   if (!(state.chartSeriesHidden && state.chartSeriesHidden.sr)) drawSupportResistance(ctx, layout, view);
+  if (state.chartLargeMode) drawScenarioFan(ctx, layout, view);
   if (layout.vol) drawVolPanel(ctx, layout, view, slot);
+  if (state.chartLargeMode) {
+    drawIndicatorSubplots(ctx, layout, view);
+    drawChartAnnotations(ctx, layout, view);
+  }
   drawEventMarkers(ctx, layout, view);
   drawRangeSelection(ctx, layout, view, slot);
   drawCrosshairTooltip(ctx, layout, view);
+  drawHoverFeatureBadge(ctx, layout);
 }
 
 function drawPricePanel(ctx, layout, view, slot) {
@@ -3543,16 +4405,36 @@ function drawPricePanel(ctx, layout, view, slot) {
   const colors = chartThemeColors();
   const panel = layout.price;
   const hidden = state.chartSeriesHidden || {};
-  const mas = state.chartMA.filter((s) => !hidden[s.key]);
+  const sourceSeries = state.chartLargeMode ? (state.chartMA || []) : (state.chartClassicMA || state.chartMA || []);
+  const mas = sourceSeries.filter((s) => state.chartLargeMode ? indicatorEnabled(s.key) : !hidden[s.key]);
+  const basePrice = Number(all[view.start]?.close) || 1;
+  state._chartBasePrice = basePrice;
   let hi = -Infinity, lo = Infinity;
   for (let i = view.start; i <= view.end; i += 1) {
-    hi = Math.max(hi, Number(all[i].high));
-    lo = Math.min(lo, Number(all[i].low));
-    mas.forEach((s) => { const v = s.values[i]; if (v != null && Number.isFinite(v)) { hi = Math.max(hi, v); lo = Math.min(lo, v); } });
+    hi = Math.max(hi, chartValueForScale(Number(all[i].high), basePrice));
+    lo = Math.min(lo, chartValueForScale(Number(all[i].low), basePrice));
+    mas.forEach((s) => {
+      const v = chartValueForScale(Number(s.values[i]), basePrice);
+      if (Number.isFinite(v)) { hi = Math.max(hi, v); lo = Math.min(lo, v); }
+    });
+  }
+  const scenario = chartScenarioFanData();
+  if (state.chartLargeMode && scenario && view.end >= all.length - 1) {
+    scenario.windows.forEach((windowStats) => {
+      ["p10", "p25", "median", "p75", "p90"].forEach((key) => {
+        const price = scenarioPriceAtReturn(scenario.latestClose, windowStats[key]);
+        const scaled = chartValueForScale(price, basePrice);
+        if (Number.isFinite(scaled)) {
+          hi = Math.max(hi, scaled);
+          lo = Math.min(lo, scaled);
+        }
+      });
+    });
   }
   const rng = (hi - lo) || 1;
   const min = lo - rng * 0.06, max = hi + rng * 0.06, range = (max - min) || 1;
-  const yOf = (v) => panel.top + panel.height - ((v - min) / range) * panel.height;
+  const yOfScaled = (v) => panel.top + panel.height - ((v - min) / range) * panel.height;
+  const yOf = (v) => yOfScaled(chartValueForScale(Number(v), basePrice));
   state._priceYOf = yOf;
 
   ctx.strokeStyle = colors.grid; ctx.lineWidth = 1;
@@ -3560,7 +4442,7 @@ function drawPricePanel(ctx, layout, view, slot) {
   for (let g = 0; g <= 4; g += 1) {
     const y = panel.top + (panel.height * g) / 4;
     ctx.beginPath(); ctx.moveTo(layout.padding.left, y); ctx.lineTo(layout.width - layout.padding.right, y); ctx.stroke();
-    ctx.fillText(formatNumber(max - (range * g) / 4), layout.width - layout.padding.right + 6, y + 4);
+    ctx.fillText(formatChartAxisValue(max - (range * g) / 4, basePrice), layout.width - layout.padding.right + 6, y + 4);
   }
   // 日期軸（首尾）
   ctx.fillStyle = colors.muted;
@@ -3582,7 +4464,10 @@ function drawPricePanel(ctx, layout, view, slot) {
   }
   // 均線
   mas.slice().reverse().forEach((s) => {
-    ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = s.width; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    const emphasis = activeChartEmphasisFeature();
+    ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = emphasis === s.key ? (s.width || 1) + 1.4 : s.width; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if (emphasis && emphasis !== s.key) ctx.globalAlpha = .28;
+    if (s.dash) ctx.setLineDash(s.dash);
     let started = false; ctx.beginPath();
     for (let i = view.start; i <= view.end; i += 1) {
       const v = s.values[i];
@@ -3594,11 +4479,76 @@ function drawPricePanel(ctx, layout, view, slot) {
   });
 }
 
+function drawScenarioFan(ctx, layout, view) {
+  const scenario = chartScenarioFanData();
+  const yOf = state._priceYOf;
+  const all = state.chartAll || [];
+  if (!scenario || !yOf || !layout.futureWidth || view.end < all.length - 1) return;
+  const originIndex = all.length - 1;
+  const originX = chartXOf(originIndex, view, layout);
+  const originY = yOf(scenario.latestClose);
+  const right = layout.width - layout.padding.right;
+  const maxDays = Math.max(...scenario.windows.map((item) => item.days), 1);
+  const xOfDays = (days) => originX + ((right - originX) * Number(days)) / maxDays;
+  const point = (item, key) => ({
+    x: xOfDays(item.days),
+    y: clamp(yOf(scenarioPriceAtReturn(scenario.latestClose, item[key])), layout.price.top, layout.price.top + layout.price.height),
+  });
+  const drawBand = (lowKey, highKey, fillStyle) => {
+    const upper = [{ x: originX, y: originY }, ...scenario.windows.map((item) => point(item, highKey))];
+    const lower = [{ x: originX, y: originY }, ...scenario.windows.map((item) => point(item, lowKey))].reverse();
+    ctx.beginPath();
+    upper.forEach((p, index) => { if (index === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+    lower.forEach((p) => ctx.lineTo(p.x, p.y));
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+  };
+  ctx.save();
+  drawBand("p10", "p90", "rgba(125,184,226,.16)");
+  drawBand("p25", "p75", "rgba(125,184,226,.32)");
+  const medianWindows = scenario.windows.filter((item) => item.count >= 8 && Number.isFinite(item.median));
+  if (medianWindows.length) {
+    ctx.strokeStyle = "rgba(44,84,117,.78)";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    medianWindows.forEach((item) => {
+      const p = point(item, "median");
+      ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = "rgba(44,84,117,.88)";
+  ctx.fillText("歷史範圍", Math.min(originX + 8, right - 58), layout.price.top + 14);
+  ctx.fillStyle = "rgba(122,135,150,.95)";
+  ctx.fillText("非預測", Math.min(originX + 8, right - 42), layout.price.top + 28);
+  scenario.windows.forEach((item) => {
+    const x = xOfDays(item.days);
+    ctx.fillStyle = "rgba(122,135,150,.9)";
+    ctx.fillText(`${formatInteger(item.days)}日`, Math.min(x - 12, right - 26), layout.price.top + layout.price.height - 6);
+  });
+  ctx.restore();
+}
+
 function drawVolPanel(ctx, layout, view, slot) {
   const all = state.chartAll, panel = layout.vol;
   const colors = chartThemeColors();
+  const volumeMaLayers = state.chartLargeMode
+    ? CHART_VOLUME_MA_KEYS.filter((key) => indicatorEnabled(key) && featureSeries(key).some((value) => value != null))
+    : [];
   let vmax = 1;
   for (let i = view.start; i <= view.end; i += 1) vmax = Math.max(vmax, Number(all[i].volume) || 0);
+  volumeMaLayers.forEach((key) => {
+    const values = featureSeries(key);
+    for (let i = view.start; i <= view.end; i += 1) {
+      const value = Number(values[i]);
+      if (Number.isFinite(value)) vmax = Math.max(vmax, value);
+    }
+  });
   ctx.fillStyle = colors.muted2; ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
   ctx.fillText("量", layout.padding.left, panel.top - 2);
   const bw = Math.max(1, Math.min(11, slot * 0.68));
@@ -3610,6 +4560,134 @@ function drawVolPanel(ctx, layout, view, slot) {
     ctx.fillStyle = up ? "rgba(224,49,49,0.45)" : "rgba(47,158,68,0.45)";
     ctx.fillRect(x - bw / 2, panel.top + panel.height - bh, bw, bh);
   }
+  volumeMaLayers.forEach((key) => {
+    const style = CHART_VOLUME_MA_STYLES[key] || { color: colors.brand, width: 1.1 };
+    const values = featureSeries(key);
+    const yOf = (value) => panel.top + panel.height - (value / vmax) * panel.height;
+    drawNumericLine(ctx, values, view, layout, yOf, focusedLineStyle(key, style));
+  });
+}
+
+function drawIndicatorSubplots(ctx, layout, view) {
+  (layout.subplots || []).forEach((panel) => drawIndicatorSubplot(ctx, layout, view, panel));
+}
+
+function drawIndicatorSubplot(ctx, layout, view, panel) {
+  const colors = chartThemeColors();
+  const enabledKeys = panel.keys.filter((key) => indicatorEnabled(key) && featureSeries(key).some((value) => value != null));
+  if (!enabledKeys.length) return;
+  let min = Number.isFinite(panel.min) ? Number(panel.min) : Infinity;
+  let max = Number.isFinite(panel.max) ? Number(panel.max) : -Infinity;
+  enabledKeys.forEach((key) => {
+    const values = featureSeries(key);
+    for (let i = view.start; i <= view.end; i += 1) {
+      const value = Number(values[i]);
+      if (Number.isFinite(value)) {
+        min = Math.min(min, value);
+        max = Math.max(max, value);
+      }
+    }
+  });
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
+    min = min === Infinity ? 0 : min - 1;
+    max = max === -Infinity ? 1 : max + 1;
+  }
+  const pad = (max - min) * 0.12 || 1;
+  if (!Number.isFinite(panel.min)) min -= pad;
+  if (!Number.isFinite(panel.max)) max += pad;
+  const yOf = (value) => panel.top + panel.height - ((value - min) / ((max - min) || 1)) * panel.height;
+
+  ctx.save();
+  ctx.strokeStyle = colors.grid;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(layout.padding.left, panel.top);
+  ctx.lineTo(layout.width - layout.padding.right, panel.top);
+  ctx.moveTo(layout.padding.left, panel.top + panel.height);
+  ctx.lineTo(layout.width - layout.padding.right, panel.top + panel.height);
+  ctx.stroke();
+  ctx.fillStyle = colors.muted;
+  ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillText(panel.label, layout.padding.left, panel.top - 3);
+  ctx.fillText(formatNumber(max), layout.width - layout.padding.right + 6, panel.top + 8);
+  ctx.fillText(formatNumber(min), layout.width - layout.padding.right + 6, panel.top + panel.height);
+
+  if (panel.key === "rsi" || panel.key === "kd") {
+    [20, 50, 80].forEach((level) => {
+      if (level < min || level > max) return;
+      const y = yOf(level);
+      ctx.strokeStyle = level === 50 ? colors.line : colors.grid;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(layout.padding.left, y); ctx.lineTo(layout.width - layout.padding.right, y); ctx.stroke();
+      ctx.setLineDash([]);
+    });
+  }
+
+  enabledKeys.forEach((key, index) => {
+    const values = featureSeries(key);
+    if (key === "macd_histogram") {
+      const slot = layout.innerWidth / Math.max(1, view.end - view.start + 1);
+      const bw = Math.max(1, Math.min(8, slot * 0.56));
+      const zeroY = yOf(0);
+      for (let i = view.start; i <= view.end; i += 1) {
+        const value = Number(values[i]);
+        if (!Number.isFinite(value)) continue;
+        const x = chartXOf(i, view, layout);
+        const y = yOf(value);
+        ctx.fillStyle = value >= 0 ? "rgba(224,49,49,.45)" : "rgba(47,158,68,.45)";
+        ctx.fillRect(x - bw / 2, Math.min(y, zeroY), bw, Math.max(1, Math.abs(zeroY - y)));
+      }
+      return;
+    }
+    const style = focusedLineStyle(key, subplotLineStyle(key, index, panel.color));
+    drawNumericLine(ctx, values, view, layout, yOf, style);
+  });
+  ctx.restore();
+}
+
+function focusedLineStyle(key, style) {
+  const emphasis = activeChartEmphasisFeature();
+  if (!emphasis) return style;
+  if (emphasis === key) {
+    return { ...style, width: (style.width || 1.2) + 1.2, alpha: 1 };
+  }
+  return { ...style, alpha: .28 };
+}
+
+function activeChartEmphasisFeature() {
+  return state.chartFocusedFeature || state.chartHoverFeatureKey || null;
+}
+
+function subplotLineStyle(key, index, fallback) {
+  const colors = {
+    rsi_14: "#2f63a3", rsi_6: "#c47b2a", rsi_12: "#1f7a5f", rsi_24: "#7a4fb0",
+    macd: "#6B4FA0", macd_signal: "#C77D11",
+    kd_k: "#2f63a3", kd_d: "#C77D11", kd_j: "#7a4fb0",
+    atr_5: "#d08c60", atr_14: "#B0820B", atr_20: "#8a6d1b",
+    hv_20: "#2C5475", hv_60: "#7a4fb0", hv_120: "#315b7c",
+    obv: "#1C3D5A",
+    trend_strength: "#7a4fb0",
+  };
+  return { color: colors[key] || fallback || ["#2f63a3", "#C77D11", "#7a4fb0"][index % 3], width: 1.3 };
+}
+
+function drawNumericLine(ctx, values, view, layout, yOf, style) {
+  ctx.save();
+  ctx.strokeStyle = style.color;
+  ctx.lineWidth = style.width || 1.2;
+  if (style.alpha != null) ctx.globalAlpha = style.alpha;
+  if (style.dash) ctx.setLineDash(style.dash);
+  ctx.beginPath();
+  let started = false;
+  for (let i = view.start; i <= view.end; i += 1) {
+    const value = Number(values[i]);
+    if (!Number.isFinite(value)) { started = false; continue; }
+    const x = chartXOf(i, view, layout);
+    const y = yOf(value);
+    if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawChipsPanel(ctx, layout, view, slot) {
@@ -3678,6 +4756,169 @@ function drawEventMarkers(ctx, layout, view) {
     ctx.fillStyle = color;
     ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.lineTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.closePath(); ctx.fill();
   });
+}
+
+function drawChartAnnotations(ctx, layout, view) {
+  const annotations = Array.isArray(state.chartAnnotations) ? state.chartAnnotations : [];
+  if (!annotations.length || !state._priceYOf) return;
+  const all = state.chartAll || [];
+  ctx.save();
+  annotations.forEach((annotation) => {
+    const idx = annotationIndex(annotation.anchor_date);
+    if (idx < 0 || idx < view.start || idx > view.end) return;
+    const x = chartXOf(idx, view, layout);
+    const price = Number(annotation.anchor_price || all[idx]?.close);
+    if (!Number.isFinite(price) || price <= 0) return;
+    const y = state._priceYOf(price);
+    const color = annotation.color || "#2C5475";
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.4;
+    if (annotation.kind === "hline") {
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(layout.padding.left, y); ctx.lineTo(layout.width - layout.padding.right, y); ctx.stroke();
+      ctx.setLineDash([]);
+      drawAnnotationLabel(ctx, annotation, layout.padding.left + 6, y - 6, color);
+      return;
+    }
+    if (annotation.kind === "trendline" || annotation.kind === "arrow") {
+      const idx2 = annotationIndex(annotation.anchor_date2);
+      if (idx2 >= 0) {
+        const x2 = chartXOf(Math.max(view.start, Math.min(view.end, idx2)), view, layout);
+        const price2 = Number(annotation.anchor_price2 || price);
+        const y2 = state._priceYOf(price2);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
+        if (annotation.kind === "arrow") drawArrowHead(ctx, x, y, x2, y2, color);
+        drawAnnotationLabel(ctx, annotation, x2 + 5, y2 - 6, color);
+        return;
+      }
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.85)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawAnnotationLabel(ctx, annotation, x + 7, y - 7, color);
+  });
+  ctx.restore();
+}
+
+function drawAnnotationLabel(ctx, annotation, x, y, color) {
+  const text = String(annotation.text || annotationKindLabel(annotation.kind) || "").trim();
+  if (!text) return;
+  ctx.save();
+  ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
+  const width = Math.min(180, ctx.measureText(text).width + 12);
+  ctx.fillStyle = "rgba(255,255,255,.88)";
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); roundedRect(ctx, x, y - 14, width, 20, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillText(text.length > 18 ? `${text.slice(0, 18)}...` : text, x + 6, y);
+  ctx.restore();
+}
+
+function drawArrowHead(ctx, x1, y1, x2, y2, color) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = 8;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - size * Math.cos(angle - Math.PI / 6), y2 - size * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(x2 - size * Math.cos(angle + Math.PI / 6), y2 - size * Math.sin(angle + Math.PI / 6));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function annotationIndex(dateStr) {
+  const all = state.chartAll || [];
+  if (!dateStr) return -1;
+  return all.findIndex((item) => item.date === dateStr);
+}
+
+function annotationKindLabel(kind) {
+  return { note: "筆記", hline: "水平線", trendline: "趨勢線", arrow: "箭頭", textbox: "文字框" }[kind] || "標註";
+}
+
+function renderAnnotationList() {
+  if (!elements.annotationList) return;
+  const items = Array.isArray(state.chartAnnotations) ? state.chartAnnotations : [];
+  if (!items.length) {
+    elements.annotationList.innerHTML = `<p class="annotation-empty">目前沒有圖表標註。</p>`;
+    return;
+  }
+  elements.annotationList.innerHTML = items.map((item) => `
+    <div class="annotation-item">
+      <strong>${escapeHtml(annotationKindLabel(item.kind))}</strong>
+      <span>${escapeHtml(item.anchor_date || "--")} ${escapeHtml(item.text || "")}</span>
+      <div>
+        <button type="button" onclick="editChartAnnotation(${Number(item.id)})">編輯</button>
+        <button type="button" onclick="deleteChartAnnotation(${Number(item.id)})">刪除</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function addChartAnnotationFromUI() {
+  if (!state.activeStockId || !(state.chartAll || []).length) return;
+  const kind = elements.annotationKind?.value || "note";
+  const text = elements.annotationText?.value || "";
+  const all = state.chartAll || [];
+  const range = normalizeChartRange(state.chartRangeSelection?.start, state.chartRangeSelection?.end);
+  const index = state.chartHoverIndex != null ? state.chartHoverIndex : (range?.start ?? all.length - 1);
+  const anchor = all[index] || all[all.length - 1];
+  const payload = {
+    kind,
+    anchor_date: anchor.date,
+    anchor_price: Number(anchor.close),
+    text,
+    color: kind === "hline" ? "#B0820B" : "#2C5475",
+  };
+  if (["trendline", "arrow"].includes(kind)) {
+    const endIndex = range?.end ?? Math.min(all.length - 1, index + 20);
+    const end = all[endIndex] || anchor;
+    payload.anchor_date2 = end.date;
+    payload.anchor_price2 = Number(end.close);
+  }
+  try {
+    const saved = await postJson(`/api/stocks/${encodeURIComponent(state.activeStockId)}/annotations`, payload);
+    state.chartAnnotations = [...(state.chartAnnotations || []), saved];
+    if (elements.annotationText) elements.annotationText.value = "";
+    renderAnnotationList();
+    drawChart();
+  } catch (error) {
+    showMessage(`新增標註失敗：${error.message}`, true);
+  }
+}
+
+async function editChartAnnotation(id) {
+  const current = (state.chartAnnotations || []).find((item) => Number(item.id) === Number(id));
+  if (!current || !state.activeStockId) return;
+  const nextText = window.prompt("更新標註文字", current.text || "");
+  if (nextText == null) return;
+  try {
+    const updated = await patchJson(`/api/stocks/${encodeURIComponent(state.activeStockId)}/annotations/${id}`, { text: nextText });
+    state.chartAnnotations = (state.chartAnnotations || []).map((item) => Number(item.id) === Number(id) ? updated : item);
+    renderAnnotationList();
+    drawChart();
+  } catch (error) {
+    showMessage(`更新標註失敗：${error.message}`, true);
+  }
+}
+
+async function deleteChartAnnotation(id) {
+  if (!state.activeStockId) return;
+  try {
+    await deleteJson(`/api/stocks/${encodeURIComponent(state.activeStockId)}/annotations/${id}`);
+    state.chartAnnotations = (state.chartAnnotations || []).filter((item) => Number(item.id) !== Number(id));
+    renderAnnotationList();
+    drawChart();
+  } catch (error) {
+    showMessage(`刪除標註失敗：${error.message}`, true);
+  }
 }
 
 function activeChartRangeSelection() {
@@ -3754,10 +4995,11 @@ function drawCrosshairTooltip(ctx, layout, view) {
     lines.push(`外資 ${formatLots(chip.foreign_net)}　投信 ${formatLots(chip.trust_net)}`);
     lines.push(`自營 ${formatLots(chip.dealer_net)}　三大 ${formatLots(chip.total_net)} 張`);
   }
+  collectTooltipIndicators(idx).forEach((line) => lines.push(line));
   const evs = (state.chartEventsByIndex || {})[idx] || [];
   evs.slice(0, 3).forEach((e) => lines.push(`◆ ${e.label}`));
 
-  const lh = 17, pad = 10, w = 224;
+  const lh = 17, pad = 10, w = 260;
   const hgt = pad * 2 + 20 + lines.length * lh;
   let tx = x + 12; if (tx + w > layout.width - 6) tx = x - w - 12;
   let ty = layout.price.top + 6;
@@ -3770,6 +5012,81 @@ function drawCrosshairTooltip(ctx, layout, view) {
     ctx.fillText(ln, tx + pad, ty + pad + 20 + (i + 1) * lh - 4);
   });
   ctx.restore();
+}
+
+function drawHoverFeatureBadge(ctx, layout) {
+  if (!state.chartLargeMode || !state.chartHoverFeatureKey || !state.chartHoverPoint) return;
+  const text = hoverFeatureSummary(state.chartHoverFeatureKey, state.chartHoverFeatureIndex);
+  if (!text) return;
+  const colors = chartThemeColors();
+  const padX = 9;
+  const h = 26;
+  ctx.save();
+  ctx.font = "12px Microsoft JhengHei, Segoe UI, Arial";
+  const w = Math.min(360, ctx.measureText(text).width + padX * 2);
+  let x = state.chartHoverPoint.x + 12;
+  let y = state.chartHoverPoint.y - h - 8;
+  if (x + w > layout.width - 8) x = layout.width - w - 8;
+  if (y < 8) y = state.chartHoverPoint.y + 14;
+  ctx.fillStyle = colors.tooltipBg;
+  ctx.beginPath();
+  roundedRect(ctx, x, y, w, h, 8);
+  ctx.fill();
+  ctx.strokeStyle = colors.rangeStroke;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = colors.tooltipText;
+  ctx.fillText(text.length > 42 ? `${text.slice(0, 42)}...` : text, x + padX, y + 17);
+  ctx.restore();
+}
+
+function hoverFeatureSummary(key, index) {
+  const srLine = findSupportResistanceLine(key);
+  if (srLine) return `${srLine.label} ${formatNumber(srLine.price)} · 近${srLine.window}日${srLine.kindLabel}`;
+  const feature = chartFeatureSpec(key);
+  const value = featureValueAtIndex(key, index);
+  const valueText = formatIndicatorValue(key, value);
+  const description = compactDescription(feature.description || feature.label || "");
+  return `${feature.label || key} · ${valueText}${description ? ` · ${description}` : ""}`;
+}
+
+function compactDescription(text) {
+  const first = String(text || "").split(/[。；]/)[0].replace(/\s+/g, " ").trim();
+  return first.length > 18 ? `${first.slice(0, 18)}...` : first;
+}
+
+function featureValueAtIndex(key, index) {
+  if (key === "vol") return (state.chartAll || [])[index]?.volume;
+  const values = featureSeries(key);
+  if (index != null && index >= 0 && index < values.length) return values[index];
+  return latestFeatureRawValue(key);
+}
+
+function collectTooltipIndicators(index) {
+  if (!state.chartLargeMode) return [];
+  const catalog = state.chartCatalog || {};
+  const features = Array.isArray(catalog.features) ? catalog.features : [];
+  const preferred = features
+    .filter((feature) => indicatorEnabled(feature.key))
+    .filter(isChartVisualFeature)
+    .slice(0, 8);
+  const lines = [];
+  preferred.forEach((feature) => {
+    const value = featureSeries(feature.key)[index];
+    if (value == null) return;
+    if (typeof value === "object") {
+      if (value.score != null) lines.push(`${feature.label} ${formatNumber(value.score)}分`);
+      return;
+    }
+    if (typeof value === "boolean") {
+      if (value) lines.push(`${feature.label} 是`);
+      return;
+    }
+    if (Number.isFinite(Number(value))) {
+      lines.push(`${feature.label} ${formatNumber(value)}`);
+    }
+  });
+  return lines;
 }
 
 function renderRangeStatsPanel(range = state.chartRangeSelection || state.chartRangeDraft) {
@@ -3835,6 +5152,29 @@ function updateRangeControlState() {
   elements.chartClearRangeBtn?.classList.toggle("hidden", !state.chartRangeSelection && !state.chartRangeDraft);
 }
 
+function toggleLargeChart(force) {
+  const panel = elements.priceChart?.closest(".chart-panel");
+  if (!panel) return;
+  const entering = typeof force === "boolean" ? force : !state.chartLargeMode;
+  state.chartLargeMode = entering;
+  panel.classList.toggle("chart-lab-mode", entering);
+  document.body.classList.toggle("chart-lab-open", entering);
+  elements.chartLargeBtn?.classList.toggle("is-active", entering);
+  if (elements.chartLargeBtn) elements.chartLargeBtn.textContent = entering ? "關閉大型圖" : "大型K線圖";
+  setChartUxMode(state.chartPrefs?.ux_mode || "translate", { persist: false, redraw: false });
+  if (!entering && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  renderIndicatorPanel();
+  renderChartTranslation(state.activePayload);
+  updateChartLegendState();
+  window.setTimeout(drawChart, 80);
+}
+
+function toggleChartFullscreen() {
+  toggleLargeChart();
+}
+
 // ---- 互動：滾輪縮放 / 拖曳平移 / hover ----
 function handleChartPointerMove(event) {
   if (state.chartSelectingRange) { doChartRangeSelect(event); return; }
@@ -3842,8 +5182,18 @@ function handleChartPointerMove(event) {
   const all = state.chartAll || [];
   if (all.length < 2) return;
   const idx = chartIndexAtClientX(event.clientX);
-  if (idx !== state.chartHoverIndex) {
+  const target = state.chartLargeMode ? nearestChartFeatureAtPointer(event) : null;
+  const nextFeature = target?.key && target.key !== "candle" ? target.key : null;
+  const point = chartLocalPoint(event);
+  const changed = idx !== state.chartHoverIndex
+    || nextFeature !== state.chartHoverFeatureKey
+    || Math.abs((point?.x || 0) - (state.chartHoverPoint?.x || 0)) > 8
+    || Math.abs((point?.y || 0) - (state.chartHoverPoint?.y || 0)) > 8;
+  if (changed) {
     state.chartHoverIndex = idx;
+    state.chartHoverFeatureKey = nextFeature;
+    state.chartHoverFeatureIndex = target?.index ?? idx;
+    state.chartHoverPoint = point;
     drawChart();
     renderDateEvent(idx);
   }
@@ -3927,6 +5277,97 @@ function handleChartMouseUp() {
   drawChart();
 }
 
+function handleChartClick(event) {
+  if (!state.chartLargeMode || state.chartRangeMode) return;
+  const target = nearestChartFeatureAtPointer(event);
+  if (target?.key && target.key !== "candle") {
+    showChartLayerExplanation(target.key);
+    return;
+  }
+  const index = target?.index ?? chartIndexAtClientX(event.clientX);
+  showChartCandleExplanation(index);
+}
+
+function nearestChartFeatureAtPointer(event) {
+  const canvas = elements.priceChart;
+  if (!canvas || !(state.chartAll || []).length) return null;
+  const layout = chartLayout(canvas);
+  const point = chartLocalPoint(event);
+  const x = point?.x ?? 0;
+  const y = point?.y ?? 0;
+  const view = chartView();
+  const index = chartIndexAtClientX(event.clientX);
+  if (x < layout.padding.left || x > layout.width - layout.padding.right) return { key: null, index };
+  if (y >= layout.price.top && y <= layout.price.top + layout.price.height) {
+    const srLine = (state.chartSRLines || [])
+      .map((line) => ({ ...line, distance: Math.abs(y - line.y) }))
+      .filter((line) => line.distance <= 9)
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (srLine) return { key: srLine.key, index };
+    const overlays = (state.chartMA || []).filter((series) => indicatorEnabled(series.key));
+    let best = { key: "candle", index, distance: Infinity };
+    overlays.forEach((series) => {
+      const value = series.values?.[index];
+      if (value == null || !state._priceYOf) return;
+      const distance = Math.abs(y - state._priceYOf(Number(value)));
+      if (distance < best.distance) best = { key: series.key, index, distance };
+    });
+    return best.distance <= 12 ? best : { key: "candle", index };
+  }
+  if (layout.vol && y >= layout.vol.top && y <= layout.vol.top + layout.vol.height) {
+    return { key: "vol", index };
+  }
+  for (const panel of layout.subplots || []) {
+    if (y < panel.top || y > panel.top + panel.height) continue;
+    const key = nearestSubplotKey(panel, view, index, y);
+    return { key: key || panel.keys.find((item) => indicatorEnabled(item)) || null, index };
+  }
+  return { key: null, index };
+}
+
+function chartLocalPoint(event) {
+  const canvas = elements.priceChart;
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const width = canvas.width ? canvas.width / scale : rect.width;
+  const height = canvas.height ? canvas.height / scale : rect.height;
+  return {
+    x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * width,
+    y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * height,
+  };
+}
+
+function nearestSubplotKey(panel, view, index, y) {
+  const enabledKeys = panel.keys.filter((key) => indicatorEnabled(key) && featureSeries(key).some((value) => value != null));
+  if (!enabledKeys.length) return null;
+  let min = Number.isFinite(panel.min) ? Number(panel.min) : Infinity;
+  let max = Number.isFinite(panel.max) ? Number(panel.max) : -Infinity;
+  enabledKeys.forEach((key) => {
+    const values = featureSeries(key);
+    for (let i = view.start; i <= view.end; i += 1) {
+      const value = Number(values[i]);
+      if (Number.isFinite(value)) {
+        min = Math.min(min, value);
+        max = Math.max(max, value);
+      }
+    }
+  });
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return enabledKeys[0];
+  const pad = (max - min) * 0.12 || 1;
+  if (!Number.isFinite(panel.min)) min -= pad;
+  if (!Number.isFinite(panel.max)) max += pad;
+  const yOf = (value) => panel.top + panel.height - ((value - min) / ((max - min) || 1)) * panel.height;
+  let best = { key: enabledKeys[0], distance: Infinity };
+  enabledKeys.forEach((key) => {
+    const value = Number(featureSeries(key)[index]);
+    if (!Number.isFinite(value)) return;
+    const distance = Math.abs(y - yOf(value));
+    if (distance < best.distance) best = { key, distance };
+  });
+  return best.distance <= 14 ? best.key : enabledKeys[0];
+}
+
 function resetChartZoom() {
   const n = (state.chartAll || []).length;
   state.chartView = { start: 0, end: Math.max(0, n - 1) };
@@ -3951,14 +5392,27 @@ function clearChartRange() {
 function toggleChartSeries(key) {
   if (!state.chartSeriesHidden) state.chartSeriesHidden = {};
   state.chartSeriesHidden[key] = !state.chartSeriesHidden[key];
+  if (key === "vol") {
+    state.chartIndicatorEnabled.volume_ma20 = !state.chartSeriesHidden[key];
+  } else {
+    state.chartIndicatorEnabled[key] = !state.chartSeriesHidden[key];
+  }
+  state.chartPrefs = { ...normalizeChartPrefs(state.chartPrefs), preset: "custom" };
+  renderIndicatorPanel();
   updateChartLegendState();
+  if (state.chartLargeMode) showChartLayerExplanation(key, { redraw: false });
   drawChart();
+  saveChartPrefsSoon();
 }
 
 function updateChartLegendState() {
   const hidden = state.chartSeriesHidden || {};
   document.querySelectorAll("[data-series]").forEach((el) => {
-    el.classList.toggle("legend-off", !!hidden[el.dataset.series]);
+    const key = el.dataset.series;
+    const off = state.chartLargeMode
+      ? (key === "vol" ? !chartVolumeLayerEnabled() : !indicatorEnabled(key))
+      : !!hidden[key];
+    el.classList.toggle("legend-off", off);
   });
 }
 
@@ -4024,6 +5478,15 @@ async function postJson(url, body) {
 async function putJson(url, body) {
   const response = await fetch(url, {
     method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return readJsonResponse(response);
+}
+
+async function patchJson(url, body) {
+  const response = await fetch(url, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -4465,26 +5928,34 @@ function findSwingPivots(bars, k) {
       if (Number(bars[j].high) >= h) isHigh = false;
       if (Number(bars[j].low) <= l) isLow = false;
     }
-    if (isHigh) highs.push(h);
-    if (isLow) lows.push(l);
+    if (isHigh) highs.push({ index: i, value: h });
+    if (isLow) lows.push({ index: i, value: l });
   }
   return { highs, lows };
 }
 
 function pickResistance(pivotHighs, seg, close) {
-  const above = pivotHighs.filter((p) => p > close);
-  if (above.length) return Math.min(...above);
-  if (pivotHighs.length) return Math.max(...pivotHighs);
-  const hs = seg.map((p) => Number(p.high)).filter(Number.isFinite);
-  return hs.length ? Math.max(...hs) : null;
+  const above = pivotHighs.filter((p) => p.value > close);
+  if (above.length) return above.reduce((best, item) => item.value < best.value ? item : best, above[0]);
+  if (pivotHighs.length) return pivotHighs.reduce((best, item) => item.value > best.value ? item : best, pivotHighs[0]);
+  let best = null;
+  seg.forEach((p, index) => {
+    const value = Number(p.high);
+    if (Number.isFinite(value) && (!best || value > best.value)) best = { index, value };
+  });
+  return best;
 }
 
 function pickSupport(pivotLows, seg, close) {
-  const below = pivotLows.filter((p) => p < close);
-  if (below.length) return Math.max(...below);
-  if (pivotLows.length) return Math.min(...pivotLows);
-  const ls = seg.map((p) => Number(p.low)).filter(Number.isFinite);
-  return ls.length ? Math.min(...ls) : null;
+  const below = pivotLows.filter((p) => p.value < close);
+  if (below.length) return below.reduce((best, item) => item.value > best.value ? item : best, below[0]);
+  if (pivotLows.length) return pivotLows.reduce((best, item) => item.value < best.value ? item : best, pivotLows[0]);
+  let best = null;
+  seg.forEach((p, index) => {
+    const value = Number(p.low);
+    if (Number.isFinite(value) && (!best || value < best.value)) best = { index, value };
+  });
+  return best;
 }
 
 function drawSupportResistance(ctx, layout, view) {
@@ -4495,31 +5966,57 @@ function drawSupportResistance(ctx, layout, view) {
   const c = Number(all[all.length - 1].close);
   const top = layout.price.top;
   const bot = layout.price.top + layout.price.height;
+  state.chartSRLines = [];
   ctx.save();
   ctx.lineWidth = 1;
   ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
   SR_TIMEFRAMES.forEach((tf) => {
     if (hidden[tf.key]) return;
-    const seg = all.slice(all.length - Math.min(tf.window, all.length));
+    const windowSize = Math.min(tf.window, all.length);
+    const startIndex = all.length - windowSize;
+    const seg = all.slice(startIndex);
     const piv = findSwingPivots(seg, tf.k);
     const resistance = pickResistance(piv.highs, seg, c);
     const support = pickSupport(piv.lows, seg, c);
-    [[`${tf.label}壓`, resistance], [`${tf.label}撐`, support]].forEach(([label, price]) => {
-      if (price == null || !Number.isFinite(price)) return;
+    [[`${tf.label}壓`, resistance, "壓力"], [`${tf.label}撐`, support, "支撐"]].forEach(([label, level, kindLabel]) => {
+      const price = Number(level?.value);
+      if (!Number.isFinite(price)) return;
       const y = yOf(price);
       if (y < top || y > bot) return;
+      const globalIndex = startIndex + Number(level.index || 0);
+      const hoverKey = `${tf.key}_${kindLabel === "壓力" ? "res" : "sup"}`;
+      const line = { key: hoverKey, timeframeKey: tf.key, label, price, y, window: windowSize, startIndex, pivotIndex: globalIndex, color: tf.color, kindLabel };
+      state.chartSRLines.push(line);
       ctx.setLineDash([6, 4]);
       ctx.strokeStyle = tf.color;
+      const emphasis = activeChartEmphasisFeature();
+      ctx.globalAlpha = emphasis && emphasis !== hoverKey && emphasis !== tf.key ? .3 : 1;
+      ctx.lineWidth = emphasis === hoverKey || emphasis === tf.key ? 1.8 : 1;
       ctx.beginPath();
-      ctx.moveTo(layout.padding.left, y);
+      const startX = globalIndex >= view.start && startIndex <= view.end
+        ? chartXOf(Math.max(view.start, startIndex), view, layout)
+        : layout.padding.left;
+      ctx.moveTo(startX, y);
       ctx.lineTo(layout.width - layout.padding.right, y);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = tf.color;
-      ctx.fillText(`${label} ${formatNumber(price)}`, layout.padding.left + 4, y - 3);
+      ctx.globalAlpha = 1;
+      ctx.fillText(`${label} ${formatNumber(price)} · 近${windowSize}日`, layout.padding.left + 4, y - 3);
+      if (globalIndex >= view.start && globalIndex <= view.end) {
+        const px = chartXOf(globalIndex, view, layout);
+        ctx.beginPath();
+        ctx.arc(px, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     });
   });
   ctx.restore();
+}
+
+function findSupportResistanceLine(key) {
+  const lines = Array.isArray(state.chartSRLines) ? state.chartSRLines : [];
+  return lines.find((item) => item.key === key || item.timeframeKey === key) || null;
 }
 
 // ---- 體質總評併入消息面（地雷雷達） ----
