@@ -27,6 +27,7 @@ class GlossaryTests(unittest.TestCase):
             "每股淨值", "填息 / 貼息", "融資融券", "借券賣出", "ETF",
             "停損 / 停利", "複利", "分散風險", "流動性", "市值",
             "振幅", "年化波動度", "VWAP", "支撐 / 壓力",
+            "延續性", "複雜度", "波動聚集", "噪音色", "湍流程度", "同步性",
         ):
             self.assertIn(term, terms)
             self.assertGreater(len(str(terms[term]["reminder"])), 8)
@@ -35,6 +36,8 @@ class GlossaryTests(unittest.TestCase):
         self.assertEqual(aliases["指數股票型基金"], "ETF")
         self.assertEqual(aliases["波動度"], "年化波動度")
         self.assertEqual(aliases["波撐"], "支撐 / 壓力")
+        self.assertEqual(aliases["排列熵"], "複雜度")
+        self.assertEqual(aliases["市場同步"], "同步性")
 
     def test_glossary_public_text_avoids_project_redline_words(self) -> None:
         payload = glossary_payload()

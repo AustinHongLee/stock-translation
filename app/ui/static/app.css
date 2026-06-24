@@ -780,6 +780,32 @@ td.down { color: var(--down); font-weight: 600; }
 .stock-header-change.down { color: var(--down); }
 .stock-header-price-label { font-size: 11px; color: var(--muted-2); margin-top: 2px; }
 
+.structure-card { border-left: 3px solid var(--brand-2); padding: 16px 18px; }
+.structure-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.structure-head h3 { font-size: 16px; margin: 2px 0 4px; color: var(--ink); }
+.structure-head p { font-size: 12px; color: var(--muted); line-height: 1.55; }
+.structure-pill { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--brand); background: var(--brand-soft); border: 1px solid var(--brand-soft-line); border-radius: 999px; padding: 4px 10px; }
+.structure-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.structure-row { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); overflow: hidden; }
+.structure-row summary { min-height: 42px; display: grid; grid-template-columns: minmax(72px, 1fr) auto minmax(54px, auto); align-items: center; gap: 8px; padding: 9px 11px; cursor: pointer; list-style: none; }
+.structure-row summary::-webkit-details-marker { display: none; }
+.structure-label { min-width: 0; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.structure-label .term-link { font-size: 12.5px; font-weight: 700; }
+.structure-value { font-size: 11.5px; color: var(--muted); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.structure-bar { display: inline-grid; grid-template-columns: repeat(5, 10px); gap: 3px; align-items: center; }
+.structure-bar span { width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--bg-soft); }
+.structure-bar span.is-filled { background: var(--brand-2); border-color: var(--brand-2); }
+.structure-detail { border-top: 1px solid var(--line); padding: 10px 11px 11px; display: grid; gap: 6px; background: var(--surface); }
+.structure-detail p { font-size: 12px; color: var(--ink-2); line-height: 1.55; }
+.structure-detail strong { color: var(--ink); }
+.structure-grade-medium { opacity: .82; }
+.structure-grade-low,
+.structure-grade-insufficient { border-style: dashed; opacity: .72; }
+.structure-grade-low .structure-bar span.is-filled,
+.structure-grade-insufficient .structure-bar span.is-filled { background: var(--muted-2); border-color: var(--muted-2); }
+.structure-grade-locked .structure-bar span { background: transparent; border-style: dashed; }
+.structure-card .disclaimer { margin-top: 10px; }
+
 @media (max-width: 1180px) {
   .stock-header-card {
     grid-template-columns: 54px minmax(0, 1fr) minmax(120px, auto);
@@ -789,6 +815,17 @@ td.down { color: var(--down); font-weight: 600; }
     justify-content: flex-start;
     max-width: none;
   }
+}
+
+@media (max-width: 900px) {
+  .structure-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .structure-head { flex-direction: column; align-items: stretch; }
+  .structure-pill { align-self: flex-start; }
+  .structure-grid { grid-template-columns: 1fr; }
+  .structure-row summary { grid-template-columns: minmax(84px, 1fr) auto minmax(54px, auto); }
 }
 
 /* ETF 模式說明 */

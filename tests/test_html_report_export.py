@@ -17,7 +17,7 @@ class HtmlReportExportTests(unittest.TestCase):
 
         self.assertTrue(html.startswith("<!doctype html>"))
         self.assertIn("2330 台積電 個股研究報告", html)
-        for section in ("體質總評", "三大法人", "估值情境", "消息 / 地雷雷達", "價量摘要", "圖表標註", "重點名詞教學"):
+        for section in ("體質總評", "結構指紋", "三大法人", "估值情境", "消息 / 地雷雷達", "價量摘要", "圖表標註", "重點名詞教學"):
             self.assertIn(section, html)
         self.assertIn("資料日 2026-06-16", html)
         self.assertIn("價格位階 92%", html)
@@ -161,6 +161,42 @@ def _sample_payload() -> dict[str, object]:
                     "sample_size": 260,
                 },
             },
+        },
+        "structure": {
+            "available": True,
+            "as_of_date": "2026-06-16",
+            "window": 250,
+            "title": "結構指紋",
+            "subtitle": "這檔股票現在的性格（結構描述，非預測）",
+            "disclaimer": "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議",
+            "sufficiency": {"bars_available": 320, "grade": "high"},
+            "dimensions": [
+                {
+                    "key": "memory",
+                    "label": "延續性",
+                    "available": True,
+                    "bar_level": 3,
+                    "bar_max": 5,
+                    "grade": "high",
+                    "summary": "H=0.58：延續性偏高，傾向延續近期行為。",
+                    "forbidden": "不得解讀為後續方向承諾或必然反轉；延續性描述自相關結構，不含方向。",
+                    "overlap_note": "與圖上趨勢強度不同。",
+                    "raw": {"hurst_dfa": 0.58},
+                },
+                {
+                    "key": "synchrony",
+                    "label": "同步性",
+                    "locked": True,
+                    "available": False,
+                    "bar_level": None,
+                    "bar_max": 5,
+                    "grade": "locked",
+                    "summary": "需市場資料（Phase 2）。",
+                    "forbidden": "需要跨股資料；個股頁不做同步性判讀。",
+                    "overlap_note": "個股看不到同步性，要看市場層級雷達。",
+                    "raw": {},
+                },
+            ],
         },
         "report": {"sections": []},
     }

@@ -58,6 +58,9 @@ def build_stock_workbook_bytes(
     summary.title = "個股摘要"
     _write_stock_summary(summary, payload, generated_at=generated_at)
 
+    structure = workbook.create_sheet("結構指紋")
+    _write_structure_fingerprint(structure, payload, generated_at=generated_at)
+
     prices = workbook.create_sheet("日線資料")
     _write_prices(prices, payload, generated_at=generated_at)
 
@@ -493,6 +496,51 @@ def _write_stock_summary(
     _finish_sheet(sheet)
 
 
+def _write_structure_fingerprint(
+    sheet: Worksheet,
+    payload: dict[str, Any],
+    *,
+    generated_at: datetime | None,
+) -> None:
+    _setup_sheet(sheet, "結構指紋", generated_at=generated_at, last_column=8)
+    structure = payload.get("structure") or {}
+    sufficiency = structure.get("sufficiency") if isinstance(structure.get("sufficiency"), dict) else {}
+    top_rows = [
+        ["標題", structure.get("title") or "結構指紋"],
+        ["說明", structure.get("subtitle") or "這檔股票現在的性格（結構描述，非預測）"],
+        ["資料日", structure.get("as_of_date")],
+        ["視窗", structure.get("window")],
+        ["樣本筆數", sufficiency.get("bars_available")],
+        ["資料充足度", _structure_grade_label(sufficiency.get("grade"))],
+        ["提醒", structure.get("disclaimer") or "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議"],
+    ]
+    _write_table(sheet, 4, ["項目", "內容"], top_rows)
+
+    rows: list[list[Any]] = []
+    for item in structure.get("dimensions") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            [
+                item.get("label") or item.get("key"),
+                "鎖定" if item.get("locked") else ("可用" if item.get("available") else "資料不足"),
+                _structure_grade_label(item.get("grade")),
+                _structure_bar_text(item),
+                item.get("summary"),
+                item.get("forbidden"),
+                item.get("overlap_note"),
+                _structure_raw_text(item),
+            ]
+        )
+    _write_table(
+        sheet,
+        13,
+        ["維度", "狀態", "等級", "格數", "摘要", "不要這樣解讀", "差異說明", "原始讀數"],
+        rows or [["尚無結構指紋資料", None, None, None, None, None, None, None]],
+    )
+    _finish_sheet(sheet)
+
+
 def _write_prices(
     sheet: Worksheet,
     payload: dict[str, Any],
@@ -716,6 +764,37 @@ def _write_financials(
     _format_numeric_columns(sheet, 5, sheet.max_row, {6}, "0.00")
     _format_numeric_columns(sheet, 5, sheet.max_row, {7, 8, 9, 10}, "0.00%")
     _finish_sheet(sheet)
+
+
+def _structure_bar_text(item: dict[str, Any]) -> str:
+    if item.get("locked"):
+        return "需市場資料"
+    if not item.get("available"):
+        return "資料不足"
+    return f"{item.get('bar_level')}/{item.get('bar_max') or 5}"
+
+
+def _structure_grade_label(value: Any) -> str:
+    if value == "high":
+        return "充足"
+    if value == "medium":
+        return "僅供參考"
+    if value == "low":
+        return "偏少"
+    if value == "locked":
+        return "鎖定"
+    return "不足"
+
+
+def _structure_raw_text(item: dict[str, Any]) -> str:
+    if item.get("grade") in ("low", "insufficient"):
+        return ""
+    raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+    parts: list[str] = []
+    for key, value in raw.items():
+        number = _to_float(value)
+        parts.append(f"{key}={number:.4f}" if number is not None else f"{key}={value}")
+    return "、".join(parts)
 
 
 def _write_notes(

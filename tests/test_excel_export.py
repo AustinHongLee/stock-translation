@@ -133,6 +133,29 @@ class ExcelExportTests(unittest.TestCase):
                     ]
                 },
             },
+            "structure": {
+                "available": True,
+                "as_of_date": "2026-06-16",
+                "window": 250,
+                "title": "結構指紋",
+                "subtitle": "這檔股票現在的性格（結構描述，非預測）",
+                "disclaimer": "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議",
+                "sufficiency": {"bars_available": 320, "grade": "high"},
+                "dimensions": [
+                    {
+                        "key": "memory",
+                        "label": "延續性",
+                        "available": True,
+                        "bar_level": 3,
+                        "bar_max": 5,
+                        "grade": "high",
+                        "summary": "H=0.58：延續性偏高，傾向延續近期行為。",
+                        "forbidden": "不得解讀為後續方向承諾或必然反轉；延續性描述自相關結構，不含方向。",
+                        "overlap_note": "與圖上趨勢強度不同。",
+                        "raw": {"hurst_dfa": 0.58},
+                    }
+                ],
+            },
             "prices": [{"date": "2026-06-16", "open": 1000, "high": 1100, "low": 990, "close": 1080, "volume": 1, "change": 80, "source": "test"}],
             "annotations": [
                 {
@@ -165,7 +188,10 @@ class ExcelExportTests(unittest.TestCase):
 
         self.assertIn("估值情境", workbook.sheetnames)
         self.assertIn("圖表標註", workbook.sheetnames)
+        self.assertIn("結構指紋", workbook.sheetnames)
         self.assertIn("非投資建議", workbook["個股摘要"]["A1"].value)
+        self.assertEqual(workbook["結構指紋"]["A14"].value, "延續性")
+        self.assertEqual(workbook["結構指紋"]["D14"].value, "3/5")
         self.assertEqual(workbook["估值情境"]["A15"].value, "高殖利率情境")
         self.assertAlmostEqual(workbook["估值情境"]["B15"].value, 0.0625)
         self.assertEqual(workbook["圖表標註"]["A5"].value, "缺口")

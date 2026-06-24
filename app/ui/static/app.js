@@ -170,6 +170,7 @@ const elements = {
   stockHeaderPrice: document.querySelector("#stockHeaderPrice"),
   stockHeaderChange: document.querySelector("#stockHeaderChange"),
   stockHeaderPriceLabel: document.querySelector("#stockHeaderPriceLabel"),
+  structureCard: document.querySelector("#structureCard"),
   etfNote: document.querySelector("#etfNote"),
   stockSubtitle: document.querySelector("#stockSubtitle"),
   stockDataNote: document.querySelector("#stockDataNote"),
@@ -2055,6 +2056,7 @@ function renderStock(payload, fallbackStockId) {
   const latestWithNote = [...prices].reverse().find((item) => item.note);
   elements.latestNote.textContent = summary.change_note || (latestWithNote ? formatPriceNote(latestWithNote.note) : "");
   renderQuote(payload.quote, summary);
+  renderStructureCard(payload.structure);
   renderCompanyBrief(payload.brief);
   renderRevenue(payload.revenue_summary, payload.monthly_revenues || []);
   renderFinancial(payload.financial_summary, payload.financial_statements || [], payload.fundamental_trends);
@@ -2093,6 +2095,86 @@ function renderPriceWindow(priceWindow, summary) {
   if (isPartial && priceWindow?.stale_days != null) {
     elements.stockDataNote.textContent += `｜日線資料過期 ${priceWindow.stale_days} 天，請重新同步`;
   }
+}
+
+function renderStructureCard(structure) {
+  const card = elements.structureCard;
+  if (!card) return;
+  const dimensions = Array.isArray(structure?.dimensions) ? structure.dimensions : [];
+  if (!structure || !dimensions.length) {
+    card.hidden = true;
+    card.innerHTML = "";
+    return;
+  }
+  card.hidden = false;
+  const sufficiency = structure.sufficiency || {};
+  const meta = [
+    structure.as_of_date ? `資料日 ${escapeHtml(structure.as_of_date)}` : "",
+    structure.window ? `${escapeHtml(structure.window)} 日視窗` : "",
+    structureSufficiencyLabel(sufficiency.grade),
+  ].filter(Boolean).join(" · ");
+  const rows = dimensions.map(renderStructureDimension).join("");
+  card.innerHTML = `
+    <div class="structure-head">
+      <div>
+        <p class="eyebrow">${escapeHtml(structure.title || "結構指紋")}</p>
+        <h3>${escapeHtml(structure.subtitle || "這檔股票現在的性格")}</h3>
+        <p>${escapeHtml(meta || "資料充足度待確認")}</p>
+      </div>
+      <span class="structure-pill">${escapeHtml(structureAvailabilityLabel(structure))}</span>
+    </div>
+    <div class="structure-grid">${rows}</div>
+    <p class="disclaimer">${escapeHtml(structure.disclaimer || "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議")}</p>
+  `;
+}
+
+function renderStructureDimension(item) {
+  const locked = Boolean(item?.locked);
+  const grade = locked ? "locked" : (item?.grade || "insufficient");
+  const detail = [item?.summary, item?.forbidden, item?.overlap_note].filter(Boolean).join(" ");
+  const label = item?.glossary_term
+    ? `<button class="term-link" type="button" data-glossary-term="${escapeHtml(item.glossary_term)}">${escapeHtml(item.label || item.key || "--")}</button>`
+    : escapeHtml(item?.label || item?.key || "--");
+  const valueText = locked
+    ? "需市場資料"
+    : item?.available
+      ? `${Number(item.bar_level ?? 0)} / ${Number(item.bar_max || 5)}`
+      : "資料不足";
+  return `
+    <details class="structure-row structure-grade-${escapeHtml(grade)}" title="${escapeHtml(detail)}">
+      <summary>
+        <span class="structure-label">${label}</span>
+        ${renderStructureBar(item, locked)}
+        <span class="structure-value">${escapeHtml(valueText)}</span>
+      </summary>
+      <div class="structure-detail">
+        <p>${escapeHtml(item?.summary || "目前沒有可讀摘要。")}</p>
+        <p><strong>不要這樣解讀</strong>：${escapeHtml(item?.forbidden || "不得當成方向或操作訊號。")}</p>
+        <p><strong>跟圖上指標差在哪</strong>：${escapeHtml(item?.overlap_note || "這是獨立的結構描述。")}</p>
+      </div>
+    </details>
+  `;
+}
+
+function renderStructureBar(item, locked = false) {
+  const max = Number(item?.bar_max || 5);
+  const level = locked || !item?.available ? 0 : Math.max(0, Math.min(max, Number(item?.bar_level || 0)));
+  const cells = Array.from({ length: max }, (_, index) => (
+    `<span class="${index < level ? "is-filled" : ""}" aria-hidden="true"></span>`
+  )).join("");
+  return `<span class="structure-bar" aria-label="${locked ? "鎖定" : `${level} / ${max}`}">${cells}</span>`;
+}
+
+function structureSufficiencyLabel(grade) {
+  if (grade === "high") return "資料充足";
+  if (grade === "medium") return "僅供參考";
+  if (grade === "low") return "資料偏少";
+  return "資料不足";
+}
+
+function structureAvailabilityLabel(structure) {
+  if (!structure?.available) return "資料不足";
+  return structureSufficiencyLabel(structure?.sufficiency?.grade);
 }
 
 async function refreshQuote(stockId) {

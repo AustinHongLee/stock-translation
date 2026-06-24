@@ -34,6 +34,7 @@ def build_stock_report_html(
         [
             _hero(title, market, summary, data_date, generated),
             _assessment_section(payload.get("assessment"), payload.get("report"), data_date),
+            _structure_section(payload.get("structure"), data_date),
             _chips_section(payload.get("chips"), data_date),
             _valuation_section(payload.get("valuation"), data_date),
             _news_section(news_payload, data_date),
@@ -167,6 +168,50 @@ def _factor_cards(factors: Any, *, limit: int) -> str:
     return '<div class="card-grid">' + "\n".join(cards) + "</div>"
 
 
+def _structure_section(structure: Any, data_date: str) -> str:
+    payload = structure if isinstance(structure, dict) else {}
+    dimensions = [item for item in payload.get("dimensions") or [] if isinstance(item, dict)]
+    if not dimensions:
+        return ""
+    as_of = _text(payload.get("as_of_date") or data_date)
+    sufficiency = payload.get("sufficiency") if isinstance(payload.get("sufficiency"), dict) else {}
+    subtitle = _text(payload.get("subtitle") or "這檔股票現在的性格（結構描述，非預測）")
+    meta = _join_nonempty(
+        [
+            f"{payload.get('window')} 日視窗" if payload.get("window") else "",
+            f"資料充足度 {_structure_grade_label(sufficiency.get('grade'))}",
+            f"樣本 {sufficiency.get('bars_available')} 筆" if sufficiency.get("bars_available") is not None else "",
+        ],
+        " · ",
+    )
+    cards = []
+    for item in dimensions:
+        value = "需市場資料" if item.get("locked") else _structure_bar_text(item)
+        raw = "" if item.get("grade") in ("low", "insufficient") else _structure_raw_text(item)
+        cards.append(
+            f"""
+            <article class="mini-card">
+              <h3>{_escape(_text(item.get('label') or item.get('key') or '維度'))}</h3>
+              <p>{_escape(_join_nonempty([value, _structure_grade_label(item.get('grade'))], ' · '))}</p>
+              <span>{_escape(_text(item.get('summary') or '--'))}</span>
+              <span>{_escape(_text(item.get('forbidden') or '不得當成方向或操作訊號。'))}</span>
+              <span>{_escape(_text(item.get('overlap_note') or '這是獨立的結構描述。'))}</span>
+              {f'<span>{_escape(raw)}</span>' if raw else ''}
+            </article>
+            """
+        )
+    return _section(
+        "結構指紋",
+        as_of,
+        f"""
+        <p class="lead">{_escape(subtitle)}</p>
+        <p class="muted">{_escape(meta)}</p>
+        <div class="card-grid">{''.join(cards)}</div>
+        <p class="muted">{_escape(_text(payload.get('disclaimer') or '結構描述工具 · 描述現在 · 不預測未來 · 非投資建議'))}</p>
+        """,
+    )
+
+
 def _chips_section(chips: Any, data_date: str) -> str:
     payload = chips if isinstance(chips, dict) else {}
     as_of = _text(payload.get("as_of") or data_date)
@@ -189,6 +234,34 @@ def _chips_section(chips: Any, data_date: str) -> str:
         <p class="muted">{_escape(_text(payload.get('disclaimer') or '法人籌碼只呈現買賣超事實。'))}</p>
         """,
     )
+
+
+def _structure_bar_text(item: dict[str, Any]) -> str:
+    if not item.get("available"):
+        return "資料不足"
+    level = item.get("bar_level")
+    max_value = item.get("bar_max") or 5
+    return f"格數 {level}/{max_value}"
+
+
+def _structure_grade_label(value: Any) -> str:
+    if value == "high":
+        return "充足"
+    if value == "medium":
+        return "僅供參考"
+    if value == "low":
+        return "偏少"
+    if value == "locked":
+        return "鎖定"
+    return "不足"
+
+
+def _structure_raw_text(item: dict[str, Any]) -> str:
+    raw = item.get("raw") if isinstance(item.get("raw"), dict) else {}
+    if not raw:
+        return ""
+    parts = [f"{key}={_fmt_number(value, digits=4)}" for key, value in raw.items()]
+    return "原始讀數 " + "、".join(parts)
 
 
 def _valuation_section(valuation: Any, data_date: str) -> str:

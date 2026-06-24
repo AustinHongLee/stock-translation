@@ -28,6 +28,8 @@ from app.analyze.stock_compare import (
     build_stock_comparison,
     normalize_compare_stock_ids,
 )
+from app.analyze.structure_registry import DEFAULT_WINDOW as STRUCTURE_WINDOW
+from app.analyze.structure_registry import build_structure_payload
 from app.analyze.valuation import ValuationResult, calculate_dividend_valuation
 from app.analyze.suitability import ValuationSuitability, assess_valuation_suitability
 from app.analyze.vital_signs import VitalSignsReport, build_vital_signs_report
@@ -54,6 +56,7 @@ CHART_MA_WARMUP_DAYS = 400
 CHART_MA_WARMUP_ROWS = 260
 LOCAL_DATA_CACHE_KEY = "local_data_v2"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
+STRUCTURE_CACHE_PREFIX = "structure"
 
 
 def build_indicator_catalog_payload() -> dict[str, object]:
@@ -723,6 +726,12 @@ def build_stock_payload(
     )
     if latest_close is None and valuation_prices:
         latest_close = valuation_prices[-1].close
+    structure_payload = _build_cached_structure_payload(
+        store,
+        stock_id,
+        valuation_prices or prices,
+        window=STRUCTURE_WINDOW,
+    )
     monthly_revenues = store.get_monthly_revenues(stock_id, limit=12)
     financial_statements = store.get_financial_statements(stock_id, limit=8)
     latest_financial = financial_statements[0] if financial_statements else None
@@ -818,6 +827,7 @@ def build_stock_payload(
         "fundamental_trends": build_fundamental_trends(financial_statements),
         "historical_frequency": build_historical_frequency_report(prices),
         "valuation": valuation_payload,
+        "structure": structure_payload,
         "brief": stock_brief_to_json(profile, suitability),
         "chips": chips_summary,
         "chips_series": [institutional_to_json(t) for t in chips_trades],
@@ -826,6 +836,43 @@ def build_stock_payload(
         "indicator_prefs": build_indicator_prefs_payload(store),
         "annotations": store.get_chart_annotations(stock_id),
     }
+
+
+def _build_cached_structure_payload(
+    store: SQLiteStore,
+    stock_id: str,
+    prices: list[DailyPrice],
+    *,
+    window: int,
+) -> dict[str, object]:
+    if not prices:
+        return build_structure_payload([], window=window)
+    last_close_date = prices[-1].date.isoformat()
+    cache_key = f"{STRUCTURE_CACHE_PREFIX}::{stock_id}::{last_close_date}::{window}"
+    cached = store.get_json_cache(cache_key)
+    if cached is not None and isinstance(cached[0], dict):
+        return cached[0]  # type: ignore[return-value]
+    try:
+        payload = build_structure_payload(
+            [item.close for item in prices],
+            as_of_date=last_close_date,
+            window=window,
+        )
+        store.set_json_cache(cache_key, payload)
+        return payload
+    except Exception as exc:  # noqa: BLE001 - structure card must not block stock page
+        return {
+            "available": False,
+            "reason": f"結構指紋暫時無法計算：{exc}",
+            "as_of_date": last_close_date,
+            "window": window,
+            "title": "結構指紋",
+            "subtitle": "這檔股票現在的性格（結構描述，非預測）",
+            "disclaimer": "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議",
+            "sufficiency": {"bars_available": len(prices), "grade": "insufficient"},
+            "synchrony_locked": True,
+            "dimensions": [],
+        }
 
 
 def portfolio_summary_to_json(result: PortfolioResult) -> dict[str, object]:

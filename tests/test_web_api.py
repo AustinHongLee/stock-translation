@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from app.models import (
     DailyPrice,
@@ -361,6 +362,8 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertIn("features", payload)
         self.assertIn("ma20", payload["features"]["series"])  # type: ignore[index]
         self.assertEqual(len(payload["features"]["dates"]), len(payload["prices"]))  # type: ignore[index,arg-type]
+        self.assertIn("structure", payload)
+        self.assertEqual(payload["structure"]["title"], "結構指紋")  # type: ignore[index]
         self.assertEqual(portfolio_payload["summary"]["positions_count"], 1)  # type: ignore[index]
         self.assertEqual(portfolio_payload["positions"][0]["shares"], 1000)  # type: ignore[index]
         self.assertEqual(portfolio_payload["positions"][0]["latest_close"], 107)  # type: ignore[index]
@@ -370,6 +373,87 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(watchlist_payload["items"][0]["profile"]["short_name"], "台積電")  # type: ignore[index]
         self.assertIn("board", watchlist_payload["items"][0])  # type: ignore[index]
         self.assertEqual(watchlist_payload["items"][0]["board"]["assessment"]["label"], "體質中性")  # type: ignore[index]
+
+    def test_stock_payload_caches_structure_by_last_close_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            today = date.today()
+            rows = [
+                DailyPrice(
+                    stock_id="2330",
+                    date=today - timedelta(days=319 - i),
+                    open=100 + i * 0.1,
+                    high=101 + i * 0.1,
+                    low=99 + i * 0.1,
+                    close=100 + i * 0.1 + ((i % 5) - 2) * 0.05,
+                    volume=1000 + i,
+                )
+                for i in range(320)
+            ]
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(rows)
+
+                payload = build_stock_payload(store, "2330", days=365)
+                last_date = rows[-1].date.isoformat()
+                cached = store.get_json_cache(f"structure::2330::{last_date}::250")
+
+                with patch("app.web.api.build_structure_payload", side_effect=AssertionError("recomputed")):
+                    cached_payload = build_stock_payload(store, "2330", days=365)
+
+        self.assertIsNotNone(cached)
+        self.assertEqual(payload["structure"]["as_of_date"], last_date)  # type: ignore[index]
+        self.assertEqual(cached_payload["structure"]["as_of_date"], last_date)  # type: ignore[index]
+        self.assertEqual(len(cached_payload["structure"]["dimensions"]), 6)  # type: ignore[index]
+
+    def test_stock_payload_structure_degrades_for_short_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            today = date.today()
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="7777",
+                            date=today - timedelta(days=49 - i),
+                            open=50 + i * 0.1,
+                            high=51 + i * 0.1,
+                            low=49 + i * 0.1,
+                            close=50 + i * 0.1,
+                            volume=100 + i,
+                        )
+                        for i in range(50)
+                    ]
+                )
+
+                payload = build_stock_payload(store, "7777", days=365)
+
+        self.assertFalse(payload["structure"]["available"])  # type: ignore[index]
+        self.assertEqual(payload["structure"]["sufficiency"]["grade"], "insufficient")  # type: ignore[index]
+        self.assertEqual(len(payload["structure"]["dimensions"]), 6)  # type: ignore[index]
+
+    def test_local_data_payload_does_not_compute_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date.today(),
+                            open=100,
+                            high=101,
+                            low=99,
+                            close=100,
+                            volume=1000,
+                        )
+                    ]
+                )
+
+                with patch("app.web.api.build_structure_payload", side_effect=AssertionError("local-data recomputed structure")):
+                    payload = build_local_data_payload(store)
+
+        self.assertGreaterEqual(payload["count"], 1)
+        self.assertEqual(payload["items"][0]["stock_id"], "2330")  # type: ignore[index]
 
     def test_glossary_payload_is_available_for_ui_terms(self) -> None:
         payload = glossary_payload()

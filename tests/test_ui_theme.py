@@ -63,6 +63,18 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function exportStockReport", js)
         self.assertIn(".html", js)
 
+    def test_stock_page_exposes_structure_fingerprint_card(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="structureCard"', html)
+        self.assertIn("structure-card", css)
+        self.assertIn("structure-grid", css)
+        self.assertIn("structureCard", js)
+        self.assertIn("function renderStructureCard", js)
+        self.assertIn("renderStructureCard(payload.structure)", js)
+
     def test_chart_advanced_controls_are_large_chart_only(self) -> None:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
