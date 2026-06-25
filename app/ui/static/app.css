@@ -1391,6 +1391,12 @@ td.down { color: var(--down); font-weight: 600; }
 .chart-size-btn:hover { background: var(--surface-hover); border-color: var(--brand-2); }
 .chart-size-btn.is-active { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 .chart-large-btn { background: var(--brand-soft); border-color: var(--brand-soft-line); }
+.chart-intraday-badge {
+  align-items: center; min-height: 24px; padding: 2px 9px;
+  border: 1px dashed var(--warn-line); border-radius: 999px;
+  background: var(--warn-bg); color: var(--warn);
+  font-size: 11.5px; font-weight: 700;
+}
 .chart-select { min-height: 28px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; padding: 3px 8px; }
 .chart-lab-only { display: none; }
 .chart-panel.chart-lab-mode {

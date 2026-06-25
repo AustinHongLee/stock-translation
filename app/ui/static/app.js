@@ -21,6 +21,11 @@ const state = {
   searchRequestSeq: 0,
   quoteTimer: null,
   chartPrices: [],
+  chartOfficialAll: [],
+  chartOfficialStockId: null,
+  chartIntradayEnabled: false,
+  chartIntradayRow: null,
+  activeQuote: null,
   chartHoverIndex: null,
   chartFeatures: null,
   chartCatalog: null,
@@ -232,6 +237,8 @@ const elements = {
   priceChartTitle: document.querySelector("#priceChartTitle"),
   dateRange: document.querySelector("#dateRange"),
   chartLargeBtn: document.querySelector("#chartLargeBtn"),
+  chartIntradayBtn: document.querySelector("#chartIntradayBtn"),
+  chartIntradayBadge: document.querySelector("#chartIntradayBadge"),
   chartHeightSelect: document.querySelector("#chartHeightSelect"),
   chartScaleSelect: document.querySelector("#chartScaleSelect"),
   chartRangeBtn: document.querySelector("#chartRangeBtn"),
@@ -2148,7 +2155,7 @@ function renderStock(payload, fallbackStockId) {
   state.chartPrefs = normalizeChartPrefs(payload.indicator_prefs);
   state.chartAnnotations = Array.isArray(payload.annotations) ? payload.annotations : [];
   setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices, payload.features || null);
-  renderDateEvent((state.chartAll || []).length - 1);
+  renderDateEvent((state.chartPrices || []).length - 1);
   renderAnnotationList();
   renderChipsCard(payload.chips);
   renderChartTranslation(payload);
@@ -2258,6 +2265,7 @@ async function refreshQuote(stockId) {
   try {
     const payload = await getJson(`/api/quotes/${encodeURIComponent(stockId)}`);
     if (stockId === state.activeStockId) {
+      if (state.activePayload) state.activePayload.quote = payload.quote;
       renderQuote(payload.quote, state.activeSummary || {});
     }
   } catch (error) {
@@ -2285,6 +2293,7 @@ function scheduleQuoteRefresh() {
 }
 
 function renderQuote(quote, summary) {
+  state.activeQuote = quote || null;
   const fallbackClose = summary?.latest_close;
   const displayPrice = quote?.display_price ?? fallbackClose;
   const displayChange = quote?.display_change;
@@ -2342,6 +2351,10 @@ function renderQuote(quote, summary) {
     elements.stockHeaderChange.classList.toggle("up", displayChange > 0);
     elements.stockHeaderChange.classList.toggle("down", displayChange < 0);
   }
+  refreshIntradayChartLayer({
+    preserveView: true,
+    redraw: Boolean(state.chartLargeMode && state.chartIntradayEnabled),
+  });
 }
 
 function renderRevenue(summary, records) {
@@ -3537,6 +3550,109 @@ function isTradingRow(p) {
   return Boolean(p) && [p.open, p.high, p.low, p.close].every((v) => Number.isFinite(Number(v)) && Number(v) > 0);
 }
 
+function buildIntradayChartRow(quote, officialRows = state.chartOfficialAll || [], officialStockId = state.chartOfficialStockId) {
+  if (!quote?.available || quote.current_price == null || !quote.trade_datetime) return null;
+  const quoteStockId = String(quote.stock_id || "").trim();
+  const expectedStockId = String(officialStockId || state.activeStockId || "").trim();
+  if (quoteStockId && expectedStockId && quoteStockId !== expectedStockId) return null;
+  const dateText = String(quote.trade_datetime).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return null;
+  const lastOfficialDate = officialRows.length ? String(officialRows[officialRows.length - 1]?.date || "") : "";
+  if (lastOfficialDate && dateText <= lastOfficialDate) return null;
+  const close = Number(quote.current_price);
+  const open = Number(quote.open_price ?? quote.previous_close ?? close);
+  const rawHigh = Number(quote.high_price ?? close);
+  const rawLow = Number(quote.low_price ?? close);
+  const high = Math.max(rawHigh, open, close);
+  const low = Math.min(rawLow, open, close);
+  if (![open, high, low, close].every((value) => Number.isFinite(value) && value > 0)) return null;
+  return {
+    date: dateText,
+    open,
+    high,
+    low,
+    close,
+    volume: Number.isFinite(Number(quote.volume)) ? Number(quote.volume) : 0,
+    provisional: true,
+    source: "TWSE_MIS_INTRADAY",
+    note: "盤中暫算，收盤後可能改變。",
+  };
+}
+
+function refreshIntradayChartLayer(options = {}) {
+  const officialRows = Array.isArray(state.chartOfficialAll) ? state.chartOfficialAll : [];
+  const officialStockId = String(state.chartOfficialStockId || "").trim();
+  const activeStockId = String(state.activeStockId || "").trim();
+  if (officialStockId && activeStockId && officialStockId !== activeStockId) {
+    state.chartIntradayRow = null;
+    updateIntradayChartControls();
+    return;
+  }
+  const previousLength = (state.chartAll || []).length;
+  const previousView = state.chartView || { start: 0, end: Math.max(0, previousLength - 1) };
+  const wasAtEnd = previousView.end >= Math.max(0, previousLength - 1);
+  const intradayRow = state.chartLargeMode && state.chartIntradayEnabled
+    ? buildIntradayChartRow(state.activeQuote, officialRows, officialStockId)
+    : null;
+  state.chartIntradayRow = intradayRow;
+  state.chartAll = intradayRow ? [...officialRows, intradayRow] : officialRows;
+
+  const nextLength = state.chartAll.length;
+  if (!options.preserveView) {
+    state.chartView = { start: 0, end: Math.max(0, nextLength - 1) };
+  } else if (state.chartView) {
+    const start = Math.max(0, Math.min(state.chartView.start, Math.max(0, nextLength - 1)));
+    const end = wasAtEnd ? Math.max(0, nextLength - 1) : Math.max(start, Math.min(state.chartView.end, Math.max(0, nextLength - 1)));
+    state.chartView = { start, end };
+  }
+  rebuildEventIndex();
+  updateIntradayChartControls();
+  if (options.redraw !== false) drawChart();
+}
+
+function isIntradayOverlayActive() {
+  return Boolean(state.chartLargeMode && state.chartIntradayEnabled && state.chartIntradayRow);
+}
+
+function intradayChartStatusText() {
+  const quote = state.activeQuote || {};
+  const officialRows = Array.isArray(state.chartOfficialAll) ? state.chartOfficialAll : [];
+  const lastOfficialDate = officialRows.length ? String(officialRows[officialRows.length - 1]?.date || "") : "";
+  const quoteDate = quote.trade_datetime ? String(quote.trade_datetime).slice(0, 10) : "";
+  const quoteStockId = String(quote.stock_id || "").trim();
+  const officialStockId = String(state.chartOfficialStockId || "").trim();
+  if (quoteStockId && officialStockId && quoteStockId !== officialStockId) return "等待目前股票的盤中報價。";
+  if (quoteDate && lastOfficialDate && quoteDate <= lastOfficialDate) return "正式日線已含此日期，不另疊加。";
+  if (quote.available && quote.current_price == null) return "目前只有買賣價參考，暫不生成 K 棒。";
+  if (!quote.available) return "尚未取得盤中報價，不影響正式日線。";
+  return "盤中暫算待成交價，不影響正式日線。";
+}
+
+function toggleIntradayChartLayer(force) {
+  if (!state.chartLargeMode) return;
+  state.chartIntradayEnabled = typeof force === "boolean" ? force : !state.chartIntradayEnabled;
+  refreshIntradayChartLayer({ preserveView: true, redraw: true });
+}
+
+function updateIntradayChartControls() {
+  const btn = elements.chartIntradayBtn;
+  const badge = elements.chartIntradayBadge;
+  const active = isIntradayOverlayActive();
+  if (btn) {
+    btn.classList.toggle("is-active", Boolean(state.chartIntradayEnabled));
+    btn.textContent = state.chartIntradayEnabled
+      ? (active ? "盤中暫算開啟" : "暫算未疊加")
+      : "盤中暫算";
+    btn.title = "只在大型 K 線圖疊加盤中暫算，不寫入正式日線；收盤後可能改變。";
+  }
+  if (badge) {
+    badge.classList.toggle("hidden", !(state.chartLargeMode && state.chartIntradayEnabled));
+    badge.textContent = active
+      ? `盤中暫算 ${state.chartIntradayRow.date} ${formatNumber(state.chartIntradayRow.close)} · 收盤後可能改變`
+      : intradayChartStatusText();
+  }
+}
+
 function calculateMovingAverage(prices, windowSize) {
   const result = [];
   const windowValues = [];
@@ -4000,12 +4116,13 @@ function showChartCandleExplanation(index) {
   if (!item) return;
   const open = Number(item.open), high = Number(item.high), low = Number(item.low), close = Number(item.close);
   const direction = close > open ? "收漲" : close < open ? "收跌" : "平盤";
+  const provisional = Boolean(item.provisional);
   renderChartExplainCard({
-    title: `${item.date || "當日"} K 棒`,
+    title: `${item.date || "當日"} ${provisional ? "盤中暫算 K 棒" : "K 棒"}`,
     who: "K 棒是一個交易日的開盤、最高、最低、收盤。",
-    current: `開 ${formatNumber(open)}、高 ${formatNumber(high)}、低 ${formatNumber(low)}、收 ${formatNumber(close)}，${direction}`,
+    current: `開 ${formatNumber(open)}、高 ${formatNumber(high)}、低 ${formatNumber(low)}、${provisional ? "暫收" : "收"} ${formatNumber(close)}，${provisional ? "盤中暫算" : direction}`,
     context: "實體表示開盤到收盤的距離，上下影線表示盤中碰過的高低價。",
-    caution: "單根 K 棒容易誤讀，通常要搭配趨勢、位置與量能一起看。",
+    caution: provisional ? "這根只用目前盤中報價暫算，收盤後正式日線可能不同。" : "單根 K 棒容易誤讀，通常要搭配趨勢、位置與量能一起看。",
     guideKey: "candle",
   });
   state.chartFocusedFeature = null;
@@ -4120,6 +4237,7 @@ function renderScenarioWindow(windowStats) {
 }
 
 function chartScenarioFanData(payload = state.activePayload) {
+  if (isIntradayOverlayActive()) return null;
   const report = payload?.historical_frequency;
   const events = Array.isArray(report?.events) ? report.events : [];
   if (!report?.available || !events.length) return null;
@@ -4163,7 +4281,9 @@ function chartFeatureSpec(key) {
       label: srLine.label,
       description: `${srLine.label} 是近 ${srLine.window} 日波段高低點形成的${srLine.kindLabel}參考線。`,
       context_note: `這條線來自 ${srLine.window} 日範圍內的樞紐 K 棒，用來看股價靠近支撐或壓力的位置。`,
-      caution: "支撐壓力只是歷史轉折點整理，不代表一定守住或一定突破。",
+      caution: srLine.provisional
+        ? "這是盤中暫算支撐壓力，收盤後正式日線可能改變。"
+        : "支撐壓力只是歷史轉折點整理，不代表一定守住或一定突破。",
     };
   }
   const features = Array.isArray(state.chartCatalog?.features) ? state.chartCatalog.features : [];
@@ -4317,6 +4437,8 @@ function setupChart(prices, chipsSeries, localEvents, maPrices = null, features 
   state.chartFeatures = features || null;
   state.chartCatalog = features?.catalog || state.chartCatalog || null;
   setupChartPreferences();
+  state.chartOfficialAll = valid;
+  state.chartOfficialStockId = state.activePayload?.profile?.stock_id || state.activeStockId || null;
   state.chartAll = valid;
   state.chartPrices = valid; // 與 renderDateEvent 等相容
   const chipsMap = {};
@@ -4341,6 +4463,7 @@ function setupChart(prices, chipsSeries, localEvents, maPrices = null, features 
   state.chartSelectingRange = false;
   state.chartRangeSelection = null;
   state.chartRangeDraft = null;
+  refreshIntradayChartLayer({ preserveView: false, redraw: false });
   drawChart();
   renderIndicatorPanel();
   renderAnnotationList();
@@ -4615,10 +4738,23 @@ function drawPricePanel(ctx, layout, view, slot) {
     const o = Number(p.open), h = Number(p.high), l = Number(p.low), c = Number(p.close);
     const x = chartXOf(i, view, layout);
     const color = c > o ? CANDLE_UP_COLOR : c < o ? CANDLE_DOWN_COLOR : CANDLE_FLAT_COLOR;
+    const provisional = Boolean(p.provisional);
+    ctx.save();
+    if (provisional) {
+      ctx.globalAlpha = .82;
+      ctx.setLineDash([3, 2]);
+    }
     ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, yOf(h)); ctx.lineTo(x, yOf(l)); ctx.stroke();
     const top = Math.min(yOf(o), yOf(c)), bh = Math.max(1, Math.abs(yOf(c) - yOf(o)));
-    ctx.fillRect(x - cw / 2, top, cw, bh);
+    if (provisional) {
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1.4;
+      ctx.strokeRect(x - cw / 2, top, cw, bh);
+    } else {
+      ctx.fillRect(x - cw / 2, top, cw, bh);
+    }
+    ctx.restore();
   }
   // 均線
   mas.slice().reverse().forEach((s) => {
@@ -4715,9 +4851,11 @@ function drawVolPanel(ctx, layout, view, slot) {
     const bh = (v / vmax) * panel.height;
     const x = chartXOf(i, view, layout);
     const up = Number(p.close) >= Number(p.open);
+    ctx.globalAlpha = p.provisional ? .42 : 1;
     ctx.fillStyle = up ? "rgba(224,49,49,0.45)" : "rgba(47,158,68,0.45)";
     ctx.fillRect(x - bw / 2, panel.top + panel.height - bh, bw, bh);
   }
+  ctx.globalAlpha = 1;
   volumeMaLayers.forEach((key) => {
     const style = CHART_VOLUME_MA_STYLES[key] || { color: colors.brand, width: 1.1 };
     const values = featureSeries(key);
@@ -5141,13 +5279,15 @@ function drawCrosshairTooltip(ctx, layout, view) {
   const chg = prev != null && Number.isFinite(prev) ? c - prev : null;
   const chgPct = chg != null && prev ? (chg / prev) * 100 : null;
   const lots = Math.round((Number(item.volume) || 0) / 1000);
-  const head = `${item.date}　${c > o ? "收漲" : c < o ? "收跌" : "持平"}`;
+  const provisional = Boolean(item.provisional);
+  const head = `${item.date}　${provisional ? "盤中暫算" : (c > o ? "收漲" : c < o ? "收跌" : "持平")}`;
   const lines = [
-    `開 ${formatNumber(o)}　收 ${formatNumber(c)}`,
+    `開 ${formatNumber(o)}　${provisional ? "暫收" : "收"} ${formatNumber(c)}`,
     `高 ${formatNumber(h)}　低 ${formatNumber(l)}`,
     chg == null ? "漲跌 --" : `漲跌 ${chg > 0 ? "+" : ""}${formatNumber(chg)}（${chgPct > 0 ? "+" : ""}${formatNumber(chgPct)}%）`,
     `量 ${lots.toLocaleString("zh-TW")} 張`,
   ];
+  if (provisional) lines.push("收盤後正式日線可能不同");
   const chip = (state.chartChips || {})[item.date];
   if (chip) {
     lines.push(`外資 ${formatLots(chip.foreign_net)}　投信 ${formatLots(chip.trust_net)}`);
@@ -5200,7 +5340,7 @@ function drawHoverFeatureBadge(ctx, layout) {
 
 function hoverFeatureSummary(key, index) {
   const srLine = findSupportResistanceLine(key);
-  if (srLine) return `${srLine.label} ${formatNumber(srLine.price)} · 近${srLine.window}日${srLine.kindLabel}`;
+  if (srLine) return `${srLine.label} ${formatNumber(srLine.price)} · 近${srLine.window}日${srLine.kindLabel}${srLine.provisional ? " · 盤中暫算" : ""}`;
   const feature = chartFeatureSpec(key);
   const value = featureValueAtIndex(key, index);
   const valueText = formatIndicatorValue(key, value);
@@ -5264,6 +5404,8 @@ function renderRangeStatsPanel(range = state.chartRangeSelection || state.chartR
     return;
   }
   const changeClass = toneClass(stats.price_change);
+  const rows = state.chartAll || [];
+  const includesIntraday = Boolean(rows.slice(normalized.start, normalized.end + 1).some((item) => item?.provisional));
   panel.classList.remove("hidden");
   panel.innerHTML = `
     <div class="range-stats-head">
@@ -5280,7 +5422,7 @@ function renderRangeStatsPanel(range = state.chartRangeSelection || state.chartR
       ${rangeStatItem("區間 VWAP", formatNumber(stats.vwap))}
       ${rangeStatItem("漲跌點數", `<span class="${changeClass}">${formatSignedNumber(stats.price_change)}</span>`, true)}
     </div>
-    <p class="range-stats-note">區間統計只整理框選期間已發生的價量資料，不是預測，也不是買賣建議。</p>
+    <p class="range-stats-note">區間統計只整理框選期間已發生的價量資料${includesIntraday ? "；本區間含盤中暫算，收盤後可能改變" : ""}，不是預測，也不是買賣建議。</p>
   `;
 }
 
@@ -5325,6 +5467,7 @@ function toggleLargeChart(force) {
   }
   renderIndicatorPanel();
   renderChartTranslation(state.activePayload);
+  refreshIntradayChartLayer({ preserveView: true, redraw: false });
   updateChartLegendState();
   window.setTimeout(drawChart, 80);
 }
@@ -6122,6 +6265,7 @@ function drawSupportResistance(ctx, layout, view) {
   if (!yOf || all.length < 10) return;
   const hidden = state.chartSeriesHidden || {};
   const c = Number(all[all.length - 1].close);
+  const provisional = isIntradayOverlayActive();
   const top = layout.price.top;
   const bot = layout.price.top + layout.price.height;
   state.chartSRLines = [];
@@ -6136,14 +6280,15 @@ function drawSupportResistance(ctx, layout, view) {
     const piv = findSwingPivots(seg, tf.k);
     const resistance = pickResistance(piv.highs, seg, c);
     const support = pickSupport(piv.lows, seg, c);
-    [[`${tf.label}壓`, resistance, "壓力"], [`${tf.label}撐`, support, "支撐"]].forEach(([label, level, kindLabel]) => {
+    const prefix = provisional ? "暫算" : "";
+    [[`${prefix}${tf.label}壓`, resistance, "壓力"], [`${prefix}${tf.label}撐`, support, "支撐"]].forEach(([label, level, kindLabel]) => {
       const price = Number(level?.value);
       if (!Number.isFinite(price)) return;
       const y = yOf(price);
       if (y < top || y > bot) return;
       const globalIndex = startIndex + Number(level.index || 0);
       const hoverKey = `${tf.key}_${kindLabel === "壓力" ? "res" : "sup"}`;
-      const line = { key: hoverKey, timeframeKey: tf.key, label, price, y, window: windowSize, startIndex, pivotIndex: globalIndex, color: tf.color, kindLabel };
+      const line = { key: hoverKey, timeframeKey: tf.key, label, price, y, window: windowSize, startIndex, pivotIndex: globalIndex, color: tf.color, kindLabel, provisional };
       state.chartSRLines.push(line);
       ctx.setLineDash([6, 4]);
       ctx.strokeStyle = tf.color;
@@ -6160,7 +6305,7 @@ function drawSupportResistance(ctx, layout, view) {
       ctx.setLineDash([]);
       ctx.fillStyle = tf.color;
       ctx.globalAlpha = 1;
-      ctx.fillText(`${label} ${formatNumber(price)} · 近${windowSize}日`, layout.padding.left + 4, y - 3);
+      ctx.fillText(`${label} ${formatNumber(price)} · 近${windowSize}日${provisional ? " · 盤中" : ""}`, layout.padding.left + 4, y - 3);
       if (globalIndex >= view.start && globalIndex <= view.end) {
         const px = chartXOf(globalIndex, view, layout);
         ctx.beginPath();

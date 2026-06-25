@@ -957,6 +957,7 @@
                   <h3 id="priceChartTitle">近一年收盤價（日線）</h3>
                   <div class="chart-head-right">
                     <button id="chartLargeBtn" type="button" class="chart-size-btn chart-large-btn" onclick="toggleLargeChart()">大型K線圖</button>
+                    <button id="chartIntradayBtn" type="button" class="chart-size-btn chart-lab-only" onclick="toggleIntradayChartLayer()" title="只在大型 K 線圖疊加盤中暫算，不寫入正式日線">盤中暫算</button>
                     <select id="chartHeightSelect" class="chart-select chart-lab-only" aria-label="圖表高度">
                       <option value="standard">標準</option>
                       <option value="tall">高</option>
@@ -1003,6 +1004,7 @@
                   <button type="button" class="legend-toggle" data-series="sr_s" onclick="toggleChartSeries('sr_s')"><i class="legend-sr legend-sr-s"></i>短線支壓</button>
                   <button type="button" class="legend-toggle" data-series="sr_m" onclick="toggleChartSeries('sr_m')"><i class="legend-sr legend-sr-m"></i>波段支壓</button>
                   <button type="button" class="legend-toggle" data-series="sr_l" onclick="toggleChartSeries('sr_l')"><i class="legend-sr legend-sr-l"></i>長線支壓</button>
+                  <span id="chartIntradayBadge" class="chart-intraday-badge chart-lab-only hidden">盤中暫算未啟用</span>
                   <span class="legend-hint">滾輪縮放・拖曳平移・點圖例開關</span>
                 </div>
                 <details class="indicator-panel chart-lab-panel" open>
