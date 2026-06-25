@@ -18,6 +18,7 @@ from app.analyze.data_gap import (
     plan_data_gap,
 )
 from app.analyze.fundamental_trends import build_fundamental_trends
+from app.analyze.chart_tour import build_chart_tour
 from app.analyze.historical_frequency import build_historical_frequency_report
 from app.analyze.indicator_registry import indicator_catalog
 from app.analyze.indicators import compute_features
@@ -891,7 +892,7 @@ def build_stock_payload(
         financial_summary=financial_summary_payload,
     )
 
-    return {
+    payload: dict[str, object] = {
         "profile": profile_to_json(profile) if profile else None,
         "prices": [price_to_json(item) for item in prices],
         "ma_prices": [price_to_json(item) for item in ma_prices],
@@ -934,6 +935,16 @@ def build_stock_payload(
         "indicator_prefs": build_indicator_prefs_payload(store),
         "annotations": store.get_chart_annotations(stock_id),
     }
+    try:
+        payload["chart_tour"] = build_chart_tour(payload)
+    except Exception as exc:  # noqa: BLE001 - chart tour must not block stock page
+        payload["chart_tour"] = {
+            "available": False,
+            "disclaimer": "讀圖識讀教學：描述現在、整理歷史資料，非預測、非投資建議。",
+            "beats": [],
+            "error": str(exc),
+        }
+    return payload
 
 
 def _build_cached_structure_payload(

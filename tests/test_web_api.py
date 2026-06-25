@@ -622,6 +622,8 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(len(payload["features"]["dates"]), 10)  # type: ignore[index,arg-type]
         self.assertIsNotNone(payload["features"]["series"]["ma60"][0])  # type: ignore[index]
         self.assertEqual(payload["features"]["dates"][0], payload["prices"][0]["date"])  # type: ignore[index]
+        self.assertIn("chart_tour", payload)
+        self.assertIn("beats", payload["chart_tour"])  # type: ignore[operator]
 
     def test_cached_local_data_payload_reuses_recent_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

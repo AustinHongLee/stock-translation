@@ -237,6 +237,7 @@ const elements = {
   priceChartTitle: document.querySelector("#priceChartTitle"),
   dateRange: document.querySelector("#dateRange"),
   chartLargeBtn: document.querySelector("#chartLargeBtn"),
+  chartTourBtn: document.querySelector("#chartTourBtn"),
   chartIntradayBtn: document.querySelector("#chartIntradayBtn"),
   chartIntradayBadge: document.querySelector("#chartIntradayBadge"),
   chartHeightSelect: document.querySelector("#chartHeightSelect"),
@@ -2159,6 +2160,7 @@ function renderStock(payload, fallbackStockId) {
   renderAnnotationList();
   renderChipsCard(payload.chips);
   renderChartTranslation(payload);
+  window.syncChartTourUi?.();
   state.newsRiskSummary = null;
   renderAssessmentMerged();
   scheduleQuoteRefresh();
@@ -4679,6 +4681,7 @@ function drawChart() {
   drawRangeSelection(ctx, layout, view, slot);
   drawCrosshairTooltip(ctx, layout, view);
   drawHoverFeatureBadge(ctx, layout);
+  window.drawChartTourOverlay?.(ctx, layout, view);
 }
 
 function drawPricePanel(ctx, layout, view, slot) {
@@ -5465,9 +5468,11 @@ function toggleLargeChart(force) {
   if (!entering && document.fullscreenElement) {
     document.exitFullscreen().catch(() => {});
   }
+  if (!entering) window.stopChartTour?.({ silent: true });
   renderIndicatorPanel();
   renderChartTranslation(state.activePayload);
   refreshIntradayChartLayer({ preserveView: true, redraw: false });
+  window.syncChartTourUi?.();
   updateChartLegendState();
   window.setTimeout(drawChart, 80);
 }

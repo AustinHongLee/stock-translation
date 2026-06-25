@@ -957,6 +957,9 @@
                   <h3 id="priceChartTitle">近一年收盤價（日線）</h3>
                   <div class="chart-head-right">
                     <button id="chartLargeBtn" type="button" class="chart-size-btn chart-large-btn" onclick="toggleLargeChart()">大型K線圖</button>
+                    <button id="chartTourBtn" type="button" class="chart-size-btn chart-lab-only" onclick="toggleChartTour()" title="用大型 K 線圖播放讀圖導覽">
+                      <span class="chart-tour-icon" aria-hidden="true"></span>讀圖導覽
+                    </button>
                     <button id="chartIntradayBtn" type="button" class="chart-size-btn chart-lab-only" onclick="toggleIntradayChartLayer()" title="只在大型 K 線圖疊加盤中暫算，不寫入正式日線">盤中暫算</button>
                     <select id="chartHeightSelect" class="chart-select chart-lab-only" aria-label="圖表高度">
                       <option value="standard">標準</option>
@@ -1050,6 +1053,30 @@
                   </div>
                 </details>
                 <canvas id="priceChart" width="960" height="360"></canvas>
+                <div id="chartTourOverlay" class="chart-tour-overlay hidden" aria-live="polite">
+                  <div class="chart-tour-shell">
+                    <div class="chart-tour-meta">
+                      <span id="chartTourChapter">讀圖導覽</span>
+                      <b id="chartTourProgress">0 / 0</b>
+                    </div>
+                    <h4 id="chartTourTitle">--</h4>
+                    <p id="chartTourHeadline">--</p>
+                    <details id="chartTourDetails" class="chart-tour-details">
+                      <summary>為什麼看這裡 / 注意什麼</summary>
+                      <p id="chartTourWhy">--</p>
+                      <p id="chartTourCaution">--</p>
+                    </details>
+                    <div id="chartTourDots" class="chart-tour-dots" aria-hidden="true"></div>
+                    <div class="chart-tour-controls">
+                      <button type="button" class="chart-size-btn" data-chart-tour-action="prev">上一步</button>
+                      <button id="chartTourPlayBtn" type="button" class="chart-size-btn is-active" data-chart-tour-action="play">暫停</button>
+                      <button type="button" class="chart-size-btn" data-chart-tour-action="next">下一步</button>
+                      <button id="chartTourSpeedBtn" type="button" class="chart-size-btn" data-chart-tour-action="speed">5秒</button>
+                      <button type="button" class="chart-size-btn" data-chart-tour-action="close">略過</button>
+                    </div>
+                    <p id="chartTourDisclaimer" class="chart-tour-disclaimer">讀圖識讀教學 · 描述現在 · 非預測 · 非投資建議</p>
+                  </div>
+                </div>
                 <div id="rangeStatsPanel" class="range-stats-panel hidden" aria-live="polite"></div>
                 <div class="date-event-panel" aria-live="polite">
                   <div class="date-event-main">
@@ -1155,5 +1182,6 @@
     </div>
 
     <script src="/static/app.js"></script>
+    <script src="/static/chart_tour.js"></script>
   </body>
 </html>
