@@ -1517,41 +1517,27 @@ td.down { color: var(--down); font-weight: 600; }
   font-size: 13px;
 }
 .chart-tour-readout {
-  min-width: min(360px, 42vw);
-  max-width: min(520px, 48vw);
+  min-width: 132px;
+  max-width: min(280px, 30vw);
   overflow: hidden;
   display: grid;
-  gap: 2px;
 }
-.chart-tour-readout h4 {
-  margin: 0;
-  color: #e7f2ff;
-  font-size: 12.5px;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.chart-tour-readout > p {
-  margin: 0;
-  color: #b8cde2;
-  font-size: 11.5px;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.chart-tour-readout .chart-tour-details { display: none; }
 .chart-tour-details {
   margin-top: 8px;
   border-top: 1px solid rgba(129, 194, 255, .18);
   padding-top: 7px;
+}
+.chart-tour-readout .chart-tour-details {
+  margin: 0;
+  border-top: 0;
+  padding-top: 0;
 }
 .chart-tour-details summary {
   cursor: pointer;
   color: #9ed0ff;
   font-size: 12px;
   font-weight: 800;
+  line-height: 1.35;
 }
 .chart-tour-details p {
   color: #c9d8e8;

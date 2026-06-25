@@ -10,17 +10,13 @@
   const TOUR_BLUE = "#8fc9ff";
   const TOUR_GOLD = "#e4b84f";
   const TOUR_INK = "rgba(231, 242, 255, .92)";
-  const TOUR_DIM = "rgba(161, 176, 194, .72)";
 
   function tourElements() {
-    ensureTourCalloutElements();
     return {
       button: document.querySelector("#chartTourBtn"),
       overlay: document.querySelector("#chartTourOverlay"),
       chapter: document.querySelector("#chartTourChapter"),
       progress: document.querySelector("#chartTourProgress"),
-      title: document.querySelector("#chartTourTitle"),
-      headline: document.querySelector("#chartTourHeadline"),
       why: document.querySelector("#chartTourWhy"),
       caution: document.querySelector("#chartTourCaution"),
       dots: document.querySelector("#chartTourDots"),
@@ -33,26 +29,6 @@
       calloutLabel: document.querySelector("#chartTourCalloutLabel"),
       calloutText: document.querySelector("#chartTourCalloutText"),
     };
-  }
-
-  function ensureTourCalloutElements() {
-    if (document.querySelector("#chartTourCallout")) return;
-    const canvas = document.querySelector("#priceChart");
-    const parent = canvas?.parentElement;
-    if (!canvas || !parent) return;
-    const callout = document.createElement("div");
-    callout.id = "chartTourCallout";
-    callout.className = "chart-tour-callout hidden";
-    callout.setAttribute("aria-hidden", "true");
-    callout.innerHTML = `
-      <div id="chartTourCalloutLeader" class="chart-tour-callout-leader"></div>
-      <div class="chart-tour-callout-meta">
-        <span id="chartTourCalloutIcon" aria-hidden="true">●</span>
-        <b id="chartTourCalloutLabel">讀圖</b>
-      </div>
-      <p id="chartTourCalloutText">--</p>
-    `;
-    parent.insertBefore(callout, canvas.nextSibling);
   }
 
   function currentTour() {
@@ -170,8 +146,6 @@
     const narration = beat.narration || {};
     ui.chapter.textContent = `${chapterLabel(beat.chapter)} · ${confidenceLabel(beat.confidence)}`;
     ui.progress.textContent = `${tourState.index + 1} / ${tour.beats.length}`;
-    ui.title.textContent = beat.title || "讀圖導覽";
-    ui.headline.textContent = narration.headline || "--";
     ui.why.textContent = narration.why || "--";
     ui.caution.textContent = narration.caution || "--";
     ui.disclaimer.textContent = tour.disclaimer || "讀圖識讀教學 · 描述現在 · 非預測 · 非投資建議";
@@ -378,62 +352,6 @@
     ctx.restore();
   }
 
-  function drawTourAnchoredCallout(ctx, layout, beat, anchor) {
-    const text = tourCalloutText(beat);
-    if (!text || !anchor) return;
-    ctx.save();
-    ctx.font = "14px Microsoft JhengHei, Segoe UI, Arial";
-    const maxTextWidth = Math.min(310, Math.max(190, layout.innerWidth * 0.36));
-    const lines = wrapTourText(ctx, text, maxTextWidth, 3);
-    ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
-    const label = `${chapterLabel(beat.chapter)} · ${confidenceLabel(beat.confidence)}`;
-    const labelWidth = ctx.measureText(label).width;
-    ctx.font = "14px Microsoft JhengHei, Segoe UI, Arial";
-    const lineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), 120);
-    const box = {
-      width: Math.min(340, Math.max(220, Math.max(labelWidth + 54, lineWidth + 42))),
-      height: 50 + lines.length * 19,
-    };
-    const placement = chooseTourCalloutPlacement(anchor, box, layout);
-    const edge = nearestRectPoint(placement, anchor);
-
-    ctx.strokeStyle = "rgba(143, 201, 255, .82)";
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([5, 4]);
-    ctx.beginPath();
-    ctx.moveTo(edge.x, edge.y);
-    const midX = (edge.x + anchor.x) / 2;
-    const midY = (edge.y + anchor.y) / 2;
-    ctx.quadraticCurveTo(midX, midY - 10, anchor.x, anchor.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = "rgba(8, 20, 32, .94)";
-    ctx.strokeStyle = beat.confidence === "low" ? TOUR_DIM : TOUR_BLUE;
-    ctx.shadowColor = "rgba(0, 0, 0, .30)";
-    ctx.shadowBlur = 18;
-    roundRect(ctx, placement.x, placement.y, box.width, box.height, 8);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.stroke();
-
-    drawTourVisualGlyph(ctx, beat, placement.x + 18, placement.y + 24, 17);
-    ctx.fillStyle = TOUR_DIM;
-    ctx.font = "11px Microsoft JhengHei, Segoe UI, Arial";
-    ctx.fillText(label, placement.x + 42, placement.y + 21);
-    ctx.fillStyle = TOUR_INK;
-    ctx.font = "14px Microsoft JhengHei, Segoe UI, Arial";
-    lines.forEach((line, index) => {
-      ctx.fillText(line, placement.x + 18, placement.y + 47 + index * 19);
-    });
-
-    ctx.fillStyle = beat.confidence === "low" ? TOUR_DIM : TOUR_GOLD;
-    ctx.beginPath();
-    ctx.arc(anchor.x, anchor.y, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
   function updateTourDomCallout(beat, anchor = null, layout = null, view = null) {
     const ui = tourElements();
     if (!ui.callout || !tourState.active || !beat || !state.chartLargeMode) {
@@ -545,40 +463,69 @@
     const canvasTop = canvasRect.top - panelRect.top;
     const canvasRight = canvasLeft + canvasRect.width;
     const canvasBottom = canvasTop + canvasRect.height;
-    let score = bias;
+    const futureLeft = layout?.futureWidth
+      ? canvasLeft + (layout.plotRight / Math.max(1, layout.width)) * canvasRect.width
+      : null;
+    const hover = state.chartHoverPoint;
+    const hoverPoint = hover && Number.isFinite(hover.x) && Number.isFinite(hover.y)
+      ? { x: canvasLeft + hover.x, y: canvasTop + hover.y }
+      : null;
+    return bias + scoreCalloutGeometry(
+      rect,
+      anchorPoint,
+      collectCandleRects(canvasRect, panelRect, layout, view),
+      collectSupportLineYs(canvasRect, panelRect, layout),
+      hoverPoint,
+      {
+        left: canvasLeft,
+        right: canvasRight,
+        top: canvasTop,
+        bottom: canvasBottom,
+        recentLeft: canvasLeft + canvasRect.width * 0.62,
+        futureLeft,
+        bottomControlTop: canvasBottom - 92,
+      },
+    );
+  }
+
+  function scoreCalloutGeometry(rect, anchorPoint, candleRects = [], srYs = [], hoverPoint = null, bounds = {}) {
+    let score = 0;
     if (rectContains(rect, anchorPoint)) score += 900;
     const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     const anchorDistance = Math.hypot(center.x - anchorPoint.x, center.y - anchorPoint.y);
     if (anchorDistance < 96) score += 160 - anchorDistance;
-    const rightHeavyZone = canvasLeft + canvasRect.width * 0.62;
-    if (rect.x + rect.width > rightHeavyZone) score += 160;
-    if (layout?.futureWidth) {
-      const futureLeft = canvasLeft + (layout.plotRight / Math.max(1, layout.width)) * canvasRect.width;
-      if (rect.x + rect.width > futureLeft - 16) score += 220;
+    if (Number.isFinite(bounds?.recentLeft) && rect.x + rect.width > bounds.recentLeft) score += 160;
+    if (Number.isFinite(bounds?.futureLeft) && rect.x + rect.width > bounds.futureLeft - 16) score += 220;
+    if (hoverPoint && rectDistanceToPoint(rect, hoverPoint) < 72) score += 180;
+    candleRects.forEach((candleRect) => {
+      const weight = candleRect?.recent ? 1 : 0;
+      if (rectsOverlap(rect, candleRect)) score += weight ? 26 : 7;
+      const close = candleRect?.close || candleRect?.closePoint;
+      if (close && rectContains(rect, close)) score += weight ? 36 : 10;
+    });
+    srYs.forEach((y) => {
+      if (Number.isFinite(y) && y >= rect.y - 8 && y <= rect.y + rect.height + 8) score += 42;
+    });
+    if (Number.isFinite(bounds?.bottomControlTop) && rect.y + rect.height > bounds.bottomControlTop) score += 120;
+    if (
+      Number.isFinite(bounds?.top) &&
+      Number.isFinite(bounds?.left) &&
+      Number.isFinite(bounds?.right) &&
+      (rect.y < bounds.top + 6 || rect.x < bounds.left + 6 || rect.x + rect.width > bounds.right - 6)
+    ) {
+      score += 80;
     }
-    const hover = state.chartHoverPoint;
-    if (hover && Number.isFinite(hover.x) && Number.isFinite(hover.y)) {
-      const hoverPoint = {
-        x: canvasLeft + hover.x,
-        y: canvasTop + hover.y,
-      };
-      if (rectDistanceToPoint(rect, hoverPoint) < 72) score += 180;
-    }
-    score += candleOverlapPenalty(rect, canvasRect, panelRect, layout, view);
-    score += supportLineOverlapPenalty(rect, canvasRect, panelRect, layout);
-    if (rect.y + rect.height > canvasBottom - 92) score += 120;
-    if (rect.y < canvasTop + 6 || rect.x < canvasLeft + 6 || rect.x + rect.width > canvasRight - 6) score += 80;
     return score;
   }
 
-  function candleOverlapPenalty(rect, canvasRect, panelRect, layout, view) {
-    if (!layout || !view || !state._priceYOf || typeof chartXOf !== "function") return 0;
+  function collectCandleRects(canvasRect, panelRect, layout, view) {
+    if (!layout || !view || !state._priceYOf || typeof chartXOf !== "function") return [];
     const all = state.chartAll || [];
     const canvasLeft = canvasRect.left - panelRect.left;
     const canvasTop = canvasRect.top - panelRect.top;
     const scaleX = canvasRect.width / Math.max(1, layout.width);
     const scaleY = canvasRect.height / Math.max(1, layout.height);
-    let penalty = 0;
+    const rects = [];
     const step = Math.max(1, Math.ceil((view.end - view.start + 1) / 180));
     for (let index = view.start; index <= view.end; index += step) {
       const row = all[index];
@@ -596,22 +543,23 @@
         y: Math.min(yHigh, yLow) - 2,
         width: 10,
         height: Math.abs(yLow - yHigh) + 4,
+        close: { x, y: yClose },
+        recent: index > view.end - 45,
       };
-      if (rectsOverlap(rect, candleRect)) penalty += index > view.end - 45 ? 26 : 7;
-      if (rectContains(rect, { x, y: yClose })) penalty += index > view.end - 45 ? 36 : 10;
+      rects.push(candleRect);
     }
-    return penalty;
+    return rects;
   }
 
-  function supportLineOverlapPenalty(rect, canvasRect, panelRect, layout) {
-    if (!layout) return 0;
+  function collectSupportLineYs(canvasRect, panelRect, layout) {
+    if (!layout) return [];
     const canvasTop = canvasRect.top - panelRect.top;
     const scaleY = canvasRect.height / Math.max(1, layout.height);
-    return (state.chartSRLines || []).reduce((sum, line) => {
+    return (state.chartSRLines || []).reduce((ys, line) => {
       const y = canvasTop + Number(line.y) * scaleY;
-      if (!Number.isFinite(y)) return sum;
-      return y >= rect.y - 8 && y <= rect.y + rect.height + 8 ? sum + 42 : sum;
-    }, 0);
+      if (Number.isFinite(y)) ys.push(y);
+      return ys;
+    }, []);
   }
 
   function updateDomLeader(callout, leader, anchorPoint, placement) {
@@ -642,41 +590,6 @@
       personality: "◌",
       structure: "◌",
     }[chapter] || "●";
-  }
-
-  function chooseTourCalloutPlacement(anchor, box, layout) {
-    const bounds = {
-      left: layout.padding.left + 8,
-      right: layout.plotRight - 8,
-      top: layout.price.top + 8,
-      bottom: Math.max(layout.price.top + 120, layout.height - layout.padding.bottom - 82),
-    };
-    const candidates = [
-      { side: "safe-left", x: layout.padding.left + 18, y: anchor.y - box.height / 2 },
-      { side: "left", x: anchor.x - box.width - 28, y: anchor.y - box.height / 2 },
-      { side: "right", x: anchor.x + 28, y: anchor.y - box.height / 2 },
-      { side: "above", x: anchor.x - box.width / 2, y: anchor.y - box.height - 30 },
-      { side: "below", x: anchor.x - box.width / 2, y: anchor.y + 30 },
-    ];
-    const anchorInRecentZone = anchor.x > layout.padding.left + layout.innerWidth * 0.70;
-    const recentZoneLeft = layout.padding.left + layout.innerWidth * 0.64;
-    let best = null;
-    candidates.forEach((candidate) => {
-      const raw = { ...candidate, width: box.width, height: box.height };
-      const placed = {
-        ...raw,
-        x: tourClamp(raw.x, bounds.left, bounds.right - box.width),
-        y: tourClamp(raw.y, bounds.top, bounds.bottom - box.height),
-      };
-      const overflow = Math.abs(placed.x - raw.x) + Math.abs(placed.y - raw.y);
-      const recentPenalty = placed.x + box.width > recentZoneLeft && placed.y < layout.price.top + layout.price.height ? 80 : 0;
-      const anchorPenalty = rectContains(placed, anchor) ? 120 : 0;
-      const sidePenalty = candidate.side === "right" && anchor.x > recentZoneLeft ? 45 : 0;
-      const safeLeftBonus = candidate.side === "safe-left" && anchorInRecentZone ? -55 : 25;
-      const score = overflow + recentPenalty + anchorPenalty + sidePenalty + safeLeftBonus;
-      if (!best || score < best.score) best = { ...placed, score };
-    });
-    return best || { x: bounds.left, y: bounds.top, width: box.width, height: box.height };
   }
 
   function chooseTourAnchor(layout, view, targets) {
@@ -844,165 +757,6 @@
     ctx.fill();
   }
 
-  function drawTourVisualGlyph(ctx, beat, x, y, size) {
-    ctx.save();
-    ctx.strokeStyle = beat.confidence === "low" ? TOUR_DIM : TOUR_GOLD;
-    ctx.fillStyle = beat.confidence === "low" ? "rgba(161, 176, 194, .20)" : "rgba(228, 184, 79, .18)";
-    ctx.lineWidth = 1.7;
-    const chapter = beat.chapter;
-    if (chapter === "confirm") {
-      drawMiniArrow(ctx, x - size * 0.65, y + 4, chapterDirection(beat), size * 0.42);
-      drawMiniArrow(ctx, x, y + 4, "flat", size * 0.42);
-      drawCheckMark(ctx, x + size * 0.68, y + 1, size * 0.45);
-    } else if (chapter === "derivation") {
-      drawNodeLinkGlyph(ctx, x, y, size);
-    } else if (chapter === "progression") {
-      drawFunnelGlyph(ctx, x, y, size);
-    } else if (chapter === "personality" || chapter === "structure") {
-      drawClarityGlyph(ctx, x, y, size, beat.confidence);
-    } else if (chapter === "momentum") {
-      drawGaugeGlyph(ctx, x, y, size);
-    } else if (chapter === "volume") {
-      drawBarsGlyph(ctx, x, y, size);
-    } else if (chapter === "levels" || chapter === "watch") {
-      drawLevelGlyph(ctx, x, y, size);
-    } else if (chapter === "scenario") {
-      drawFanGlyph(ctx, x, y, size);
-    } else {
-      drawMarkerGlyph(ctx, x, y, size);
-    }
-    ctx.restore();
-  }
-
-  function drawMiniArrow(ctx, x, y, direction, size) {
-    const dy = direction === "down" ? size : direction === "up" ? -size : 0;
-    ctx.beginPath();
-    ctx.moveTo(x, y - dy * 0.5);
-    ctx.lineTo(x, y + dy);
-    ctx.stroke();
-    if (direction === "flat") {
-      ctx.beginPath();
-      ctx.moveTo(x - size * 0.45, y);
-      ctx.lineTo(x + size * 0.45, y);
-      ctx.stroke();
-      return;
-    }
-    const tipY = y + dy;
-    ctx.beginPath();
-    ctx.moveTo(x, tipY);
-    ctx.lineTo(x - size * 0.35, tipY - Math.sign(dy || -1) * size * 0.35);
-    ctx.lineTo(x + size * 0.35, tipY - Math.sign(dy || -1) * size * 0.35);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  function drawCheckMark(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.45, y);
-    ctx.lineTo(x - size * 0.12, y + size * 0.34);
-    ctx.lineTo(x + size * 0.5, y - size * 0.4);
-    ctx.stroke();
-  }
-
-  function drawNodeLinkGlyph(ctx, x, y, size) {
-    const points = [{ x: x - size * 0.65, y }, { x, y: y - size * 0.45 }, { x: x + size * 0.68, y: y + size * 0.36 }];
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    ctx.lineTo(points[1].x, points[1].y);
-    ctx.lineTo(points[2].x, points[2].y);
-    ctx.stroke();
-    points.forEach((point) => {
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, size * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    });
-  }
-
-  function drawFunnelGlyph(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.72, y - size * 0.46);
-    ctx.lineTo(x + size * 0.72, y - size * 0.46);
-    ctx.lineTo(x + size * 0.3, y + size * 0.1);
-    ctx.lineTo(x + size * 0.08, y + size * 0.62);
-    ctx.lineTo(x - size * 0.08, y + size * 0.62);
-    ctx.lineTo(x - size * 0.3, y + size * 0.1);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  function drawClarityGlyph(ctx, x, y, size, confidence) {
-    if (confidence === "low") ctx.setLineDash([2, 3]);
-    roundRect(ctx, x - size * 0.6, y - size * 0.5, size * 1.2, size, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.42, y);
-    ctx.lineTo(x + size * 0.42, y);
-    ctx.stroke();
-  }
-
-  function drawGaugeGlyph(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.arc(x, y + size * 0.38, size * 0.72, Math.PI, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y + size * 0.38);
-    ctx.lineTo(x + size * 0.38, y - size * 0.12);
-    ctx.stroke();
-  }
-
-  function drawBarsGlyph(ctx, x, y, size) {
-    [-0.5, 0, 0.5].forEach((offset, index) => {
-      const h = size * (0.45 + index * 0.18);
-      ctx.fillRect(x + offset * size - size * 0.12, y + size * 0.55 - h, size * 0.22, h);
-    });
-  }
-
-  function drawLevelGlyph(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.72, y);
-    ctx.lineTo(x + size * 0.72, y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.45, y + size * 0.42);
-    ctx.lineTo(x + size * 0.45, y + size * 0.42);
-    ctx.moveTo(x - size * 0.32, y + size * 0.42);
-    ctx.lineTo(x - size * 0.32, y);
-    ctx.moveTo(x + size * 0.32, y + size * 0.42);
-    ctx.lineTo(x + size * 0.32, y);
-    ctx.stroke();
-  }
-
-  function drawFanGlyph(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.moveTo(x - size * 0.55, y + size * 0.45);
-    ctx.quadraticCurveTo(x, y - size * 0.62, x + size * 0.65, y - size * 0.2);
-    ctx.lineTo(x + size * 0.65, y + size * 0.58);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  function drawMarkerGlyph(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.arc(x, y, size * 0.54, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  function chapterDirection(beat) {
-    const text = `${beat?.narration?.headline || ""} ${beat?.title || ""}`;
-    if (text.includes("下跌")) return "down";
-    if (text.includes("上漲")) return "up";
-    return "flat";
-  }
-
   function tourCalloutText(beat) {
     const headline = String(beat?.narration?.headline || "").trim();
     if (["personality", "confirm", "derivation", "progression"].includes(beat.chapter) && isLayerZeroText(headline)) {
@@ -1028,42 +782,6 @@
 
   function isLayerZeroText(text) {
     return Boolean(text) && !/[0-9０-９%％]|MA|EMA|MACD|KD|RSI|OBV|量比|法人|三大法人|布林/i.test(text);
-  }
-
-  function wrapTourText(ctx, text, maxWidth, maxLines) {
-    const chars = Array.from(String(text || ""));
-    const lines = [];
-    let current = "";
-    chars.forEach((char) => {
-      const next = current + char;
-      if (current && ctx.measureText(next).width > maxWidth) {
-        lines.push(current);
-        current = char.trimStart();
-      } else {
-        current = next;
-      }
-    });
-    if (current) lines.push(current);
-    if (lines.length > maxLines) {
-      const kept = lines.slice(0, maxLines);
-      let last = kept[kept.length - 1] || "";
-      while (last && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
-      kept[kept.length - 1] = `${last}…`;
-      return kept;
-    }
-    return lines.length ? lines : ["先看圖上標記的這一段。"];
-  }
-
-  function nearestRectPoint(rect, point) {
-    const x = tourClamp(point.x, rect.x, rect.x + rect.width);
-    const y = tourClamp(point.y, rect.y, rect.y + rect.height);
-    const distances = [
-      { x, y: rect.y, d: Math.abs(point.y - rect.y) },
-      { x, y: rect.y + rect.height, d: Math.abs(point.y - (rect.y + rect.height)) },
-      { x: rect.x, y, d: Math.abs(point.x - rect.x) },
-      { x: rect.x + rect.width, y, d: Math.abs(point.x - (rect.x + rect.width)) },
-    ];
-    return distances.sort((a, b) => a.d - b.d)[0];
   }
 
   function rectContains(rect, point) {
@@ -1132,40 +850,46 @@
     return Number.isFinite(number) ? number.toFixed(2) : "--";
   }
 
-  document.querySelector("#chartTourOverlay")?.addEventListener("click", (event) => {
-    const action = event.target.closest("[data-chart-tour-action]")?.dataset.chartTourAction;
-    if (!action) return;
-    if (action === "prev") stepChartTour(-1);
-    if (action === "next") stepChartTour(1);
-    if (action === "play") togglePlay();
-    if (action === "speed") cycleSpeed();
-    if (action === "close") stopChartTour();
-  });
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { scoreCalloutGeometry };
+  }
 
-  document.addEventListener("keydown", (event) => {
-    if (!tourState.active) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      stopChartTour();
-    }
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      stepChartTour(1);
-    }
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      stepChartTour(-1);
-    }
-    if (event.key === " ") {
-      event.preventDefault();
-      togglePlay();
-    }
-  }, true);
+  if (typeof window !== "undefined" && typeof document !== "undefined") {
+    document.querySelector("#chartTourOverlay")?.addEventListener("click", (event) => {
+      const action = event.target.closest("[data-chart-tour-action]")?.dataset.chartTourAction;
+      if (!action) return;
+      if (action === "prev") stepChartTour(-1);
+      if (action === "next") stepChartTour(1);
+      if (action === "play") togglePlay();
+      if (action === "speed") cycleSpeed();
+      if (action === "close") stopChartTour();
+    });
 
-  window.toggleChartTour = toggleChartTour;
-  window.stopChartTour = stopChartTour;
-  window.syncChartTourUi = syncChartTourUi;
-  window.drawChartTourOverlay = drawChartTourOverlay;
-  syncChartTourUi();
+    document.addEventListener("keydown", (event) => {
+      if (!tourState.active) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        stopChartTour();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        stepChartTour(1);
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        stepChartTour(-1);
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        togglePlay();
+      }
+    }, true);
+
+    window.toggleChartTour = toggleChartTour;
+    window.stopChartTour = stopChartTour;
+    window.syncChartTourUi = syncChartTourUi;
+    window.drawChartTourOverlay = drawChartTourOverlay;
+    syncChartTourUi();
+  }
 })();
