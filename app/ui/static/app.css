@@ -1471,14 +1471,31 @@ td.down { color: var(--down); font-weight: 600; }
   font-size: 13px;
 }
 .chart-tour-readout {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+  min-width: min(360px, 42vw);
+  max-width: min(520px, 48vw);
   overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
+  display: grid;
+  gap: 2px;
 }
+.chart-tour-readout h4 {
+  margin: 0;
+  color: #e7f2ff;
+  font-size: 12.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chart-tour-readout > p {
+  margin: 0;
+  color: #b8cde2;
+  font-size: 11.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chart-tour-readout .chart-tour-details { display: none; }
 .chart-tour-details {
   margin-top: 8px;
   border-top: 1px solid rgba(129, 194, 255, .18);
