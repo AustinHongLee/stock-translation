@@ -160,11 +160,15 @@
   function chapterLabel(chapter) {
     return {
       intro: "開場",
+      personality: "可信度",
+      confirm: "確認",
       trend: "趨勢",
       position: "位階",
       levels: "關卡",
       momentum: "動能",
       volume: "量能",
+      derivation: "來源",
+      progression: "階段",
       events: "事件",
       chips: "籌碼",
       fundamental: "基本面",

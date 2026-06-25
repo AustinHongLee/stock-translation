@@ -15,11 +15,15 @@ MAX_BEATS = 14
 
 CHAPTER_ORDER = (
     "intro",
+    "personality",
+    "confirm",
     "trend",
     "position",
     "levels",
     "momentum",
     "volume",
+    "derivation",
+    "progression",
     "events",
     "chips",
     "fundamental",
@@ -28,7 +32,7 @@ CHAPTER_ORDER = (
     "watch",
     "outro",
 )
-CORE_CHAPTERS = {"intro", "trend", "levels", "events", "watch", "outro"}
+CORE_CHAPTERS = {"intro", "personality", "confirm", "trend", "levels", "events", "watch", "outro"}
 
 
 def build_chart_tour(payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -38,11 +42,15 @@ def build_chart_tour(payload: dict[str, Any] | None) -> dict[str, Any]:
     beats: list[dict[str, Any]] = []
     builders = (
         _intro_beat,
+        _relationship_readability_beat,
+        lambda data, prices: _relationship_item_beat(data, "confirm", "confirm", "confirm_5d", "跨源確認：扎不扎實", 97),
         _trend_beat,
         _position_beat,
         _levels_beat,
         _momentum_beat,
         _volume_beat,
+        lambda data, prices: _relationship_item_beat(data, "derivation", "derivation", "derivation_macd", "來源關係：指標怎麼來", 58),
+        lambda data, prices: _relationship_item_beat(data, "progression", "progression", "progression_ma_spread", "階段關係：黏合或散開", 57),
         _events_beat,
         _chips_beat,
         _fundamental_beat,
@@ -117,6 +125,58 @@ def _intro_beat(payload: dict[str, Any], prices: list[dict[str, Any]]) -> dict[s
         targets=[],
         confidence=_confidence_from_rows(summary.get("rows")),
         priority=100,
+    )
+
+
+def _relationship_readability_beat(payload: dict[str, Any], prices: list[dict[str, Any]]) -> dict[str, Any] | None:
+    relationships = _dict(payload.get("relationships"))
+    readability = _dict(relationships.get("readability"))
+    if not readability:
+        return None
+    level = str(readability.get("level") or "medium")
+    return _beat(
+        "personality.readability",
+        "personality",
+        "先看這檔好不好讀",
+        headline=str(readability.get("plain") or "這檔可讀性先保守看。"),
+        why=str(readability.get("why") or "性格層只當事件層的可信度濾鏡。"),
+        caution=str(readability.get("forbidden") or "可信度只表示資料好不好閱讀，不代表方向。"),
+        source="relationships.readability",
+        targets=[],
+        confidence=level if level in {"high", "medium", "low"} else "medium",
+        priority=98,
+    )
+
+
+def _relationship_item_beat(
+    payload: dict[str, Any],
+    group: str,
+    chapter: str,
+    preferred_key: str,
+    fallback_title: str,
+    priority: int,
+) -> dict[str, Any] | None:
+    relationships = _dict(payload.get("relationships"))
+    items = [item for item in relationships.get("items") or [] if isinstance(item, dict) and item.get("group") == group]
+    if not items:
+        return None
+    item = next((entry for entry in items if entry.get("key") == preferred_key), items[0])
+    narration = _dict(item.get("narration"))
+    reliability = str(item.get("reliability") or "medium")
+    detail = str(narration.get("detail") or "")
+    forbidden = str(item.get("forbidden") or "這段只描述目前資料，不是操作理由。")
+    caution = " ".join(part for part in [detail, forbidden] if part)
+    return _beat(
+        f"relationships.{item.get('key') or group}",
+        chapter,
+        str(item.get("label") or fallback_title),
+        headline=str(narration.get("plain") or item.get("label") or fallback_title),
+        why=str(narration.get("why") or "這是把既有資料的關係整理成讀圖順序。"),
+        caution=caution,
+        source=f"relationships.{item.get('key') or group}",
+        targets=[target for target in item.get("targets") or [] if isinstance(target, dict)],
+        confidence=reliability if reliability in {"high", "medium", "low"} else "medium",
+        priority=priority,
     )
 
 

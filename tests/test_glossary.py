@@ -29,6 +29,7 @@ class GlossaryTests(unittest.TestCase):
             "振幅", "年化波動度", "VWAP", "支撐 / 壓力",
             "延續性", "複雜度", "波動聚集", "噪音色", "湍流程度", "同步性",
             "市場波動(分化)", "羊群程度", "同步度",
+            "跨源確認", "扎實度", "可信度濾鏡", "衍生鏈",
         ):
             self.assertIn(term, terms)
             self.assertGreater(len(str(terms[term]["reminder"])), 8)
@@ -41,6 +42,10 @@ class GlossaryTests(unittest.TestCase):
         self.assertEqual(aliases["市場同步"], "同步性")
         self.assertEqual(aliases["平均相關"], "羊群程度")
         self.assertEqual(aliases["最大模態"], "同步度")
+        self.assertEqual(aliases["價量法人對齊"], "跨源確認")
+        self.assertEqual(aliases["扎不扎實"], "扎實度")
+        self.assertEqual(aliases["可讀性"], "可信度濾鏡")
+        self.assertEqual(aliases["來源關係"], "衍生鏈")
 
     def test_glossary_public_text_avoids_project_redline_words(self) -> None:
         payload = glossary_payload()

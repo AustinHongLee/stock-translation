@@ -22,6 +22,7 @@ from app.analyze.chart_tour import build_chart_tour
 from app.analyze.historical_frequency import build_historical_frequency_report
 from app.analyze.indicator_registry import indicator_catalog
 from app.analyze.indicators import compute_features
+from app.analyze.relationships import build_relationships_payload
 from app.analyze.market_calendar import MarketTargetDate, resolve_market_target_date
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
@@ -935,6 +936,15 @@ def build_stock_payload(
         "indicator_prefs": build_indicator_prefs_payload(store),
         "annotations": store.get_chart_annotations(stock_id),
     }
+    try:
+        payload["relationships"] = build_relationships_payload(payload)
+    except Exception as exc:  # noqa: BLE001 - relationship layer must not block stock page
+        payload["relationships"] = {
+            "available": False,
+            "items": [],
+            "disclaimer": "資料關係描述：只整理目前資料彼此是否同向，非投資建議。",
+            "error": str(exc),
+        }
     try:
         payload["chart_tour"] = build_chart_tour(payload)
     except Exception as exc:  # noqa: BLE001 - chart tour must not block stock page

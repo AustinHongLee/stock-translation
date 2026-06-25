@@ -9,6 +9,7 @@ from app.analyze.assessment import build_assessment
 from app.analyze.chart_tour import MAX_BEATS, build_chart_tour
 from app.analyze.historical_frequency import build_historical_frequency_report
 from app.analyze.indicators import compute_features
+from app.analyze.relationships import build_relationships_payload
 from app.analyze.structure_registry import build_structure_payload
 
 
@@ -71,6 +72,10 @@ def _payload(*, include_optional: bool = True) -> dict[str, object]:
                     "latest": {"foreign_net": 100, "trust_net": -50, "dealer_net": 25, "total_net": 75},
                     "sum_20": {"total_net": 880, "days": 20},
                 },
+                "chips_series": [
+                    {"date": str(item["date"]), "total_net": 80 + index}
+                    for index, item in enumerate(prices[-24:])
+                ],
                 "revenue_summary": {
                     "available": True,
                     "facts": [{"label": "年增率", "value": 13.2}],
@@ -86,6 +91,7 @@ def _payload(*, include_optional: bool = True) -> dict[str, object]:
                 "historical_frequency": build_historical_frequency_report(prices),
             }
         )
+        payload["relationships"] = build_relationships_payload(payload)
     return payload
 
 
@@ -96,6 +102,8 @@ def test_chart_tour_builds_guardrailed_beats() -> None:
     assert len(tour["beats"]) <= MAX_BEATS
     chapters = [beat["chapter"] for beat in tour["beats"]]
     assert chapters[0] == "intro"
+    assert "personality" in chapters
+    assert "confirm" in chapters
     assert "trend" in chapters
     assert "levels" in chapters
     assert "watch" in chapters
@@ -127,6 +135,8 @@ def test_missing_optional_sections_are_skipped_without_errors() -> None:
 
     assert tour["available"] is True
     assert "chips" not in chapters
+    assert "personality" not in chapters
+    assert "confirm" not in chapters
     assert "fundamental" not in chapters
     assert "structure" not in chapters
     assert "scenario" not in chapters
