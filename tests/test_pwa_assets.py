@@ -30,10 +30,13 @@ class PWAAssetsTests(unittest.TestCase):
         sw = (STATIC_DIR / "sw.js").read_text(encoding="utf-8")
 
         self.assertIn("CACHE_NAME", sw)
-        self.assertIn("stock-translator-shell-v2", sw)
+        self.assertIn("stock-translator-shell-v3", sw)
         self.assertIn("/static/app.css", sw)
         self.assertIn("/static/app.js", sw)
+        self.assertIn("/static/chart_tour.js", sw)
         self.assertIn('url.pathname.startsWith("/api/")', sw)
+        self.assertIn('url.pathname.endsWith(".js")', sw)
+        self.assertIn('url.pathname.endsWith(".css")', sw)
         self.assertIn("networkFirst(request)", sw)
         self.assertIn("reloadControlledClients", sw)
         self.assertIn("client.navigate(client.url)", sw)
@@ -45,6 +48,7 @@ class PWAAssetsTests(unittest.TestCase):
         self.assertIn('rel="manifest"', html)
         self.assertIn('name="theme-color"', html)
         self.assertIn("app-icon-192.png", html)
+        self.assertIn('/static/chart_tour.js?v=20260625-tour-callout', html)
         self.assertIn('serviceWorker.register("/sw.js")', js)
 
 

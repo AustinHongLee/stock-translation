@@ -13,6 +13,7 @@
   const TOUR_DIM = "rgba(161, 176, 194, .72)";
 
   function tourElements() {
+    ensureTourCalloutElements();
     return {
       button: document.querySelector("#chartTourBtn"),
       overlay: document.querySelector("#chartTourOverlay"),
@@ -32,6 +33,26 @@
       calloutLabel: document.querySelector("#chartTourCalloutLabel"),
       calloutText: document.querySelector("#chartTourCalloutText"),
     };
+  }
+
+  function ensureTourCalloutElements() {
+    if (document.querySelector("#chartTourCallout")) return;
+    const canvas = document.querySelector("#priceChart");
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
+    const callout = document.createElement("div");
+    callout.id = "chartTourCallout";
+    callout.className = "chart-tour-callout hidden";
+    callout.setAttribute("aria-hidden", "true");
+    callout.innerHTML = `
+      <div id="chartTourCalloutLeader" class="chart-tour-callout-leader"></div>
+      <div class="chart-tour-callout-meta">
+        <span id="chartTourCalloutIcon" aria-hidden="true">●</span>
+        <b id="chartTourCalloutLabel">讀圖</b>
+      </div>
+      <p id="chartTourCalloutText">--</p>
+    `;
+    parent.insertBefore(callout, canvas.nextSibling);
   }
 
   function currentTour() {

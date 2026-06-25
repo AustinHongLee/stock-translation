@@ -1,9 +1,10 @@
-const CACHE_NAME = "stock-translator-shell-v2";
+const CACHE_NAME = "stock-translator-shell-v3";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
   "/static/app.css",
   "/static/app.js",
+  "/static/chart_tour.js",
   "/static/assets/app-icon-192.png",
   "/static/assets/app-icon-512.png",
   "/static/assets/company-placeholder.png",
@@ -41,7 +42,13 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
-  if (request.mode === "navigate" || url.pathname === "/" || APP_SHELL.includes(url.pathname)) {
+  if (
+    request.mode === "navigate"
+    || url.pathname === "/"
+    || APP_SHELL.includes(url.pathname)
+    || url.pathname.endsWith(".js")
+    || url.pathname.endsWith(".css")
+  ) {
     event.respondWith(networkFirst(request));
     return;
   }

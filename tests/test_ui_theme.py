@@ -125,6 +125,7 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("function drawTourReliabilityFilter", tour_js)
         self.assertIn("function updateTourDomCallout", tour_js)
         self.assertIn("function hideTourDomCallout", tour_js)
+        self.assertIn("function ensureTourCalloutElements", tour_js)
         self.assertIn("function tourCalloutText", tour_js)
         self.assertIn("function drawTourConnectionArrows", tour_js)
         self.assertIn("toggleChartTour", tour_js)
