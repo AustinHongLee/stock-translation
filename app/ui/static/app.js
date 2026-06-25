@@ -5460,6 +5460,7 @@ function toggleLargeChart(force) {
   if (!panel) return;
   const entering = typeof force === "boolean" ? force : !state.chartLargeMode;
   state.chartLargeMode = entering;
+  if (entering) window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   panel.classList.toggle("chart-lab-mode", entering);
   document.body.classList.toggle("chart-lab-open", entering);
   elements.chartLargeBtn?.classList.toggle("is-active", entering);

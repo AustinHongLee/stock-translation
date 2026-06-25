@@ -1407,6 +1407,10 @@ td.down { color: var(--down); font-weight: 600; }
 .chart-panel.chart-lab-mode {
   position: fixed;
   inset: 14px;
+  width: calc(100vw - 28px);
+  height: calc(100vh - 28px);
+  max-width: calc(100vw - 28px);
+  max-height: calc(100vh - 28px);
   z-index: 70;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
@@ -1425,22 +1429,29 @@ td.down { color: var(--down); font-weight: 600; }
 }
 .chart-tour-overlay {
   position: absolute;
-  left: 72px;
-  right: 86px;
-  bottom: 48px;
+  left: 50%;
+  right: auto;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 96px);
   z-index: 6;
   pointer-events: none;
 }
 .chart-tour-shell {
   pointer-events: auto;
-  width: min(760px, 100%);
+  width: max-content;
+  max-width: min(780px, 100%);
   border: 1px solid rgba(129, 194, 255, .42);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(10, 24, 38, .92);
   box-shadow: 0 16px 42px rgba(0,0,0,.28);
   color: #e7f2ff;
-  padding: 12px 14px;
+  padding: 8px 10px;
   backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
 }
 .chart-tour-meta {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -1458,6 +1469,15 @@ td.down { color: var(--down); font-weight: 600; }
   margin: 0;
   line-height: 1.55;
   font-size: 13px;
+}
+.chart-tour-readout {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .chart-tour-details {
   margin-top: 8px;
@@ -1478,7 +1498,7 @@ td.down { color: var(--down); font-weight: 600; }
 .chart-tour-dots {
   display: flex;
   gap: 5px;
-  margin-top: 10px;
+  margin-top: 0;
   flex-wrap: wrap;
 }
 .chart-tour-dot {
@@ -1491,7 +1511,7 @@ td.down { color: var(--down); font-weight: 600; }
   gap: 7px;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 0;
 }
 .chart-tour-controls .chart-size-btn {
   color: #cfe6ff;
@@ -1504,9 +1524,11 @@ td.down { color: var(--down); font-weight: 600; }
   background: #e4b84f;
 }
 .chart-tour-disclaimer {
-  margin-top: 9px !important;
+  margin-top: 0 !important;
   color: #8fa3b7;
   font-size: 11px !important;
+  flex-basis: 100%;
+  text-align: center;
 }
 .chart-panel.chart-lab-mode .surface-head { grid-area: head; margin-bottom: 0; }
 .chart-panel.chart-lab-mode .chart-translation-panel { grid-area: translate; }
