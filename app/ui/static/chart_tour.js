@@ -226,8 +226,7 @@
     drawTourReliabilityFilter(ctx, layout, beat);
     targets.forEach((target) => drawTourTarget(ctx, layout, view, target));
     drawTourConnectionArrows(ctx, layout, view, beat, targets);
-    drawTourAnchoredCallout(ctx, layout, beat, anchor);
-    updateTourDomCallout(beat, anchor, layout);
+    updateTourDomCallout(beat, anchor, layout, view);
     ctx.restore();
   }
 
@@ -435,7 +434,7 @@
     ctx.restore();
   }
 
-  function updateTourDomCallout(beat, anchor = null, layout = null) {
+  function updateTourDomCallout(beat, anchor = null, layout = null, view = null) {
     const ui = tourElements();
     if (!ui.callout || !tourState.active || !beat || !state.chartLargeMode) {
       hideTourDomCallout();
@@ -455,15 +454,19 @@
     const canvasRect = canvas.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
     const anchorPoint = domAnchorPoint(anchor, layout, canvasRect, panelRect);
-    const placement = placeDomCallout(anchorPoint, canvasRect, panelRect, ui.callout);
-    ui.callout.classList.remove("hidden", "is-low");
-    ui.callout.classList.toggle("is-low", beat.confidence === "low");
-    ui.callout.setAttribute("aria-hidden", "false");
-    ui.callout.style.left = `${placement.x}px`;
-    ui.callout.style.top = `${placement.y}px`;
     if (ui.calloutLabel) ui.calloutLabel.textContent = `${chapterLabel(beat.chapter)} · ${confidenceLabel(beat.confidence)}`;
     if (ui.calloutText) ui.calloutText.textContent = text;
     if (ui.calloutIcon) ui.calloutIcon.textContent = glyphSymbol(beat.chapter);
+    ui.callout.classList.remove("hidden", "is-low");
+    ui.callout.classList.toggle("is-low", beat.confidence === "low");
+    ui.callout.setAttribute("aria-hidden", "false");
+    ui.callout.style.visibility = "hidden";
+    ui.callout.style.left = "0px";
+    ui.callout.style.top = "0px";
+    const placement = placeDomCallout(anchorPoint, canvasRect, panelRect, ui.callout, layout, view);
+    ui.callout.style.left = `${placement.x}px`;
+    ui.callout.style.top = `${placement.y}px`;
+    ui.callout.style.visibility = "";
     updateDomLeader(ui.callout, ui.calloutLeader, anchorPoint, placement);
   }
 
@@ -488,24 +491,127 @@
     };
   }
 
-  function placeDomCallout(anchorPoint, canvasRect, panelRect, callout) {
+  function placeDomCallout(anchorPoint, canvasRect, panelRect, callout, layout = null, view = null) {
     const width = Math.max(230, Math.min(320, callout.getBoundingClientRect().width || 286));
     const height = Math.max(76, Math.min(126, callout.getBoundingClientRect().height || 86));
     const canvasLeft = canvasRect.left - panelRect.left;
     const canvasTop = canvasRect.top - panelRect.top;
     const canvasRight = canvasLeft + canvasRect.width;
     const canvasBottom = canvasTop + canvasRect.height;
-    const preferLeft = anchorPoint.x > canvasLeft + canvasRect.width * 0.58;
-    const x = preferLeft
-      ? canvasLeft + 26
-      : Math.min(anchorPoint.x + 34, canvasRight - width - 18);
-    const y = tourClamp(anchorPoint.y - height * 0.52, canvasTop + 14, Math.max(canvasTop + 14, canvasBottom - height - 88));
-    return {
-      x: tourClamp(x, canvasLeft + 12, Math.max(canvasLeft + 12, canvasRight - width - 12)),
-      y,
-      width,
-      height,
+    const bounds = {
+      left: canvasLeft + 12,
+      right: canvasRight - 12,
+      top: canvasTop + 14,
+      bottom: Math.max(canvasTop + 120, canvasBottom - 108),
     };
+    const candidates = domCalloutCandidates(anchorPoint, bounds, width, height);
+    let best = null;
+    candidates.forEach((candidate) => {
+      const placed = {
+        ...candidate,
+        x: tourClamp(candidate.x, bounds.left, Math.max(bounds.left, bounds.right - width)),
+        y: tourClamp(candidate.y, bounds.top, Math.max(bounds.top, bounds.bottom - height)),
+        width,
+        height,
+      };
+      const score = scoreDomCalloutPlacement(placed, anchorPoint, canvasRect, panelRect, layout, view, candidate.bias || 0);
+      if (!best || score < best.score) best = { ...placed, score };
+    });
+    return best || { x: bounds.left, y: bounds.top, width, height };
+  }
+
+  function domCalloutCandidates(anchorPoint, bounds, width, height) {
+    const midY = (bounds.top + bounds.bottom - height) / 2;
+    const lowY = bounds.bottom - height;
+    const midX = (bounds.left + bounds.right - width) / 2;
+    return [
+      { x: bounds.left + 12, y: bounds.top + 10, bias: 8 },
+      { x: bounds.left + 12, y: midY, bias: 20 },
+      { x: bounds.left + 12, y: lowY, bias: 38 },
+      { x: midX, y: bounds.top + 10, bias: 36 },
+      { x: midX, y: lowY, bias: 52 },
+      { x: bounds.right - width - 12, y: bounds.top + 10, bias: 72 },
+      { x: bounds.right - width - 12, y: midY, bias: 96 },
+      { x: bounds.right - width - 12, y: lowY, bias: 110 },
+      { x: anchorPoint.x - width - 42, y: anchorPoint.y - height * 0.5, bias: 26 },
+      { x: anchorPoint.x + 42, y: anchorPoint.y - height * 0.5, bias: 42 },
+      { x: anchorPoint.x - width * 0.5, y: anchorPoint.y - height - 34, bias: 34 },
+      { x: anchorPoint.x - width * 0.5, y: anchorPoint.y + 34, bias: 70 },
+    ];
+  }
+
+  function scoreDomCalloutPlacement(rect, anchorPoint, canvasRect, panelRect, layout, view, bias) {
+    const canvasLeft = canvasRect.left - panelRect.left;
+    const canvasTop = canvasRect.top - panelRect.top;
+    const canvasRight = canvasLeft + canvasRect.width;
+    const canvasBottom = canvasTop + canvasRect.height;
+    let score = bias;
+    if (rectContains(rect, anchorPoint)) score += 900;
+    const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    const anchorDistance = Math.hypot(center.x - anchorPoint.x, center.y - anchorPoint.y);
+    if (anchorDistance < 96) score += 160 - anchorDistance;
+    const rightHeavyZone = canvasLeft + canvasRect.width * 0.62;
+    if (rect.x + rect.width > rightHeavyZone) score += 160;
+    if (layout?.futureWidth) {
+      const futureLeft = canvasLeft + (layout.plotRight / Math.max(1, layout.width)) * canvasRect.width;
+      if (rect.x + rect.width > futureLeft - 16) score += 220;
+    }
+    const hover = state.chartHoverPoint;
+    if (hover && Number.isFinite(hover.x) && Number.isFinite(hover.y)) {
+      const hoverPoint = {
+        x: canvasLeft + hover.x,
+        y: canvasTop + hover.y,
+      };
+      if (rectDistanceToPoint(rect, hoverPoint) < 72) score += 180;
+    }
+    score += candleOverlapPenalty(rect, canvasRect, panelRect, layout, view);
+    score += supportLineOverlapPenalty(rect, canvasRect, panelRect, layout);
+    if (rect.y + rect.height > canvasBottom - 92) score += 120;
+    if (rect.y < canvasTop + 6 || rect.x < canvasLeft + 6 || rect.x + rect.width > canvasRight - 6) score += 80;
+    return score;
+  }
+
+  function candleOverlapPenalty(rect, canvasRect, panelRect, layout, view) {
+    if (!layout || !view || !state._priceYOf || typeof chartXOf !== "function") return 0;
+    const all = state.chartAll || [];
+    const canvasLeft = canvasRect.left - panelRect.left;
+    const canvasTop = canvasRect.top - panelRect.top;
+    const scaleX = canvasRect.width / Math.max(1, layout.width);
+    const scaleY = canvasRect.height / Math.max(1, layout.height);
+    let penalty = 0;
+    const step = Math.max(1, Math.ceil((view.end - view.start + 1) / 180));
+    for (let index = view.start; index <= view.end; index += step) {
+      const row = all[index];
+      if (!row) continue;
+      const high = Number(row.high);
+      const low = Number(row.low);
+      const close = Number(row.close);
+      if (!Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) continue;
+      const x = canvasLeft + chartXOf(index, view, layout) * scaleX;
+      const yHigh = canvasTop + state._priceYOf(high) * scaleY;
+      const yLow = canvasTop + state._priceYOf(low) * scaleY;
+      const yClose = canvasTop + state._priceYOf(close) * scaleY;
+      const candleRect = {
+        x: x - 5,
+        y: Math.min(yHigh, yLow) - 2,
+        width: 10,
+        height: Math.abs(yLow - yHigh) + 4,
+      };
+      if (rectsOverlap(rect, candleRect)) penalty += index > view.end - 45 ? 26 : 7;
+      if (rectContains(rect, { x, y: yClose })) penalty += index > view.end - 45 ? 36 : 10;
+    }
+    return penalty;
+  }
+
+  function supportLineOverlapPenalty(rect, canvasRect, panelRect, layout) {
+    if (!layout) return 0;
+    const canvasTop = canvasRect.top - panelRect.top;
+    const scaleY = canvasRect.height / Math.max(1, layout.height);
+    return (state.chartSRLines || []).reduce((sum, line) => {
+      const y = canvasTop + Number(line.y) * scaleY;
+      if (!Number.isFinite(y)) return sum;
+      return y >= rect.y - 8 && y <= rect.y + rect.height + 8 ? sum + 42 : sum;
+    }, 0);
   }
 
   function updateDomLeader(callout, leader, anchorPoint, placement) {
@@ -962,6 +1068,16 @@
 
   function rectContains(rect, point) {
     return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+  }
+
+  function rectDistanceToPoint(rect, point) {
+    const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width));
+    const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height));
+    return Math.hypot(dx, dy);
   }
 
   function tourClamp(value, min, max) {
