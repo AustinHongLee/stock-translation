@@ -26,6 +26,11 @@
       play: document.querySelector("#chartTourPlayBtn"),
       speed: document.querySelector("#chartTourSpeedBtn"),
       disclaimer: document.querySelector("#chartTourDisclaimer"),
+      callout: document.querySelector("#chartTourCallout"),
+      calloutLeader: document.querySelector("#chartTourCalloutLeader"),
+      calloutIcon: document.querySelector("#chartTourCalloutIcon"),
+      calloutLabel: document.querySelector("#chartTourCalloutLabel"),
+      calloutText: document.querySelector("#chartTourCalloutText"),
     };
   }
 
@@ -85,6 +90,7 @@
     tourState.playing = false;
     const ui = tourElements();
     ui.overlay?.classList.add("hidden");
+    hideTourDomCallout();
     ui.button?.classList.remove("is-active");
     if (!options.silent) drawChart();
   }
@@ -136,7 +142,10 @@
     const beat = currentBeat();
     if (!ui.overlay) return;
     ui.overlay.classList.toggle("hidden", !tourState.active || !beat);
-    if (!tourState.active || !beat || !tour) return;
+    if (!tourState.active || !beat || !tour) {
+      hideTourDomCallout();
+      return;
+    }
     const narration = beat.narration || {};
     ui.chapter.textContent = `${chapterLabel(beat.chapter)} · ${confidenceLabel(beat.confidence)}`;
     ui.progress.textContent = `${tourState.index + 1} / ${tour.beats.length}`;
@@ -145,6 +154,7 @@
     ui.why.textContent = narration.why || "--";
     ui.caution.textContent = narration.caution || "--";
     ui.disclaimer.textContent = tour.disclaimer || "讀圖識讀教學 · 描述現在 · 非預測 · 非投資建議";
+    updateTourDomCallout(beat);
     if (ui.play) {
       ui.play.textContent = tourState.playing ? "暫停" : "播放";
       ui.play.classList.toggle("is-active", tourState.playing);
@@ -196,6 +206,7 @@
     targets.forEach((target) => drawTourTarget(ctx, layout, view, target));
     drawTourConnectionArrows(ctx, layout, view, beat, targets);
     drawTourAnchoredCallout(ctx, layout, beat, anchor);
+    updateTourDomCallout(beat, anchor, layout);
     ctx.restore();
   }
 
@@ -401,6 +412,109 @@
     ctx.arc(anchor.x, anchor.y, 4.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+  }
+
+  function updateTourDomCallout(beat, anchor = null, layout = null) {
+    const ui = tourElements();
+    if (!ui.callout || !tourState.active || !beat || !state.chartLargeMode) {
+      hideTourDomCallout();
+      return;
+    }
+    const text = tourCalloutText(beat);
+    if (!text) {
+      hideTourDomCallout();
+      return;
+    }
+    const canvas = document.querySelector("#priceChart");
+    const panel = canvas?.closest(".chart-panel");
+    if (!canvas || !panel) {
+      hideTourDomCallout();
+      return;
+    }
+    const canvasRect = canvas.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const anchorPoint = domAnchorPoint(anchor, layout, canvasRect, panelRect);
+    const placement = placeDomCallout(anchorPoint, canvasRect, panelRect, ui.callout);
+    ui.callout.classList.remove("hidden", "is-low");
+    ui.callout.classList.toggle("is-low", beat.confidence === "low");
+    ui.callout.setAttribute("aria-hidden", "false");
+    ui.callout.style.left = `${placement.x}px`;
+    ui.callout.style.top = `${placement.y}px`;
+    if (ui.calloutLabel) ui.calloutLabel.textContent = `${chapterLabel(beat.chapter)} · ${confidenceLabel(beat.confidence)}`;
+    if (ui.calloutText) ui.calloutText.textContent = text;
+    if (ui.calloutIcon) ui.calloutIcon.textContent = glyphSymbol(beat.chapter);
+    updateDomLeader(ui.callout, ui.calloutLeader, anchorPoint, placement);
+  }
+
+  function hideTourDomCallout() {
+    const ui = tourElements();
+    if (!ui.callout) return;
+    ui.callout.classList.add("hidden");
+    ui.callout.setAttribute("aria-hidden", "true");
+  }
+
+  function domAnchorPoint(anchor, layout, canvasRect, panelRect) {
+    const local = anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y)
+      ? anchor
+      : { x: canvasRect.width * 0.72, y: canvasRect.height * 0.42 };
+    const layoutWidth = layout?.width || canvasRect.width || 1;
+    const layoutHeight = layout?.height || canvasRect.height || 1;
+    const scaleX = canvasRect.width / layoutWidth;
+    const scaleY = canvasRect.height / layoutHeight;
+    return {
+      x: canvasRect.left - panelRect.left + local.x * scaleX,
+      y: canvasRect.top - panelRect.top + local.y * scaleY,
+    };
+  }
+
+  function placeDomCallout(anchorPoint, canvasRect, panelRect, callout) {
+    const width = Math.max(230, Math.min(320, callout.getBoundingClientRect().width || 286));
+    const height = Math.max(76, Math.min(126, callout.getBoundingClientRect().height || 86));
+    const canvasLeft = canvasRect.left - panelRect.left;
+    const canvasTop = canvasRect.top - panelRect.top;
+    const canvasRight = canvasLeft + canvasRect.width;
+    const canvasBottom = canvasTop + canvasRect.height;
+    const preferLeft = anchorPoint.x > canvasLeft + canvasRect.width * 0.58;
+    const x = preferLeft
+      ? canvasLeft + 26
+      : Math.min(anchorPoint.x + 34, canvasRight - width - 18);
+    const y = tourClamp(anchorPoint.y - height * 0.52, canvasTop + 14, Math.max(canvasTop + 14, canvasBottom - height - 88));
+    return {
+      x: tourClamp(x, canvasLeft + 12, Math.max(canvasLeft + 12, canvasRight - width - 12)),
+      y,
+      width,
+      height,
+    };
+  }
+
+  function updateDomLeader(callout, leader, anchorPoint, placement) {
+    if (!leader) return;
+    const fromLeft = anchorPoint.x < placement.x;
+    const fromX = fromLeft ? 0 : placement.width;
+    const fromY = placement.height * 0.5;
+    const dx = anchorPoint.x - (placement.x + fromX);
+    const dy = anchorPoint.y - (placement.y + fromY);
+    const length = Math.max(24, Math.min(220, Math.hypot(dx, dy)));
+    leader.style.left = `${fromX}px`;
+    leader.style.top = `${fromY}px`;
+    leader.style.width = `${length}px`;
+    leader.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+    leader.style.transformOrigin = fromLeft ? "0 50%" : "0 50%";
+  }
+
+  function glyphSymbol(chapter) {
+    return {
+      confirm: "✓",
+      derivation: "↔",
+      progression: "⌄",
+      momentum: "◒",
+      volume: "▮",
+      levels: "━",
+      watch: "◇",
+      scenario: "◖",
+      personality: "◌",
+      structure: "◌",
+    }[chapter] || "●";
   }
 
   function chooseTourCalloutPlacement(anchor, box, layout) {

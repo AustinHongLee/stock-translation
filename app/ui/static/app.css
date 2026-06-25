@@ -1437,6 +1437,52 @@ td.down { color: var(--down); font-weight: 600; }
   z-index: 6;
   pointer-events: none;
 }
+.chart-tour-callout {
+  position: absolute;
+  z-index: 7;
+  width: min(320px, 32vw);
+  min-width: 230px;
+  border: 1px solid rgba(129, 194, 255, .74);
+  border-radius: 8px;
+  background: rgba(8, 20, 32, .96);
+  box-shadow: 0 16px 38px rgba(0,0,0,.34), 0 0 0 1px rgba(143, 201, 255, .12) inset;
+  color: #e7f2ff;
+  padding: 10px 12px 11px;
+  pointer-events: none;
+}
+.chart-tour-callout-leader {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 64px;
+  border-top: 1px dashed rgba(143, 201, 255, .82);
+  transform-origin: 0 50%;
+}
+.chart-tour-callout-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9ed0ff;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.chart-tour-callout-meta span {
+  color: #e4b84f;
+  font-size: 13px;
+}
+.chart-tour-callout p {
+  margin: 7px 0 0;
+  color: #e7f2ff;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.chart-tour-callout.is-low {
+  border-color: rgba(161, 176, 194, .74);
+  background: rgba(12, 23, 34, .92);
+}
+.chart-tour-callout.is-low .chart-tour-callout-leader { border-top-color: rgba(161, 176, 194, .72); }
 .chart-tour-shell {
   pointer-events: auto;
   width: max-content;
