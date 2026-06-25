@@ -49,12 +49,16 @@ class PublicReadOnlyASGITests(unittest.TestCase):
 
             search = _request_json(app, "GET", "/api/search", query={"q": "台積"})
             stock = _request_json(app, "GET", "/api/stocks/2330", query={"days": "30"})
+            forecast = _request_json(app, "GET", "/api/stocks/2330/forecast-lab", query={"days": "30"})
 
         self.assertEqual(search["status"], 200)
         self.assertEqual(search["json"]["results"][0]["stock_id"], "2330")
         self.assertEqual(stock["status"], 200)
         self.assertEqual(stock["json"]["profile"]["short_name"], "台積電")
         self.assertEqual(stock["json"]["quote"]["status"], "unavailable")
+        self.assertEqual(forecast["status"], 200)
+        self.assertTrue(forecast["json"]["experimental"])
+        self.assertEqual(forecast["json"]["stock_id"], "2330")
 
 
 def _seed_private_db(tmp_path: Path) -> Path:

@@ -19,7 +19,7 @@
     <title>股票翻譯機 · 投資作業系統</title>
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/assets/app-icon-192.png">
-    <link rel="stylesheet" href="/static/app.css?v=20260625-tour-review1">
+    <link rel="stylesheet" href="/static/app.css?v=20260625-forecast-lab1">
   </head>
   <body data-sheet="dashboard" data-theme="light">
     <div class="app-shell">
@@ -961,6 +961,9 @@
                       <span class="chart-tour-icon" aria-hidden="true"></span>讀圖導覽
                     </button>
                     <button id="chartIntradayBtn" type="button" class="chart-size-btn chart-lab-only" onclick="toggleIntradayChartLayer()" title="只在大型 K 線圖疊加盤中暫算，不寫入正式日線">盤中暫算</button>
+                    <button id="forecastLabBtn" type="button" class="chart-size-btn forecast-lab-btn chart-lab-only" onclick="toggleForecastLab()" title="大型 K 線圖內的技術面推估實驗">
+                      技術面推估<span>實驗·非建議</span>
+                    </button>
                     <select id="chartHeightSelect" class="chart-select chart-lab-only" aria-label="圖表高度">
                       <option value="standard">標準</option>
                       <option value="tall">高</option>
@@ -1010,6 +1013,7 @@
                   <span id="chartIntradayBadge" class="chart-intraday-badge chart-lab-only hidden">盤中暫算未啟用</span>
                   <span class="legend-hint">滾輪縮放・拖曳平移・點圖例開關</span>
                 </div>
+                <section id="forecastLabPanel" class="forecast-lab-panel chart-lab-only hidden" aria-live="polite"></section>
                 <details class="indicator-panel chart-lab-panel" open>
                   <summary>
                     <span>進階資料室</span>
@@ -1189,7 +1193,20 @@
       </section>
     </div>
 
-    <script src="/static/app.js?v=20260625-tour-review1"></script>
-    <script src="/static/chart_tour.js?v=20260625-tour-review1"></script>
+    <div id="forecastLabOverlay" class="overlay hidden" aria-hidden="true">
+      <section class="forecast-lab-modal" role="dialog" aria-modal="true" aria-labelledby="forecastLabTitle">
+        <p class="eyebrow">實驗室功能</p>
+        <h2 id="forecastLabTitle">技術面推估實驗</h2>
+        <p>這個模式只用價格技術指標整理傾向，常常會錯，非投資建議。</p>
+        <p>它會清楚標出缺少新聞、法人與風險脈絡；請把結果當成讀圖練習，不要當成操作依據。</p>
+        <div class="forecast-lab-modal-actions">
+          <button id="forecastLabCancel" class="secondary-button" type="button">取消</button>
+          <button id="forecastLabConfirm" class="primary-button" type="button">我了解，開啟實驗室</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="/static/app.js?v=20260625-forecast-lab1"></script>
+    <script src="/static/chart_tour.js?v=20260625-forecast-lab1"></script>
   </body>
 </html>

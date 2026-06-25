@@ -48,7 +48,7 @@ class PWAAssetsTests(unittest.TestCase):
         self.assertIn('rel="manifest"', html)
         self.assertIn('name="theme-color"', html)
         self.assertIn("app-icon-192.png", html)
-        self.assertIn('/static/chart_tour.js?v=20260625-tour-review1', html)
+        self.assertIn('/static/chart_tour.js?v=20260625-forecast-lab1', html)
         self.assertIn('serviceWorker.register("/sw.js")', js)
 
 

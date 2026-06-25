@@ -401,6 +401,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertGreaterEqual(len(payload["valuation"]["relative"]["methods"]), 1)  # type: ignore[index]
         self.assertTrue(payload["is_watchlisted"])
         self.assertIn("features", payload)
+        self.assertNotIn("forecast_lab", payload)
         self.assertIn("ma20", payload["features"]["series"])  # type: ignore[index]
         self.assertEqual(len(payload["features"]["dates"]), len(payload["prices"]))  # type: ignore[index,arg-type]
         self.assertIn("structure", payload)

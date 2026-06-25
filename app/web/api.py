@@ -11,6 +11,7 @@ from app.analyze.financial import (
     financial_title,
     financial_tone,
 )
+from app.analyze.forecast_lab import build_forecast_lab
 from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     DATA_NODE_INSTITUTIONAL,
@@ -784,6 +785,43 @@ def institutional_to_json(trade) -> dict[str, object]:
         "dealer_net": int(trade.dealer_net),
         "total_net": int(trade.total_net),
     }
+
+
+def build_forecast_lab_payload(
+    store: SQLiteStore,
+    stock_id: str,
+    *,
+    days: int = 365,
+    quote_provider: QuoteProvider | None = None,
+) -> dict[str, object]:
+    """Build isolated experimental forecast-lab data without polluting stock payload."""
+    stock_id = stock_id.strip()
+    try:
+        payload = build_stock_payload(
+            store,
+            stock_id,
+            days=days,
+            quote_provider=quote_provider,
+        )
+        result = build_forecast_lab(payload)
+        result["stock_id"] = stock_id
+        return result
+    except Exception as exc:  # noqa: BLE001 - experimental lab must not block stock page
+        return {
+            "available": False,
+            "experimental": True,
+            "stock_id": stock_id,
+            "reason": str(exc),
+            "lean": "中性",
+            "lean_score": 0,
+            "factors": [],
+            "scenario": {},
+            "history_bullish_ratio": None,
+            "confidence": "low",
+            "missing": ["新聞風險", "法人"],
+            "limitations": "此推估只用價格技術面，缺新聞、法人、風險，僅供參考。",
+            "disclaimer": "技術面推估實驗 · 只用價格資料 · 常常會錯 · 非投資建議",
+        }
 
 
 def build_stock_payload(

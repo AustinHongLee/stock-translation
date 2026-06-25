@@ -35,6 +35,7 @@ from app.web.api import (
     LOCAL_DATA_CACHE_KEY,
     build_compare_payload,
     build_daily_price_payload,
+    build_forecast_lab_payload,
     build_indicator_catalog_payload,
     build_portfolio_payload,
     build_quote_payload,
@@ -196,6 +197,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                 stock_id = unquote(parsed.path.removeprefix("/api/stocks/").removesuffix("/annotations")).strip()
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(build_chart_annotations_payload(store, stock_id))
+            elif parsed.path.startswith("/api/stocks/") and parsed.path.endswith("/forecast-lab"):
+                stock_id = unquote(parsed.path.removeprefix("/api/stocks/").removesuffix("/forecast-lab")).strip()
+                days = int(parse_qs(parsed.query).get("days", ["365"])[0])
+                with SQLiteStore(self.server.db_path) as store:
+                    self._send_json(build_forecast_lab_payload(store, stock_id, days=days, quote_provider=None))
             elif parsed.path.startswith("/api/stocks/"):
                 stock_id = unquote(parsed.path.rsplit("/", 1)[-1]).strip()
                 days = int(parse_qs(parsed.query).get("days", ["365"])[0])

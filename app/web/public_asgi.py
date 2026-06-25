@@ -13,6 +13,7 @@ from app.store.sqlite_store import SQLiteStore
 from app.web.api import (
     build_compare_payload,
     build_daily_price_payload,
+    build_forecast_lab_payload,
     build_local_data_payload,
     build_local_stocks_payload,
     build_market_radar_payload,
@@ -118,6 +119,18 @@ class PublicReadOnlyASGIApp:
                         store,
                         _first(query, "stock_id"),
                         _first(query, "date"),
+                    ),
+                )
+            elif path.startswith("/api/stocks/") and path.endswith("/forecast-lab"):
+                stock_id = unquote(path.removeprefix("/api/stocks/").removesuffix("/forecast-lab")).strip()
+                days = int(_first(query, "days", "365"))
+                await self._send_json(
+                    send,
+                    build_forecast_lab_payload(
+                        store,
+                        stock_id,
+                        days=days,
+                        quote_provider=None,
                     ),
                 )
             elif path.startswith("/api/stocks/"):

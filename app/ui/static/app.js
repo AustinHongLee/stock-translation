@@ -25,6 +25,9 @@ const state = {
   chartOfficialStockId: null,
   chartIntradayEnabled: false,
   chartIntradayRow: null,
+  forecastLab: null,
+  forecastLabEnabled: false,
+  forecastLabLoading: false,
   activeQuote: null,
   chartHoverIndex: null,
   chartFeatures: null,
@@ -52,6 +55,7 @@ const STOCK_SYNC_LOOKBACK_DAYS = 365 * 5;
 const LEVEL_SYNC_CONCURRENCY = 2;
 const NEWBIE_GUIDE_STORAGE_KEY = "stockTranslator.newbieGuideDismissed";
 const THEME_STORAGE_KEY = "stockTranslator.theme";
+const FORECAST_LAB_ACK_STORAGE_KEY = "stockTranslator.forecastLabAck";
 const SYNC_STEPS = [
   ["公司資料", "確認股票代號、名稱與市場。"],
   ["股利資料", "抓最近股利與歷史除息紀錄。"],
@@ -240,6 +244,11 @@ const elements = {
   chartTourBtn: document.querySelector("#chartTourBtn"),
   chartIntradayBtn: document.querySelector("#chartIntradayBtn"),
   chartIntradayBadge: document.querySelector("#chartIntradayBadge"),
+  forecastLabBtn: document.querySelector("#forecastLabBtn"),
+  forecastLabPanel: document.querySelector("#forecastLabPanel"),
+  forecastLabOverlay: document.querySelector("#forecastLabOverlay"),
+  forecastLabConfirm: document.querySelector("#forecastLabConfirm"),
+  forecastLabCancel: document.querySelector("#forecastLabCancel"),
   chartHeightSelect: document.querySelector("#chartHeightSelect"),
   chartScaleSelect: document.querySelector("#chartScaleSelect"),
   chartRangeBtn: document.querySelector("#chartRangeBtn"),
@@ -375,6 +384,8 @@ elements.stockExportButton.addEventListener("click", exportStockExcel);
 elements.stockReportButton.addEventListener("click", exportStockReport);
 elements.chartHeightSelect?.addEventListener("change", () => setChartHeight(elements.chartHeightSelect.value, { persist: true }));
 elements.chartScaleSelect?.addEventListener("change", () => setChartScale(elements.chartScaleSelect.value, { persist: true }));
+elements.forecastLabConfirm?.addEventListener("click", confirmForecastLab);
+elements.forecastLabCancel?.addEventListener("click", () => hideForecastLabModal());
 elements.indicatorGroups?.addEventListener("change", handleIndicatorToggleChange);
 elements.priceChart.addEventListener("mousemove", handleChartPointerMove);
 elements.priceChart.addEventListener("mouseleave", () => {
@@ -2080,6 +2091,7 @@ function renderStock(payload, fallbackStockId) {
   const summary = payload.summary || {};
   state.activeSummary = summary;
   state.activePayload = payload;
+  resetForecastLabState();
   hideSyncProgress();
 
   elements.stockMarket.textContent = profile?.market || "TWSE";
@@ -3532,6 +3544,7 @@ const CHART_VOLUME_MA_STYLES = {
   volume_ma20: { color: "#2f63a3", width: 1.2 },
   volume_ma60: { color: "#7a4fb0", width: 1.2 },
 };
+const FORECAST_LAB_REQUIRED_KEYS = new Set(["rsi_14", "kd_k", "kd_d", "macd", "macd_signal", "macd_histogram"]);
 const CHART_DEFAULT_PREFS = {
   preset: "newbie",
   enabled: ["ma20", "ma60", "volume_ma20", "rsi_14"],
@@ -3653,6 +3666,221 @@ function updateIntradayChartControls() {
       ? `盤中暫算 ${state.chartIntradayRow.date} ${formatNumber(state.chartIntradayRow.close)} · 收盤後可能改變`
       : intradayChartStatusText();
   }
+}
+
+function resetForecastLabState() {
+  state.forecastLab = null;
+  state.forecastLabEnabled = false;
+  state.forecastLabLoading = false;
+  hideForecastLabModal();
+  renderForecastLabPanel();
+  updateForecastLabControls();
+}
+
+function forecastLabAcked() {
+  try {
+    return window.localStorage?.getItem(FORECAST_LAB_ACK_STORAGE_KEY) === "1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function setForecastLabAcked() {
+  try {
+    window.localStorage?.setItem(FORECAST_LAB_ACK_STORAGE_KEY, "1");
+  } catch (error) {
+    // localStorage may be unavailable in private contexts; the in-session enable still works.
+  }
+}
+
+function showForecastLabModal() {
+  if (!elements.forecastLabOverlay) return;
+  elements.forecastLabOverlay.classList.remove("hidden");
+  elements.forecastLabOverlay.setAttribute("aria-hidden", "false");
+  elements.forecastLabConfirm?.focus();
+}
+
+function hideForecastLabModal() {
+  if (!elements.forecastLabOverlay) return;
+  elements.forecastLabOverlay.classList.add("hidden");
+  elements.forecastLabOverlay.setAttribute("aria-hidden", "true");
+}
+
+function confirmForecastLab() {
+  setForecastLabAcked();
+  hideForecastLabModal();
+  enableForecastLab();
+}
+
+function toggleForecastLab(force) {
+  const next = typeof force === "boolean" ? force : !state.forecastLabEnabled;
+  if (!next) {
+    state.forecastLabEnabled = false;
+    renderForecastLabPanel();
+    updateForecastLabControls();
+    renderIndicatorPanel();
+    drawChart();
+    return;
+  }
+  if (!state.chartLargeMode) toggleLargeChart(true);
+  if (!forecastLabAcked()) {
+    showForecastLabModal();
+    return;
+  }
+  enableForecastLab();
+}
+
+function enableForecastLab() {
+  if (!state.activeStockId) return;
+  state.forecastLabEnabled = true;
+  updateForecastLabControls();
+  renderForecastLabPanel();
+  renderIndicatorPanel();
+  drawChart();
+  if (!state.forecastLab && !state.forecastLabLoading) loadForecastLab();
+}
+
+async function loadForecastLab() {
+  if (!state.activeStockId) return;
+  const stockId = state.activeStockId;
+  state.forecastLabLoading = true;
+  renderForecastLabPanel();
+  updateForecastLabControls();
+  try {
+    const payload = await getJson(`/api/stocks/${encodeURIComponent(stockId)}/forecast-lab?days=365`);
+    if (state.activeStockId !== stockId) return;
+    state.forecastLab = payload;
+  } catch (error) {
+    state.forecastLab = {
+      available: false,
+      experimental: true,
+      reason: error.message,
+      limitations: "此推估只用價格技術面，缺新聞、法人、風險，僅供參考。",
+      disclaimer: "技術面推估實驗 · 只用價格資料 · 常常會錯 · 非投資建議",
+    };
+  } finally {
+    if (state.activeStockId === stockId) {
+      state.forecastLabLoading = false;
+      renderForecastLabPanel();
+      updateForecastLabControls();
+      renderIndicatorPanel();
+      drawChart();
+    }
+  }
+}
+
+function updateForecastLabControls() {
+  const btn = elements.forecastLabBtn;
+  const panel = elements.priceChart?.closest(".chart-panel");
+  panel?.classList.toggle("chart-forecast-mode", Boolean(state.chartLargeMode && state.forecastLabEnabled));
+  if (btn) {
+    btn.classList.toggle("is-active", Boolean(state.forecastLabEnabled));
+    btn.disabled = Boolean(state.forecastLabLoading);
+    btn.innerHTML = state.forecastLabEnabled
+      ? `關閉推估<span>${state.forecastLabLoading ? "讀取中" : "實驗·非建議"}</span>`
+      : `技術面推估<span>實驗·非建議</span>`;
+  }
+  elements.forecastLabPanel?.classList.toggle("hidden", !(state.chartLargeMode && state.forecastLabEnabled));
+}
+
+function renderForecastLabPanel() {
+  const panel = elements.forecastLabPanel;
+  if (!panel) return;
+  panel.classList.toggle("hidden", !(state.chartLargeMode && state.forecastLabEnabled));
+  if (!state.chartLargeMode || !state.forecastLabEnabled) {
+    panel.innerHTML = "";
+    return;
+  }
+  if (state.forecastLabLoading && !state.forecastLab) {
+    panel.innerHTML = stateMessageHTML("loading", "讀取技術面推估", "只在實驗室內載入，不影響主個股頁。", { compact: true });
+    return;
+  }
+  const lab = state.forecastLab;
+  if (!lab) {
+    panel.innerHTML = stateMessageHTML("empty", "技術面推估尚未載入", "開啟後會讀取獨立端點。", { compact: true });
+    return;
+  }
+  if (!lab.available) {
+    panel.innerHTML = `
+      <div class="forecast-lab-banner">
+        <strong>${escapeHtml(lab.disclaimer || "技術面推估實驗 · 非投資建議")}</strong>
+        <span>實驗室</span>
+      </div>
+      <p class="forecast-lab-empty">${escapeHtml(lab.reason || "目前資料不足，暫時不顯示傾向。")}</p>
+      <p class="forecast-lab-limit">${escapeHtml(lab.limitations || "此推估只用價格技術面，缺新聞、法人、風險，僅供參考。")}</p>
+    `;
+    return;
+  }
+  const missing = Array.isArray(lab.missing) && lab.missing.length ? lab.missing.join("、") : "暫無明顯缺口";
+  const factors = Array.isArray(lab.factors) ? lab.factors : [];
+  const scenario = lab.scenario || {};
+  const ratio = Number(lab.history_bullish_ratio);
+  const ratioText = Number.isFinite(ratio) ? `${Math.round(ratio * 100)}%` : "--";
+  panel.innerHTML = `
+    <div class="forecast-lab-banner">
+      <strong>${escapeHtml(lab.disclaimer || "技術面推估實驗 · 非投資建議")}</strong>
+      <span>實驗·非建議</span>
+    </div>
+    <div class="forecast-lab-main">
+      <div class="forecast-lean lean-${escapeHtml(forecastLeanClass(lab.lean))}">
+        <span>技術面傾向</span>
+        <strong>${escapeHtml(lab.lean || "中性")}</strong>
+        <small>細節分 ${escapeHtml(String(lab.lean_score ?? "--"))}</small>
+      </div>
+      <div class="forecast-lab-facts">
+        <div><span>歷史類似偏多比例</span><strong>${escapeHtml(ratioText)}</strong></div>
+        <div><span>信心</span><strong>${escapeHtml(forecastConfidenceLabel(lab.confidence))}</strong></div>
+        <div><span>缺少脈絡</span><strong>${escapeHtml(missing)}</strong></div>
+      </div>
+    </div>
+    <details class="forecast-lab-details">
+      <summary>為什麼是這個傾向</summary>
+      <div class="forecast-factor-list">
+        ${factors.map(renderForecastFactor).join("") || "<p>目前沒有可拆解的技術面因素。</p>"}
+      </div>
+    </details>
+    <div class="forecast-scenario-row">
+      ${renderForecastScenarioChip("5 日範圍", scenario.d5)}
+      ${renderForecastScenarioChip("20 日範圍", scenario.d20)}
+    </div>
+    <p class="forecast-lab-limit">${escapeHtml(lab.limitations || "此推估只用價格技術面，缺新聞、法人、風險，僅供參考。")}</p>
+  `;
+}
+
+function renderForecastFactor(factor) {
+  const tone = factor?.dir === "+" ? "plus" : factor?.dir === "-" ? "minus" : "flat";
+  return `
+    <div class="forecast-factor factor-${tone}">
+      <span>${escapeHtml(factor?.label || "--")}</span>
+      <strong>${escapeHtml(factor?.dir || "·")}${escapeHtml(String(Math.abs(Number(factor?.weight || 0))))}</strong>
+      <small>${escapeHtml(factor?.detail || "")}</small>
+    </div>
+  `;
+}
+
+function renderForecastScenarioChip(label, data) {
+  if (!data) return `<div class="forecast-scenario-chip"><span>${escapeHtml(label)}</span><strong>樣本待補</strong></div>`;
+  const lo = Number(data.lo);
+  const hi = Number(data.hi);
+  const mid = Number(data.mid);
+  const midText = Number.isFinite(mid) ? `中位 ${formatSignedPercent(mid)}` : "樣本少，只看範圍";
+  return `
+    <div class="forecast-scenario-chip">
+      <span>${escapeHtml(label)} · ${formatInteger(data.count || 0)} 次</span>
+      <strong>${formatSignedPercent(lo)} ~ ${formatSignedPercent(hi)}</strong>
+      <small>${escapeHtml(midText)}</small>
+    </div>
+  `;
+}
+
+function forecastLeanClass(lean) {
+  if (lean === "偏多") return "bull";
+  if (lean === "偏空") return "bear";
+  return "neutral";
+}
+
+function forecastConfidenceLabel(confidence) {
+  return { high: "高", medium: "中", low: "低" }[confidence] || "中";
 }
 
 function calculateMovingAverage(prices, windowSize) {
@@ -4238,8 +4466,49 @@ function renderScenarioWindow(windowStats) {
   `;
 }
 
+function buildForecastLabScenarioFan() {
+  const lab = state.forecastLab;
+  const raw = lab?.scenario || {};
+  if (!state.forecastLabEnabled || !lab?.available) return null;
+  const windows = [["d5", 5], ["d20", 20]]
+    .map(([key, days]) => {
+      const item = raw[key];
+      if (!item) return null;
+      const p10 = Number(item.lo);
+      const p90 = Number(item.hi);
+      if (!Number.isFinite(p10) || !Number.isFinite(p90)) return null;
+      const p25 = Number.isFinite(Number(item.p25)) ? Number(item.p25) : p10;
+      const p75 = Number.isFinite(Number(item.p75)) ? Number(item.p75) : p90;
+      const median = Number.isFinite(Number(item.mid)) ? Number(item.mid) : NaN;
+      return {
+        days,
+        count: Number(item.count || 0),
+        p10,
+        p25,
+        median,
+        p75,
+        p90,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.days - b.days);
+  const latestClose = Number(state.activeSummary?.latest_close || (state.chartAll || []).at?.(-1)?.close);
+  if (!windows.length || !Number.isFinite(latestClose) || latestClose <= 0) return null;
+  return {
+    experimental: true,
+    event: {
+      label: lab.scenario_event?.label || "技術面推估區",
+      current_match: Boolean(lab.scenario_event?.current_match),
+    },
+    windows,
+    latestClose,
+  };
+}
+
 function chartScenarioFanData(payload = state.activePayload) {
   if (isIntradayOverlayActive()) return null;
+  const labScenario = buildForecastLabScenarioFan();
+  if (labScenario) return labScenario;
   const report = payload?.historical_frequency;
   const events = Array.isArray(report?.events) ? report.events : [];
   if (!report?.available || !events.length) return null;
@@ -4385,6 +4654,9 @@ function handleIndicatorToggleChange(event) {
 
 function indicatorEnabled(key) {
   if (!key) return false;
+  if (state.chartLargeMode && state.forecastLabEnabled && FORECAST_LAB_REQUIRED_KEYS.has(key)) {
+    return true;
+  }
   if (state.chartLargeMode && chartVisualFeatureKeys().has(key)) {
     return Boolean(state.chartIndicatorEnabled?.[key]);
   }
@@ -4676,6 +4948,7 @@ function drawChart() {
   if (state.chartLargeMode) {
     drawIndicatorSubplots(ctx, layout, view);
     drawChartAnnotations(ctx, layout, view);
+    drawForecastLabOverlay(ctx, layout, view);
   }
   drawEventMarkers(ctx, layout, view);
   drawRangeSelection(ctx, layout, view, slot);
@@ -4802,11 +5075,11 @@ function drawScenarioFan(ctx, layout, view) {
     ctx.fill();
   };
   ctx.save();
-  drawBand("p10", "p90", "rgba(125,184,226,.16)");
-  drawBand("p25", "p75", "rgba(125,184,226,.32)");
+  drawBand("p10", "p90", scenario.experimental ? "rgba(176,130,11,.14)" : "rgba(125,184,226,.16)");
+  drawBand("p25", "p75", scenario.experimental ? "rgba(176,130,11,.28)" : "rgba(125,184,226,.32)");
   const medianWindows = scenario.windows.filter((item) => item.count >= 8 && Number.isFinite(item.median));
   if (medianWindows.length) {
-    ctx.strokeStyle = "rgba(44,84,117,.78)";
+    ctx.strokeStyle = scenario.experimental ? "rgba(176,130,11,.78)" : "rgba(44,84,117,.78)";
     ctx.lineWidth = 1.2;
     ctx.setLineDash([5, 4]);
     ctx.beginPath();
@@ -4819,10 +5092,10 @@ function drawScenarioFan(ctx, layout, view) {
     ctx.setLineDash([]);
   }
   ctx.font = "10.5px Microsoft JhengHei, Segoe UI, Arial";
-  ctx.fillStyle = "rgba(44,84,117,.88)";
-  ctx.fillText("歷史範圍", Math.min(originX + 8, right - 58), layout.price.top + 14);
+  ctx.fillStyle = scenario.experimental ? "rgba(176,130,11,.92)" : "rgba(44,84,117,.88)";
+  ctx.fillText(scenario.experimental ? "推估範圍" : "歷史範圍", Math.min(originX + 8, right - 58), layout.price.top + 14);
   ctx.fillStyle = "rgba(122,135,150,.95)";
-  ctx.fillText("非預測", Math.min(originX + 8, right - 42), layout.price.top + 28);
+  ctx.fillText(scenario.experimental ? "實驗參考" : "非預測", Math.min(originX + 8, right - 42), layout.price.top + 28);
   scenario.windows.forEach((item) => {
     const x = xOfDays(item.days);
     ctx.fillStyle = "rgba(122,135,150,.9)";
@@ -4912,6 +5185,7 @@ function drawIndicatorSubplot(ctx, layout, view, panel) {
   ctx.fillText(formatNumber(min), layout.width - layout.padding.right + 6, panel.top + panel.height);
 
   if (panel.key === "rsi" || panel.key === "kd") {
+    if (state.forecastLabEnabled) drawForecastLabOscillatorZones(ctx, layout, panel, min, max, yOf);
     [20, 50, 80].forEach((level) => {
       if (level < min || level > max) return;
       const y = yOf(level);
@@ -4941,6 +5215,77 @@ function drawIndicatorSubplot(ctx, layout, view, panel) {
     const style = focusedLineStyle(key, subplotLineStyle(key, index, panel.color));
     drawNumericLine(ctx, values, view, layout, yOf, style);
   });
+  if (state.forecastLabEnabled && panel.key === "macd") {
+    drawForecastLabMacdCrossMarks(ctx, layout, view, yOf);
+  }
+  ctx.restore();
+}
+
+function drawForecastLabOscillatorZones(ctx, layout, panel, min, max, yOf) {
+  const zones = panel.key === "rsi"
+    ? [{ low: 70, high: 100, fill: "rgba(176,130,11,.12)" }, { low: 0, high: 30, fill: "rgba(104,169,215,.12)" }]
+    : [{ low: 80, high: 100, fill: "rgba(176,130,11,.12)" }, { low: 0, high: 20, fill: "rgba(104,169,215,.12)" }];
+  zones.forEach((zone) => {
+    const low = Math.max(min, zone.low);
+    const high = Math.min(max, zone.high);
+    if (high <= low) return;
+    const yTop = yOf(high);
+    const yBottom = yOf(low);
+    ctx.fillStyle = zone.fill;
+    ctx.fillRect(layout.padding.left, yTop, layout.width - layout.padding.left - layout.padding.right, yBottom - yTop);
+  });
+}
+
+function drawForecastLabMacdCrossMarks(ctx, layout, view, yOf) {
+  const macd = featureSeries("macd");
+  const signal = featureSeries("macd_signal");
+  if (!macd.length || !signal.length) return;
+  ctx.save();
+  for (let i = Math.max(view.start + 1, 1); i <= view.end; i += 1) {
+    const prevA = Number(macd[i - 1]);
+    const prevB = Number(signal[i - 1]);
+    const currA = Number(macd[i]);
+    const currB = Number(signal[i]);
+    if (![prevA, prevB, currA, currB].every(Number.isFinite)) continue;
+    const prevDelta = prevA - prevB;
+    const currDelta = currA - currB;
+    if ((prevDelta <= 0 && currDelta > 0) || (prevDelta >= 0 && currDelta < 0)) {
+      const x = chartXOf(i, view, layout);
+      const y = yOf(currA);
+      const upward = currDelta > 0;
+      ctx.fillStyle = upward ? "rgba(104,169,215,.92)" : "rgba(176,130,11,.92)";
+      ctx.strokeStyle = "rgba(8,20,32,.72)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4);
+      ctx.lineTo(x + 4, y);
+      ctx.lineTo(x, y + 4);
+      ctx.lineTo(x - 4, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawForecastLabOverlay(ctx, layout, view) {
+  if (!state.forecastLabEnabled) return;
+  const lab = state.forecastLab;
+  ctx.save();
+  ctx.strokeStyle = "rgba(176,130,11,.36)";
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([7, 5]);
+  ctx.strokeRect(layout.padding.left, layout.price.top, layout.innerWidth, layout.price.height);
+  ctx.setLineDash([]);
+  ctx.font = "700 11px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = "rgba(176,130,11,.72)";
+  const label = lab?.available ? `技術面推估 · ${lab.lean || "中性"}` : "技術面推估實驗";
+  const textWidth = ctx.measureText(label).width;
+  ctx.fillText(label, Math.max(layout.padding.left + 8, layout.plotRight - textWidth - 12), layout.price.top + 18);
+  ctx.font = "10px Microsoft JhengHei, Segoe UI, Arial";
+  ctx.fillStyle = "rgba(122,135,150,.86)";
+  ctx.fillText("只看價格技術面", Math.max(layout.padding.left + 8, layout.plotRight - 92), layout.price.top + 32);
   ctx.restore();
 }
 
@@ -5469,9 +5814,15 @@ function toggleLargeChart(force) {
   if (!entering && document.fullscreenElement) {
     document.exitFullscreen().catch(() => {});
   }
-  if (!entering) window.stopChartTour?.({ silent: true });
+  if (!entering) {
+    window.stopChartTour?.({ silent: true });
+    state.forecastLabEnabled = false;
+    hideForecastLabModal();
+  }
   renderIndicatorPanel();
   renderChartTranslation(state.activePayload);
+  renderForecastLabPanel();
+  updateForecastLabControls();
   refreshIntradayChartLayer({ preserveView: true, redraw: false });
   window.syncChartTourUi?.();
   updateChartLegendState();
