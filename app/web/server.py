@@ -20,7 +20,8 @@ from app.exporters.excel import (
 )
 from app.exporters.html_report import assert_report_has_no_forbidden, build_stock_report_html
 from app.news import fetch_company_news
-from app.runtime_paths import data_path, ensure_seeded_data_file, migrate_legacy_data, static_dir
+from app.runtime_paths import data_dir, data_path, ensure_seeded_data_file, external_root, migrate_legacy_data, static_dir
+from app.store.legacy_import import copy_legacy_snapshot, import_legacy_data, legacy_import_status
 from app.update.checker import check_for_update
 from app.update.installer import prepare_update, start_prepared_update
 from app.version import APP_VERSION
@@ -115,6 +116,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 params = parse_qs(parsed.query)
                 force = (params.get("force") or ["0"])[0] in {"1", "true", "yes"}
                 self._send_json(_latest_update_info(force=force))
+            elif parsed.path == "/api/data/legacy-import":
+                self._send_json(_legacy_import_payload())
             elif parsed.path == "/api/indicator-prefs":
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(build_indicator_prefs_payload(store))
@@ -523,6 +526,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                     status=HTTPStatus.ACCEPTED,
                 )
                 threading.Timer(0.5, self.server.shutdown).start()
+            elif parsed.path == "/api/data/legacy-import":
+                if not getattr(sys, "frozen", False):
+                    self._send_json({"ok": False, "available": False, "reason": "dev_mode"})
+                    return
+                legacy_db, current_db, legacy_dir = _legacy_import_paths()
+                summary = import_legacy_data(legacy_db, current_db)
+                snapshot_copied = copy_legacy_snapshot(legacy_dir, data_dir())
+                with SQLiteStore(current_db) as store:
+                    store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
+                _write_legacy_import_dismissed()
+                self._send_json({"ok": True, **summary, "snapshot_copied": snapshot_copied})
+            elif parsed.path == "/api/data/legacy-import/dismiss":
+                _write_legacy_import_dismissed()
+                self._send_json({"ok": True})
             elif parsed.path == "/api/watchlist":
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()
@@ -846,6 +863,51 @@ def _latest_update_info(*, force: bool = False) -> dict[str, object]:
     _UPDATE_CHECK_CACHE["payload"] = dict(payload)
     _UPDATE_CHECK_CACHE["checked_at"] = now
     return payload
+
+
+def _legacy_import_paths() -> tuple[Path, Path, Path]:
+    current_dir = data_dir()
+    legacy_dir = external_root() / "data"
+    return (
+        legacy_dir / "stock_translator.sqlite3",
+        current_dir / "stock_translator.sqlite3",
+        legacy_dir,
+    )
+
+
+def _legacy_import_dismissed_path() -> Path:
+    return data_dir() / ".legacy_import_dismissed"
+
+
+def _legacy_import_payload() -> dict[str, object]:
+    if not getattr(sys, "frozen", False):
+        return {
+            "available": False,
+            "dismissed": False,
+            "legacy_stock_count": 0,
+            "current_stock_count": 0,
+            "reason": "dev_mode",
+        }
+
+    marker = _legacy_import_dismissed_path()
+    if marker.is_file():
+        return {
+            "available": False,
+            "dismissed": True,
+            "legacy_stock_count": 0,
+            "current_stock_count": 0,
+        }
+
+    legacy_db, current_db, _legacy_dir = _legacy_import_paths()
+    payload = dict(legacy_import_status(legacy_db, current_db))
+    payload["dismissed"] = False
+    return payload
+
+
+def _write_legacy_import_dismissed() -> None:
+    marker = _legacy_import_dismissed_path()
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("", encoding="utf-8")
 
 
 def _date_or_none(value: object) -> date | None:

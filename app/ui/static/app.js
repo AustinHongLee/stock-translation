@@ -52,6 +52,7 @@ const state = {
   appVersion: "",
   updateInfo: null,
   updateNotesOpen: false,
+  legacyImportInfo: null,
 };
 
 const STOCK_SYNC_LOOKBACK_DAYS = 365 * 5;
@@ -440,6 +441,7 @@ init();
 async function init() {
   setupUpdateControls();
   await loadAppInfo();
+  checkLegacyImport();
   maybeCheckForUpdate();
   await loadGlossary();
   resetPortfolioForm();
@@ -469,6 +471,90 @@ function registerServiceWorker() {
       console.warn("Service worker registration failed", error);
     });
   });
+}
+
+async function checkLegacyImport() {
+  try {
+    const payload = await getJson("/api/data/legacy-import");
+    state.legacyImportInfo = payload;
+    if (payload?.available) renderLegacyImportPrompt(payload);
+  } catch (error) {
+    console.warn("Legacy import check failed", error);
+  }
+}
+
+function renderLegacyImportPrompt(payload) {
+  const host = elements.message?.parentElement || document.querySelector(".workspace");
+  if (!host || !elements.message) return;
+  let banner = document.querySelector("#legacyImportBanner");
+  if (!banner) {
+    banner = document.createElement("section");
+    banner.id = "legacyImportBanner";
+    banner.className = "legacy-import-banner update-banner";
+    banner.setAttribute("aria-live", "polite");
+    host.insertBefore(banner, elements.message);
+  }
+  const legacyCount = formatInteger(payload.legacy_stock_count || 0);
+  const currentCount = formatInteger(payload.current_stock_count || 0);
+  banner.classList.remove("hidden");
+  banner.innerHTML = `
+    <div class="update-banner-main">
+      <div class="update-banner-title">偵測到舊版資料</div>
+      <p class="update-banner-text">偵測到你電腦裡有舊版下載的股票資料（約 ${escapeHtml(legacyCount)} 檔），目前程式的資料還是空的（約 ${escapeHtml(currentCount)} 檔）。要把舊資料匯入嗎？</p>
+      <p class="update-banner-text">匯入會用非破壞性合併，不覆蓋現在資料，也不刪舊檔。</p>
+    </div>
+    <div class="update-banner-actions">
+      <button class="primary-button" type="button" data-legacy-import>匯入舊資料</button>
+      <button class="chart-size-btn" type="button" data-legacy-import-dismiss>不要，謝謝</button>
+    </div>
+  `;
+  banner.onclick = handleLegacyImportPromptClick;
+}
+
+function hideLegacyImportPrompt() {
+  document.querySelector("#legacyImportBanner")?.classList.add("hidden");
+}
+
+async function handleLegacyImportPromptClick(event) {
+  const importButton = event.target.closest("[data-legacy-import]");
+  if (importButton) {
+    await importLegacyDataFromPrompt(importButton);
+    return;
+  }
+  const dismissButton = event.target.closest("[data-legacy-import-dismiss]");
+  if (dismissButton) await dismissLegacyImportPrompt(dismissButton);
+}
+
+async function importLegacyDataFromPrompt(button) {
+  const oldText = button?.textContent || "匯入舊資料";
+  if (button) { button.disabled = true; button.textContent = "匯入中..."; }
+  try {
+    const payload = await postJson("/api/data/legacy-import", {});
+    hideLegacyImportPrompt();
+    const approx = formatInteger(state.legacyImportInfo?.legacy_stock_count || 0);
+    const rows = formatInteger(payload.rows || 0);
+    showMessage(`已匯入舊資料：約 ${approx} 檔、${rows} 筆資料。`);
+    await loadLocalData();
+    await loadValueScreener();
+    await loadMarketRadar();
+  } catch (error) {
+    showMessage(`匯入舊資料失敗：${error.message}`, true);
+  } finally {
+    if (button && button.isConnected) { button.disabled = false; button.textContent = oldText; }
+  }
+}
+
+async function dismissLegacyImportPrompt(button) {
+  const oldText = button?.textContent || "不要，謝謝";
+  if (button) { button.disabled = true; button.textContent = "已記住"; }
+  try {
+    await postJson("/api/data/legacy-import/dismiss", {});
+    hideLegacyImportPrompt();
+  } catch (error) {
+    showMessage(`暫時無法記住選擇：${error.message}`, true);
+  } finally {
+    if (button && button.isConnected) { button.disabled = false; button.textContent = oldText; }
+  }
 }
 
 function setupUpdateControls() {
