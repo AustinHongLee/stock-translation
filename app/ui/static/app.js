@@ -1298,6 +1298,18 @@ function screenerSnapshotMetric(item, type) {
 }
 
 async function handleScreenerAction(event) {
+  const snapshotButton = event.target.closest("[data-refresh-snapshot]");
+  if (snapshotButton) {
+    await fixSnapshotFromLocalData(snapshotButton);
+    return;
+  }
+
+  const fixButton = event.target.closest("[data-local-fix-stock]");
+  if (fixButton) {
+    await fixOneStockFromLocalData(fixButton.dataset.localFixStock, fixButton);
+    return;
+  }
+
   const levelSyncButton = event.target.closest("[data-level-sync-stock]");
   if (levelSyncButton) {
     await syncLevelTarget(levelSyncButton.dataset.levelSyncStock);
@@ -7257,6 +7269,7 @@ function updateLocalDataFilterButtons() {
 function renderLocalDataTable(payload) {
   const tbody = elements.localDataRows;
   if (!tbody) return;
+  renderSnapshotBanner(payload);
   updateLocalDataFilterButtons();
   const allItems = (payload && payload.items) || [];
   const items = filterAndSortLocalDataItems(allItems, {
@@ -7278,6 +7291,9 @@ function renderLocalDataTable(payload) {
     const dateCell = `<span class="${stale ? "ld-stale" : ""}">${escapeHtml(it.last_date)}${stale ? `（過期${it.stale_days}天）` : ""}</span>`;
     const sr = it.sr_status && it.sr_status !== "資料不足" ? escapeHtml(it.sr_status) : "—";
     const dataStatus = localDataCoverageLabel(it);
+    const fixBtn = localRowNeedsFix(it)
+      ? `<button class="table-action ld-fix-btn" type="button" data-local-fix-stock="${escapeHtml(it.stock_id)}">補這檔</button>`
+      : "";
     return `<tr>
       <td>${escapeHtml(it.stock_id)}</td>
       <td>${escapeHtml(it.name || "")}</td>
@@ -7286,7 +7302,7 @@ function renderLocalDataTable(payload) {
       <td>${dataStatus}</td>
       <td>${it.has_institutional ? "✓" : "—"}</td>
       <td>${sr}</td>
-      <td><button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button></td>
+      <td>${fixBtn}<button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button></td>
     </tr>`;
   }).join("") : `<tr><td colspan="8">${stateMessageHTML("empty", "目前沒有符合條件的資料", "換一個篩選條件，或先同步更多股票。", { compact: true })}</td></tr>`;
 }
@@ -7303,14 +7319,13 @@ function localDataTargetSummary(payload) {
 function localDataCoverageLabel(item) {
   const price = dataGapShortLabel(item?.price_gap, "日線");
   const inst = dataGapShortLabel(item?.institutional_gap, "法人");
-  const target = item?.data_target || {};
-  const parts = [];
-  if (target.snapshot_stale) {
-    parts.push(`<span class="ld-snapshot">快照待更新</span>`);
-  }
-  parts.push(price);
+  // 「快照待更新」改到頁面頂端 banner 一次呈現（快照是全市場共用，不該每一列都出現）。
+  const parts = [price];
   if (inst) parts.push(inst);
-  return `<span class="ld-coverage">${parts.join("")}</span>`;
+  let html = `<span class="ld-coverage">${parts.join("")}</span>`;
+  const hint = localFixHint(item);
+  if (hint) html += `<div class="ld-hint">${escapeHtml(hint)}</div>`;
+  return html;
 }
 
 function dataGapShortLabel(gap, label) {
@@ -7329,4 +7344,96 @@ function dataGapShortLabel(gap, label) {
     return `<span class="ld-muted">${escapeHtml(label)}待來源</span>`;
   }
   return `<span class="ld-muted">${escapeHtml(label)}未索引</span>`;
+}
+
+// ===== 本地資料：智慧分流的一鍵修正（快照=頁面層、日線/法人=逐列） =====
+function localGapNeedsFix(gap) {
+  const status = gap?.status || "";
+  return status === "gap" || status === "force_refresh_required";
+}
+
+function localRowNeedsFix(item) {
+  return localGapNeedsFix(item?.price_gap) || localGapNeedsFix(item?.institutional_gap);
+}
+
+function localFixHint(item) {
+  const price = item?.price_gap?.status || "";
+  const inst = item?.institutional_gap?.status || "";
+  if (price === "force_refresh_required" || inst === "force_refresh_required") {
+    return "資料對不上 · 按「補這檔」重抓這檔";
+  }
+  if (price === "gap" || inst === "gap") {
+    return "差幾天沒補上 · 按「補這檔」一鍵補回";
+  }
+  return "";
+}
+
+function renderSnapshotBanner(payload) {
+  const tbody = elements.localDataRows;
+  if (!tbody) return;
+  const anchor = tbody.closest("table") || tbody;
+  const host = anchor.parentElement;
+  if (!host) return;
+  let banner = document.querySelector("#localDataSnapshotBanner");
+  const stale = !!(payload && payload.data_target && payload.data_target.snapshot_stale);
+  if (!stale) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "localDataSnapshotBanner";
+    banner.className = "ld-banner";
+    host.insertBefore(banner, anchor);
+  }
+  banner.hidden = false;
+  const td = (payload && (payload.data_target_date || (payload.data_target && payload.data_target.target_date))) || "";
+  banner.innerHTML = `
+    <div class="ld-banner-text">
+      <strong>雷達快照待更新</strong>
+      <span>「快照」是雷達中心幫全市場拍的一張合照（排行、估值都讀它）。它比最新交易日舊了，所以這裡提醒一下。
+      ${td ? `最新交易日：${escapeHtml(td)}。` : ""}按右邊重拍一次就會更新（約 1–2 分鐘，會抓全市場最新收盤＋股利）。</span>
+    </div>
+    <button class="table-action ld-banner-action" type="button" data-refresh-snapshot="1">更新雷達快照</button>
+  `;
+}
+
+async function fixSnapshotFromLocalData(button) {
+  if (button) { button.disabled = true; button.textContent = "更新中…"; }
+  try {
+    await refreshValueScreener();
+    await loadLocalData();
+  } catch (error) {
+    showMessage(`更新雷達快照失敗：${error.message}`, true);
+  } finally {
+    if (button && button.isConnected) { button.disabled = false; button.textContent = "更新雷達快照"; }
+  }
+}
+
+async function fixOneStockFromLocalData(stockId, button) {
+  const target = String(stockId || "").trim();
+  if (!target) return;
+  if (button) { button.disabled = true; button.textContent = "補資料中…"; }
+  showMessage(`正在補 ${target} 的資料（日線／法人）...`);
+  let ok = false;
+  try {
+    const payload = await syncTargetsBatch([target]);
+    ok = Number(payload.succeeded || 0) > 0;
+    const skipped = Number(payload.skipped || 0) > 0;
+    if (ok) {
+      showMessage(skipped ? `${target} 已是最新，無需補。` : `${target} 已補到最新。`);
+    } else {
+      const firstError = (payload.results || []).find((item) => !item.ok)?.error;
+      showMessage(`${target} 補資料失敗：${firstError || "資料源暫時沒有回應"}`, true);
+    }
+    await loadLocalData();
+    if (state.activeStockId === target) {
+      await loadStock(target, { quiet: true, keepSheet: true });
+    }
+    window.setTimeout(hideMessage, ok ? 1800 : 4200);
+  } catch (error) {
+    showMessage(`${target} 補資料失敗：${error.message}`, true);
+  } finally {
+    if (button && button.isConnected) { button.disabled = false; button.textContent = "補這檔"; }
+  }
 }
