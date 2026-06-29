@@ -7,6 +7,7 @@ __pycache__/
 data/*.sqlite3
 data/*.sqlite3-*
 data/*.log
+data/.fuse_hidden*
 
 # 建置產物（PyInstaller）
 build/
