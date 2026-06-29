@@ -31,7 +31,11 @@ def build_bulk_plan(
 ) -> BulkPlan:
     ctx: dict = {}
     today = date.today()
-    target_date = previous_business_day(today)
+    # 目標 = 「今天之前的最後一個交易日」（節假日感知）。
+    # 不可用 previous_business_day(today)：它在交易日會回傳今天本身，
+    # 會讓盤中／收盤前所有股票都被判定『未到最新』。
+    # 這裡刻意與 market_calendar.previous_completed_business_day（local-data 用的 expected）對齊。
+    target_date = previous_business_day(today - timedelta(days=1))
     start = today - timedelta(days=max(1, lookback_days))
 
     def prelude(stop_event) -> None:
@@ -121,10 +125,28 @@ def build_bulk_plan(
             if prices:
                 store.upsert_daily_prices(prices)
                 store.refresh_data_coverage(sid, DATA_NODE_DAILY_PRICE, target_date=target_date)
-        except Exception as exc:
+        except Exception as exc:  # 真的抓取例外才 raise → 觸發連續失敗自動暫停保護
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "failed", error=str(exc))
             raise
-        store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+        # 驗收：只有真的補到『最新交易日』才算 done。
+        # fetch_daily_prices 會把個別月份失敗吞成 warning、不丟例外，
+        # 若無條件標 done，半套／過期資料會被當成完成，且之後永遠被略過。
+        # 因此一律用『本地實際最後一筆日期』驗收；未達標就標 failed（會被重試與下次下載重抓）。
+        latest = store.get_daily_prices(sid, limit=1)
+        if latest and latest[-1].date >= target_date:
+            store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+        else:
+            have = latest[-1].date.isoformat() if latest else "無資料"
+            store.mark_bulk_item(
+                BULK_RUN_KEY,
+                "stock",
+                sid,
+                "failed",
+                error=(
+                    f"日線未到最新交易日（最後={have}，目標={target_date.isoformat()}；"
+                    "可能停牌／新上市／來源限流）"
+                ),
+            )
 
     def skip(sid: str) -> bool:
         store = ctx.get("store")
@@ -132,19 +154,38 @@ def build_bulk_plan(
             return False
         if retry_failed_only:
             return False
-        status = store.get_bulk_item_statuses(BULK_RUN_KEY, "stock").get(sid)
-        if status == "done":
-            return True
+        # 重點修正：不再用 bulk_progress 的 "done" 短路。
+        # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
+        # 改成每次都用『本地最後一筆 vs 目標交易日』判斷新鮮度（精確、不用 <=3 天的近似）。
         latest = store.get_daily_prices(sid, limit=1)
-        if not latest:
-            return False
-        fresh = (today - latest[-1].date).days <= 3
-        if fresh:
+        if latest and latest[-1].date >= target_date:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
-        return fresh
+            return True
+        return False
 
     def on_finish(_status) -> None:
         store = ctx.get("store")
+        client = ctx.get("client")
+        # 1) 全市場最新一天日線 top-up（安全網）：用 STOCK_DAY_ALL 一次補齊所有人的最近收盤。
+        #    放在收尾、不放 prelude——若放 prelude，首次下載會讓 skip() 看到『已有最新一根』
+        #    而略過逐檔歷史回補，導致每檔只剩 1 根。逐檔遇限流時，這一筆能把最後一根補上。
+        if client is not None and store is not None and not retry_failed_only:
+            try:
+                latest_all = client.fetch_latest_all_prices()
+                if latest_all:
+                    store.upsert_daily_prices(latest_all)
+            except Exception:  # noqa: BLE001 - 安全網失敗不影響主流程
+                pass
+        # 2) 同步刷新雷達快照：讓『全市場下載』也更新 value_screener。
+        #    否則快照停在上次『更新雷達』的日期 → 本地資料每列都掛『快照待更新』。
+        #    這一步把兩個原本各走各的更新動作（全市場下載 / 更新雷達）綁在一起。
+        if client is not None and not retry_failed_only:
+            try:
+                from app.screener.value import refresh_value_screener
+
+                refresh_value_screener(client)
+            except Exception:  # noqa: BLE001
+                pass
         if store is not None:
             store.delete_json_cache("local_data_v2")
 
