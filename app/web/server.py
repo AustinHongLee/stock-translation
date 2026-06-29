@@ -19,7 +19,7 @@ from app.exporters.excel import (
 )
 from app.exporters.html_report import assert_report_has_no_forbidden, build_stock_report_html
 from app.news import fetch_company_news
-from app.runtime_paths import data_path, ensure_seeded_data_file, static_dir
+from app.runtime_paths import data_path, ensure_seeded_data_file, migrate_legacy_data, static_dir
 from app.portfolio import PortfolioCalculationError, calculate_portfolio
 from app.portfolio.models import PortfolioTransaction
 from app.screener.value import DEFAULT_SCREENER_PATH, refresh_value_screener
@@ -727,6 +727,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.db == DEFAULT_DB:
+        migrate_legacy_data("stock_translator.sqlite3")
         args.db = ensure_seeded_data_file("stock_translator.sqlite3")
     args.db.parent.mkdir(parents=True, exist_ok=True)
     with SQLiteStore(args.db):
