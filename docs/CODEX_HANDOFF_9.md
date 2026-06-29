@@ -62,4 +62,22 @@ Add one-click fixes + plain-language hints to local-data status
 ```
 **先不要 push（由使用者決定）。**
 
-*本檔由 Claude 整理；§1 變更已實際套用於工作樹（未 commit、未 push）。*
+---
+
+## 5. 修訂 v2（依使用者實測回饋，已套用）
+
+實測發現兩問題並修正（仍只動 `app/ui/static/app.js` + `app/ui/static/app.css`，**無後端改動**）：
+
+1. **「補這檔」對「法人大缺」沒反應** → 因為法人是「逐日」抓的、且 `/api/sync` 不抓法人。
+   依成本模型重做分流：
+   - **日線**（按月抓、便宜）：一律可「補這檔」→ `POST /api/sync`（skip_if_current）。
+   - **法人小缺（≤ `INST_QUICK_FIX_MAX_DAYS`=10 個交易日）**：可「補這檔」→ `POST /api/institutional/sync`（端點已存在）。
+   - **法人大缺（>10，例如 244 日）**：**不顯示死按鈕**，提示「請按上方『開始下載』全市場補」（法人本就該整批抓）。
+   - 新增/改寫的純前端函式：`priceNeedsFix` / `instQuickFixable` / `instBigGap` / `localRowNeedsFix` / `localFixHint` / `fixOneStockFromLocalData`（依缺項打對應端點；不再用 `syncTargetsBatch`）。
+
+2. **快照 banner 太搶眼、像常駐** → 改為**低調單行（資訊性、非警告色）**，文案講明「**本頁日線/法人不受影響**」，並加「**知道了**」可關（`state.snapshotBannerDismissed`，本工作階段不再出現）。CSS `.ld-banner*` 改用 `--line`/`--muted`。
+
+驗證：抽出所有改動函式 `node --check` = **JS SYNTAX OK**。
+此修訂仍包含在「前端 commit」內（app.js / app.css），commit 訊息不變。
+
+*本檔由 Claude 整理；§1、§5 變更已實際套用於工作樹（未 commit、未 push）。*
