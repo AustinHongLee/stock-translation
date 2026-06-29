@@ -49,12 +49,17 @@ const state = {
     aliases: new Map(),
     patterns: [],
   },
+  appVersion: "",
+  updateInfo: null,
+  updateNotesOpen: false,
 };
 
 const STOCK_SYNC_LOOKBACK_DAYS = 365 * 5;
 const LEVEL_SYNC_CONCURRENCY = 2;
 const NEWBIE_GUIDE_STORAGE_KEY = "stockTranslator.newbieGuideDismissed";
 const THEME_STORAGE_KEY = "stockTranslator.theme";
+const UPDATE_AUTO_CHECK_STORAGE_KEY = "stockTranslator.autoUpdateCheck";
+const UPDATE_DISMISSED_STORAGE_KEY = "stockTranslator.updateDismissed";
 const FORECAST_LAB_ACK_STORAGE_KEY = "stockTranslator.forecastLabAck";
 const SYNC_STEPS = [
   ["公司資料", "確認股票代號、名稱與市場。"],
@@ -75,6 +80,9 @@ const elements = {
   searchSuggestions: document.querySelector("#searchSuggestions"),
   themeToggle: document.querySelector("#themeToggle"),
   themeColorMeta: document.querySelector('meta[name="theme-color"]'),
+  appVersionBadge: document.querySelector("#appVersionBadge"),
+  autoUpdateCheckToggle: document.querySelector("#autoUpdateCheckToggle"),
+  updateBanner: document.querySelector("#updateBanner"),
   localStocks: document.querySelector("#localStocks"),
   refreshLocalButton: document.querySelector("#refreshLocalButton"),
   localDataSort: document.querySelector("#localDataSort"),
@@ -325,6 +333,8 @@ elements.searchInput.addEventListener("input", handleSearchInput);
 elements.searchInput.addEventListener("focus", handleSearchInput);
 elements.searchSuggestions.addEventListener("click", handleSearchSuggestionClick);
 elements.themeToggle?.addEventListener("click", toggleTheme);
+elements.autoUpdateCheckToggle?.addEventListener("change", handleAutoUpdateToggle);
+elements.updateBanner?.addEventListener("click", handleUpdateBannerClick);
 elements.refreshLocalButton.addEventListener("click", loadWatchlist);
 elements.dashboardRefreshButton.addEventListener("click", loadWatchlist);
 elements.dashboardWatchlist.addEventListener("click", handleDashboardStockClick);
@@ -428,6 +438,9 @@ window.addEventListener("resize", () => {
 init();
 
 async function init() {
+  setupUpdateControls();
+  await loadAppInfo();
+  maybeCheckForUpdate();
   await loadGlossary();
   resetPortfolioForm();
   showSheet("dashboard", { preserveScroll: true });
@@ -456,6 +469,153 @@ function registerServiceWorker() {
       console.warn("Service worker registration failed", error);
     });
   });
+}
+
+function setupUpdateControls() {
+  const enabled = autoUpdateCheckEnabled();
+  if (elements.autoUpdateCheckToggle) elements.autoUpdateCheckToggle.checked = enabled;
+  if (!enabled) hideUpdateBanner();
+}
+
+async function loadAppInfo() {
+  try {
+    const payload = await getJson("/api/app-info");
+    state.appVersion = payload.version || "";
+    renderAppVersion();
+  } catch (error) {
+    console.warn("App info unavailable", error);
+  }
+}
+
+function renderAppVersion(version = state.appVersion || state.updateInfo?.current || "") {
+  if (!elements.appVersionBadge) return;
+  elements.appVersionBadge.textContent = version ? `v${String(version).replace(/^v/i, "")}` : "v--";
+}
+
+function autoUpdateCheckEnabled() {
+  try {
+    const stored = window.localStorage?.getItem(UPDATE_AUTO_CHECK_STORAGE_KEY);
+    return stored !== "0";
+  } catch (error) {
+    return true;
+  }
+}
+
+function handleAutoUpdateToggle() {
+  const enabled = !!elements.autoUpdateCheckToggle?.checked;
+  try { window.localStorage?.setItem(UPDATE_AUTO_CHECK_STORAGE_KEY, enabled ? "1" : "0"); } catch (error) {}
+  if (enabled) {
+    maybeCheckForUpdate({ force: true });
+  } else {
+    hideUpdateBanner();
+    showMessage("已關閉自動檢查更新；之後不會主動連 GitHub。");
+    window.setTimeout(hideMessage, 2200);
+  }
+}
+
+async function maybeCheckForUpdate(options = {}) {
+  if (!options.force && !autoUpdateCheckEnabled()) return;
+  try {
+    const suffix = options.force ? "?force=1" : "";
+    const payload = await getJson(`/api/update/check${suffix}`);
+    state.updateInfo = payload;
+    state.updateNotesOpen = false;
+    renderAppVersion(payload.current);
+    renderUpdateBanner(payload);
+  } catch (error) {
+    console.warn("Update check failed", error);
+  }
+}
+
+function renderUpdateBanner(payload = state.updateInfo) {
+  if (!elements.updateBanner || !payload?.available) {
+    hideUpdateBanner();
+    return;
+  }
+  const latest = String(payload.latest || "");
+  if (updateDismissedVersion() === latest) {
+    hideUpdateBanner();
+    return;
+  }
+  const url = payload.manual_url || payload.url || "";
+  const notes = payload.notes ? String(payload.notes).trim() : "";
+  elements.updateBanner.classList.remove("hidden");
+  elements.updateBanner.innerHTML = `
+    <div class="update-banner-main">
+      <div class="update-banner-title">有新版 ${escapeHtml(latest || "可下載")}</div>
+      <p class="update-banner-text">可以直接下載新版 zip；若按「下載並更新」，程式會先備份再替換 exe 與 _internal，data 資料夾不會被碰。未簽章版本可能被 SmartScreen 或防毒提醒，旁邊保留手動下載備援。</p>
+      <p class="update-banner-text">隱私：自動檢查只連 GitHub 取版本號與下載連結，不上傳本地資料。</p>
+    </div>
+    <div class="update-banner-actions">
+      <button class="primary-button" type="button" data-update-download>下載並更新</button>
+      ${url ? `<a class="update-link" href="${escapeHtml(url)}" target="_blank" rel="noopener" data-update-direct>直接下載</a>` : ""}
+      <button class="chart-size-btn" type="button" data-update-notes>${state.updateNotesOpen ? "收起說明" : "查看說明"}</button>
+      <button class="chart-size-btn" type="button" data-update-dismiss>知道了</button>
+    </div>
+    ${state.updateNotesOpen ? `<pre class="update-notes">${escapeHtml(notes || "Release 沒有填寫更新說明。")}</pre>` : ""}
+  `;
+}
+
+function hideUpdateBanner() {
+  elements.updateBanner?.classList.add("hidden");
+}
+
+function updateDismissedVersion() {
+  try {
+    return window.localStorage?.getItem(UPDATE_DISMISSED_STORAGE_KEY) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function dismissUpdateBanner() {
+  const latest = state.updateInfo?.latest || "";
+  try { if (latest) window.localStorage?.setItem(UPDATE_DISMISSED_STORAGE_KEY, latest); } catch (error) {}
+  hideUpdateBanner();
+}
+
+function handleUpdateBannerClick(event) {
+  const download = event.target.closest("[data-update-download]");
+  if (download) {
+    downloadAndApplyUpdate(download);
+    return;
+  }
+  const notes = event.target.closest("[data-update-notes]");
+  if (notes) {
+    state.updateNotesOpen = !state.updateNotesOpen;
+    renderUpdateBanner();
+    return;
+  }
+  const dismiss = event.target.closest("[data-update-dismiss]");
+  if (dismiss) dismissUpdateBanner();
+}
+
+async function downloadAndApplyUpdate(button) {
+  const info = state.updateInfo || {};
+  if (!info.url && !info.manual_url) {
+    showMessage("目前沒有可下載的更新檔。", true);
+    return;
+  }
+  const oldText = button?.textContent || "下載並更新";
+  if (button) { button.disabled = true; button.textContent = "下載中..."; }
+  try {
+    const payload = await postJson("/api/update/download", {
+      url: info.url || info.manual_url,
+      latest: info.latest || "",
+      asset_name: info.asset_name || "",
+      size: info.size || 0,
+      sha256: info.sha256 || "",
+      sha256_url: info.sha256_url || "",
+    });
+    showMessage(payload.message || "更新程式已啟動。");
+    if (payload.will_restart) {
+      window.setTimeout(() => showMessage("正在關閉舊版並套用更新，請稍候..."), 1200);
+    }
+  } catch (error) {
+    showMessage(`更新失敗：${error.message}。請改用「直接下載」手動更新。`, true);
+  } finally {
+    if (button && button.isConnected) { button.disabled = false; button.textContent = oldText; }
+  }
 }
 
 function getInitialTheme() {

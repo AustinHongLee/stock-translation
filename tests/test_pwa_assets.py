@@ -51,6 +51,17 @@ class PWAAssetsTests(unittest.TestCase):
         self.assertIn('/static/chart_tour.js?v=20260625-forecast-lab1', html)
         self.assertIn('serviceWorker.register("/sw.js")', js)
 
+    def test_update_ui_keeps_privacy_toggle_and_manual_download_fallback(self) -> None:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="autoUpdateCheckToggle"', html)
+        self.assertIn('id="appVersionBadge"', html)
+        self.assertIn("只連 GitHub", html)
+        self.assertIn("data-update-download", js)
+        self.assertIn("data-update-direct", js)
+        self.assertIn("不會被碰", js)
+
 
 def _png_size(path: Path) -> tuple[int, int]:
     with path.open("rb") as fh:

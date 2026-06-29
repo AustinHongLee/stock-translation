@@ -1,6 +1,6 @@
 # CODEX_HANDOFF_10 — 自動更新（檢查＋下載＋一鍵換版）＋ 資料分離
 
-> 給 Codex 的可執行規格。由 Claude 整理。**本檔目前是規格，程式碼尚未實作**（與 8/9 不同）。
+> 給 Codex 的可執行規格。由 Claude 整理。**2026-06-29 已由 Codex 實作 U1-U4**。
 > 規則：不 push（由使用者決定）；純標準庫（urllib/zipfile，不加依賴）；分波、每波可單獨驗收。
 > 來源已定：**GitHub Releases**。先確認 repo owner/name 填入 §2 的 API URL。
 
@@ -50,7 +50,7 @@
 - `app/version.py`：`APP_VERSION = "2.0.0"`（語意化版本；打包時顯示在 UI 角落）。
 
 ### 2.2 來源（GitHub Releases）
-- `https://api.github.com/repos/<OWNER>/<REPO>/releases/latest` → 取 `tag_name`（如 `v2.1.0`）與 `assets[].browser_download_url`（onedir zip）、`body`（更新說明）。
+- `https://api.github.com/repos/AustinHongLee/stock-translation/releases/latest` → 取 `tag_name`（如 `v2.1.0`）與 `assets[].browser_download_url`（onedir zip）、`body`（更新說明）。
 - 純 `urllib.request`，逾時 ~5s、`User-Agent` 標頭；失敗**安靜**（不可拖垮啟動）。
 
 ### 2.3 比對 `app/update/checker.py`（純函式、可測）

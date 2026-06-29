@@ -47,6 +47,14 @@
           <span>本地優先 · 不上傳</span>
         </div>
 
+        <div class="update-control" title="只連 GitHub 取得版本號與下載連結，不上傳任何本地資料">
+          <span id="appVersionBadge" class="version-badge">v--</span>
+          <label class="update-toggle">
+            <input id="autoUpdateCheckToggle" type="checkbox" checked>
+            <span>自動檢查更新</span>
+          </label>
+        </div>
+
         <button id="themeToggle" class="icon-button theme-toggle" type="button" title="切換深色模式" aria-label="切換深色模式" aria-pressed="false">
           <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.7A8 8 0 0 1 8.3 4 7 7 0 1 0 20 15.7Z"/></svg>
           <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -97,6 +105,7 @@
         </nav>
 
         <main class="workspace">
+          <section id="updateBanner" class="update-banner hidden" aria-live="polite"></section>
           <div id="message" class="message hidden"></div>
 
           <!-- ============ 首頁 / 儀表板 ============ -->

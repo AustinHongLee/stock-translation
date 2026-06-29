@@ -5,6 +5,7 @@ import json
 import mimetypes
 import sys
 import threading
+import time
 import webbrowser
 from datetime import date, datetime
 from http import HTTPStatus
@@ -20,6 +21,9 @@ from app.exporters.excel import (
 from app.exporters.html_report import assert_report_has_no_forbidden, build_stock_report_html
 from app.news import fetch_company_news
 from app.runtime_paths import data_path, ensure_seeded_data_file, migrate_legacy_data, static_dir
+from app.update.checker import check_for_update
+from app.update.installer import prepare_update, start_prepared_update
+from app.version import APP_VERSION
 from app.portfolio import PortfolioCalculationError, calculate_portfolio
 from app.portfolio.models import PortfolioTransaction
 from app.screener.value import DEFAULT_SCREENER_PATH, refresh_value_screener
@@ -67,6 +71,8 @@ TWSE_FETCH_BLOCKED_DURING_BULK = {
     "/api/institutional/sync",
     "/api/value-screener/refresh",
 }
+UPDATE_CHECK_CACHE_SECONDS = 300
+_UPDATE_CHECK_CACHE: dict[str, object] = {"checked_at": 0.0, "payload": None}
 
 
 class StockTranslatorServer(ThreadingHTTPServer):
@@ -103,6 +109,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_json(glossary_payload())
             elif parsed.path == "/api/indicators/catalog":
                 self._send_json(build_indicator_catalog_payload())
+            elif parsed.path == "/api/app-info":
+                self._send_json(_app_info_payload())
+            elif parsed.path == "/api/update/check":
+                params = parse_qs(parsed.query)
+                force = (params.get("force") or ["0"])[0] in {"1", "true", "yes"}
+                self._send_json(_latest_update_info(force=force))
             elif parsed.path == "/api/indicator-prefs":
                 with SQLiteStore(self.server.db_path) as store:
                     self._send_json(build_indicator_prefs_payload(store))
@@ -467,6 +479,50 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "warnings": result.warnings,
                 }
                 self._send_json(payload)
+            elif parsed.path == "/api/update/download":
+                body = self._read_json_body()
+                update_info = _latest_update_info(force=bool(body.get("force")))
+                if body.get("url"):
+                    update_info = {
+                        **update_info,
+                        "url": str(body.get("url") or ""),
+                        "manual_url": str(body.get("url") or ""),
+                        "latest": str(body.get("latest") or update_info.get("latest") or ""),
+                        "asset_name": str(body.get("asset_name") or update_info.get("asset_name") or ""),
+                        "size": int(body.get("size") or update_info.get("size") or 0),
+                        "sha256": str(body.get("sha256") or update_info.get("sha256") or ""),
+                        "sha256_url": str(body.get("sha256_url") or update_info.get("sha256_url") or ""),
+                    }
+                manual_url = str(update_info.get("manual_url") or update_info.get("url") or "")
+                if not manual_url:
+                    self._send_error(HTTPStatus.BAD_REQUEST, "目前沒有可下載的新版 zip。")
+                    return
+                if not getattr(sys, "frozen", False):
+                    self._send_json(
+                        {
+                            "ok": False,
+                            "started": False,
+                            "will_restart": False,
+                            "manual_url": manual_url,
+                            "latest": update_info.get("latest") or "",
+                            "message": "開發模式不執行自動換版；請用「直接下載」或打包後測試。",
+                        }
+                    )
+                    return
+                prepared = prepare_update(update_info)
+                start_prepared_update(prepared)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "started": True,
+                        "will_restart": True,
+                        "manual_url": manual_url,
+                        "latest": prepared.latest,
+                        "message": "下載完成，更新程式已啟動；本程式即將關閉並重開。",
+                    },
+                    status=HTTPStatus.ACCEPTED,
+                )
+                threading.Timer(0.5, self.server.shutdown).start()
             elif parsed.path == "/api/watchlist":
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()
@@ -766,6 +822,30 @@ def _configure_output() -> None:
 
 def _quote_provider() -> TwseMisQuoteProvider:
     return TwseMisQuoteProvider(TwseClient(timeout=5.0, request_interval=0.0))
+
+
+def _app_info_payload() -> dict[str, object]:
+    return {
+        "version": APP_VERSION,
+        "update_source": "GitHub Releases",
+        "update_privacy": "只連 GitHub 取得版本號與下載連結，不上傳任何本地資料。",
+        "frozen": bool(getattr(sys, "frozen", False)),
+    }
+
+
+def _latest_update_info(*, force: bool = False) -> dict[str, object]:
+    now = time.monotonic()
+    cached = _UPDATE_CHECK_CACHE.get("payload")
+    checked_at = float(_UPDATE_CHECK_CACHE.get("checked_at") or 0.0)
+    if not force and isinstance(cached, dict) and now - checked_at < UPDATE_CHECK_CACHE_SECONDS:
+        return dict(cached)
+
+    payload = check_for_update(APP_VERSION)
+    payload["checked_at"] = datetime.now().isoformat(timespec="seconds")
+    payload["cache_seconds"] = UPDATE_CHECK_CACHE_SECONDS
+    _UPDATE_CHECK_CACHE["payload"] = dict(payload)
+    _UPDATE_CHECK_CACHE["checked_at"] = now
+    return payload
 
 
 def _date_or_none(value: object) -> date | None:
