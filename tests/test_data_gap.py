@@ -12,6 +12,7 @@ from app.analyze.data_gap import (
     STATUS_SOURCE_PENDING,
     STATUS_SUSPECT,
     count_business_days,
+    market_node_freshness,
     next_business_day,
     plan_data_gap,
     previous_business_day,
@@ -105,6 +106,28 @@ class DataGapTests(unittest.TestCase):
         self.assertEqual(count_business_days(date(2026, 6, 19), date(2026, 6, 22)), 1)
         self.assertEqual(previous_business_day(date(2026, 6, 21)), date(2026, 6, 18))
         self.assertEqual(next_business_day(date(2026, 6, 19)), date(2026, 6, 22))
+
+    def test_market_node_freshness_current_gap_missing_and_grace(self) -> None:
+        self.assertEqual(
+            market_node_freshness(date(2026, 6, 22), date(2026, 6, 22))["status"],
+            STATUS_CURRENT,
+        )
+        self.assertEqual(
+            market_node_freshness(date(2026, 6, 18), date(2026, 6, 22), grace_business_days=0),
+            {"status": STATUS_GAP, "gap_business_days": 1, "latest_date": "2026-06-18"},
+        )
+        self.assertEqual(
+            market_node_freshness(date(2026, 6, 18), date(2026, 6, 22), grace_business_days=1)["status"],
+            STATUS_CURRENT,
+        )
+        self.assertEqual(
+            market_node_freshness(None, date(2026, 6, 22)),
+            {"status": "missing", "gap_business_days": 0, "latest_date": None},
+        )
+        self.assertEqual(
+            market_node_freshness(date(2026, 6, 18), None)["status"],
+            STATUS_SOURCE_PENDING,
+        )
 
 
 if __name__ == "__main__":

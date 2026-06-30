@@ -277,6 +277,22 @@ class BulkRunnerTests(unittest.TestCase):
         mock_refresh.assert_called_once()
         self.assertIn("local_data_v2", fake_store.json_cache_deletes)
 
+    def test_prelude_does_not_mark_empty_t86_dates_done(self) -> None:
+        # 防回歸：T86 某天回空(尚未公布)時不可標 done，否則會被永久跳過 → 全市場「法人缺 N 日」補不回。
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+
+        t86_done = {m[2] for m in fake_store.bulk_marks if m[1] == "t86_date" and m[3] == "done"}
+        self.assertIn("2026-02-11", t86_done)       # 有資料 → done
+        self.assertNotIn("2026-02-23", t86_done)    # 回空 → 不可 done（要能下次重抓）
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -193,6 +193,41 @@ def resolve_post_patch_status(
     )
 
 
+def market_node_freshness(
+    latest_date: date | str | None,
+    target_date: date | str | None,
+    *,
+    grace_business_days: int = 1,
+) -> dict[str, object]:
+    """Assess freshness for market-wide nodes such as institutional T86."""
+    latest = _as_date(latest_date)
+    target = _as_date(target_date)
+    if target is None:
+        return {
+            "status": STATUS_SOURCE_PENDING,
+            "gap_business_days": 0,
+            "latest_date": _date_json(latest),
+        }
+    if latest is None:
+        return {
+            "status": "missing",
+            "gap_business_days": 0,
+            "latest_date": None,
+        }
+    if latest >= target:
+        return {
+            "status": STATUS_CURRENT,
+            "gap_business_days": 0,
+            "latest_date": _date_json(latest),
+        }
+    gap_days = count_business_days(latest + timedelta(days=1), target)
+    return {
+        "status": STATUS_CURRENT if gap_days <= grace_business_days else STATUS_GAP,
+        "gap_business_days": gap_days,
+        "latest_date": _date_json(latest),
+    }
+
+
 def count_business_days(start_date: date, end_date: date) -> int:
     return count_twse_trading_days(start_date, end_date)
 

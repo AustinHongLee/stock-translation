@@ -96,7 +96,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertTrue(current["can_skip_sync"])
         self.assertEqual(current["reference_latest_date"], "2026-06-22")
         self.assertEqual(current["daily_price"]["gap"]["status"], "current")
-        self.assertEqual(current["institutional"]["gap"]["status"], "gap")
+        self.assertEqual(current["institutional"]["gap"]["status"], "missing")
         self.assertFalse(stale["is_current"])
         self.assertEqual(stale["status"], "stale")
         self.assertEqual(stale["daily_price"]["gap"]["target_date"], "2026-06-21")
@@ -249,6 +249,50 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(payload["data_target_date"], "2026-06-22")
         self.assertTrue(payload["data_target"]["snapshot_stale"])  # type: ignore[index]
         self.assertEqual(payload["items"][0]["data_target_date"], "2026-06-22")  # type: ignore[index]
+
+    def test_local_data_uses_market_level_institutional_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {"stock_id": "2330", "price_date": "2026-06-22"},
+                            {"stock_id": "2303", "price_date": "2026-06-22"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 22), 100, 105, 99, 104, 10),
+                        DailyPrice("2303", date(2026, 6, 22), 40, 42, 39, 41, 10),
+                    ]
+                )
+                store.upsert_institutional_trades(
+                    [
+                        InstitutionalTrade("2330", date(2026, 6, 17), 100, 0, 0, 100),
+                        InstitutionalTrade("9999", date(2026, 6, 22), 100, 0, 0, 100),
+                    ]
+                )
+
+                payload = build_local_data_payload(
+                    store,
+                    today=date(2026, 6, 23),
+                    screener_path=screener_path,
+                )
+
+        self.assertEqual(payload["market_institutional"]["status"], "current")  # type: ignore[index]
+        for item in payload["items"]:  # type: ignore[union-attr]
+            self.assertEqual(item["institutional_gap"], payload["market_institutional"])
+        item_by_id = {item["stock_id"]: item for item in payload["items"]}  # type: ignore[union-attr]
+        self.assertEqual(item_by_id["2330"]["institutional_last_date"], "2026-06-17")
+        self.assertIsNone(item_by_id["2303"]["institutional_last_date"])
 
     def test_build_stock_payload_contains_profile_prices_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

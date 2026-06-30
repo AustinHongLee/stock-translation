@@ -16,6 +16,7 @@ from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     DATA_NODE_INSTITUTIONAL,
     STATUS_CURRENT,
+    market_node_freshness,
     plan_data_gap,
 )
 from app.analyze.fundamental_trends import build_fundamental_trends
@@ -24,7 +25,7 @@ from app.analyze.historical_frequency import build_historical_frequency_report
 from app.analyze.indicator_registry import indicator_catalog
 from app.analyze.indicators import compute_features
 from app.analyze.relationships import build_relationships_payload
-from app.analyze.market_calendar import MarketTargetDate, resolve_market_target_date
+from app.analyze.market_calendar import MarketTargetDate, previous_completed_business_day, resolve_market_target_date
 from app.analyze.methods import MultipleValuation, RelativeValuationResult, calculate_relative_valuation
 from app.analyze.valuation_bands import compute_valuation_bands
 from app.analyze.summary import PriceSummary, calculate_price_summary
@@ -182,6 +183,7 @@ def build_local_data_payload(
     reference_targets, default_target = _screener_reference_targets(screener_path, today=today)
     price_coverage_by_stock = store.get_data_coverage_map(DATA_NODE_DAILY_PRICE)
     institutional_coverage_by_stock = store.get_data_coverage_map(DATA_NODE_INSTITUTIONAL)
+    market_institutional = _market_institutional_freshness(store, default_target.expected_latest_close_date)
     items: list[dict[str, object]] = []
     for sid in sorted(store.get_price_stock_ids()):
         prices = store.get_daily_prices(sid, limit=140)
@@ -212,14 +214,6 @@ def build_local_data_payload(
             lookback_days=HISTORICAL_VALUATION_DAYS,
             max_patch_business_days=45,
         )
-        institutional_gap = plan_data_gap(
-            stock_id=sid,
-            node=DATA_NODE_INSTITUTIONAL,
-            coverage=institutional_coverage,
-            target_date=target_date,
-            lookback_days=365,
-            max_patch_business_days=60,
-        )
         profile = store.get_profile(sid)
         name = (profile.short_name or profile.name) if profile else ""
         sr = compute_support_resistance(prices)
@@ -233,7 +227,7 @@ def build_local_data_payload(
             "data_target_date": target_date.isoformat() if target_date else None,
             "data_target": target.to_json() if target else None,
             "price_gap": price_gap.to_json(),
-            "institutional_gap": institutional_gap.to_json(),
+            "institutional_gap": market_institutional,
             "institutional_last_date": institutional_coverage.get("latest_date"),
             "sr_status": sr.get("status"),
             "support": sr.get("support"),
@@ -245,6 +239,7 @@ def build_local_data_payload(
         "generated_at": today.isoformat(),
         "data_target_date": default_target.target_date.isoformat(),
         "data_target": default_target.to_json(),
+        "market_institutional": market_institutional,
         "count": len(items),
         "items": items,
         "near": near,
@@ -317,14 +312,7 @@ def build_sync_freshness_payload(
         lookback_days=lookback_days,
         max_patch_business_days=45,
     )
-    institutional_gap = plan_data_gap(
-        stock_id=stock_id,
-        node=DATA_NODE_INSTITUTIONAL,
-        coverage=institutional_coverage,
-        target_date=target_date,
-        lookback_days=365,
-        max_patch_business_days=60,
-    )
+    institutional_gap = _market_institutional_freshness(store, target.expected_latest_close_date)
     local_date = _date_or_none(daily_coverage.get("latest_date"))
     is_current = daily_gap.status == STATUS_CURRENT
     can_decide = target_date is not None
@@ -364,10 +352,22 @@ def build_sync_freshness_payload(
         },
         "institutional": {
             "coverage": institutional_coverage,
-            "gap": institutional_gap.to_json(),
+            "gap": institutional_gap,
         },
         "message": message,
     }
+
+
+def _market_institutional_freshness(
+    store: SQLiteStore,
+    expected_close: date | None = None,
+    *,
+    today: date | None = None,
+) -> dict[str, object]:
+    inst_dates = store.get_institutional_dates_any()
+    latest = max((_date_or_none(value) for value in inst_dates), default=None)
+    target = expected_close or previous_completed_business_day(today or date.today())
+    return market_node_freshness(latest, target)
 
 
 def enrich_screener_with_levels(payload: dict[str, object], store: SQLiteStore) -> dict[str, object]:

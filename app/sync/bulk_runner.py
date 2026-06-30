@@ -19,6 +19,9 @@ from app.sync.twse import TwseClient
 from app.store.sqlite_store import SQLiteStore
 
 T86_MAX_EMPTY = 12  # 連續無資料日就停（假期/邊界）
+# 最近 N 個交易日的法人「強制重抓」：治癒過去把『當下沒公布、回傳空』誤標 done 的日期，並確保最新。
+# 法人是全市場逐日資料，補一天 = 補齊所有股票，所以這幾次 API 很划算。
+T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
 
 
@@ -83,32 +86,47 @@ def build_bulk_plan(
             except Exception:  # noqa: BLE001
                 pass
 
-        # 4) 三大法人 T86：近一年交易日，跳過已存日期、連續無資料就停
+        # 4) 三大法人 T86（全市場逐日資料：補一天 = 補齊所有股票）
+        # 4a) 強制重抓最近 N 個交易日：治癒過去把「當下沒公布、回傳空」誤標成 done 的日期，並確保最新。
+        #     不看 have/done，直接重抓（upsert 冪等）；只有真的抓到資料才標 done。
+        day = today
+        forced = 0
+        while forced < T86_RECENT_FORCE_DAYS and day >= start and not stop_event.is_set():
+            if is_twse_trading_day(day):
+                forced += 1
+                day_key = day.isoformat()
+                try:
+                    trades = client.fetch_institutional_trades_for_date(day)
+                except Exception:  # noqa: BLE001
+                    trades = []
+                if trades:
+                    store.upsert_institutional_trades(trades)
+                    store.mark_bulk_item(BULK_RUN_KEY, "t86_date", day_key, "done")
+            day -= timedelta(days=1)
+
+        # 4b) 再往更早的歷史補：跳過已存／已完成日期、連續無資料就停。
         have = store.get_institutional_dates_any()
         done_t86 = {
             key
             for key, status in store.get_bulk_item_statuses(BULK_RUN_KEY, "t86_date").items()
             if status == "done"
         }
-        day = today
         empty = 0
         while day >= start and not stop_event.is_set():
             day_key = day.isoformat()
             if is_twse_trading_day(day) and day_key not in have and day_key not in done_t86:
-                fetch_failed = False
                 try:
                     trades = client.fetch_institutional_trades_for_date(day)
                 except Exception:  # noqa: BLE001
                     trades = []
-                    fetch_failed = True
                     store.mark_bulk_item(BULK_RUN_KEY, "t86_date", day_key, "failed")
                 if trades:
                     store.upsert_institutional_trades(trades)
+                    # 只有真的有資料才標 done（空日不標，下次才會重抓，不再永久毒化）。
+                    store.mark_bulk_item(BULK_RUN_KEY, "t86_date", day_key, "done")
                     empty = 0
                 else:
                     empty += 1
-                if not fetch_failed:
-                    store.mark_bulk_item(BULK_RUN_KEY, "t86_date", day_key, "done")
                 if empty >= T86_MAX_EMPTY:
                     break
             day -= timedelta(days=1)

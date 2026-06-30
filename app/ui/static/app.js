@@ -1552,6 +1552,14 @@ async function handleScreenerAction(event) {
     return;
   }
 
+  const dismissInstitutional = event.target.closest("[data-dismiss-institutional]");
+  if (dismissInstitutional) {
+    state.institutionalBannerDismissed = true;
+    const banner = document.querySelector("#localDataInstitutionalBanner");
+    if (banner) banner.hidden = true;
+    return;
+  }
+
   const snapshotButton = event.target.closest("[data-refresh-snapshot]");
   if (snapshotButton) {
     await fixSnapshotFromLocalData(snapshotButton);
@@ -7524,6 +7532,7 @@ function renderLocalDataTable(payload) {
   const tbody = elements.localDataRows;
   if (!tbody) return;
   renderSnapshotBanner(payload);
+  renderInstitutionalBanner(payload);
   updateLocalDataFilterButtons();
   const allItems = (payload && payload.items) || [];
   const items = filterAndSortLocalDataItems(allItems, {
@@ -7545,6 +7554,7 @@ function renderLocalDataTable(payload) {
     const dateCell = `<span class="${stale ? "ld-stale" : ""}">${escapeHtml(it.last_date)}${stale ? `（過期${it.stale_days}天）` : ""}</span>`;
     const sr = it.sr_status && it.sr_status !== "資料不足" ? escapeHtml(it.sr_status) : "—";
     const dataStatus = localDataCoverageLabel(it);
+    const institutionalCell = localInstitutionalInfoLabel(it);
     const fixBtn = localRowNeedsFix(it)
       ? `<button class="table-action ld-fix-btn" type="button" data-local-fix-stock="${escapeHtml(it.stock_id)}">補這檔</button>`
       : "";
@@ -7554,7 +7564,7 @@ function renderLocalDataTable(payload) {
       <td>${it.price_rows}</td>
       <td>${dateCell}</td>
       <td>${dataStatus}</td>
-      <td>${it.has_institutional ? "✓" : "—"}</td>
+      <td>${institutionalCell}</td>
       <td>${sr}</td>
       <td>${fixBtn}<button class="table-action" type="button" data-screener-stock="${escapeHtml(it.stock_id)}">看個股</button></td>
     </tr>`;
@@ -7572,14 +7582,19 @@ function localDataTargetSummary(payload) {
 
 function localDataCoverageLabel(item) {
   const price = dataGapShortLabel(item?.price_gap, "日線");
-  const inst = dataGapShortLabel(item?.institutional_gap, "法人");
   // 「快照待更新」改到頁面頂端 banner 一次呈現（快照是全市場共用，不該每一列都出現）。
-  const parts = [price];
-  if (inst) parts.push(inst);
-  let html = `<span class="ld-coverage">${parts.join("")}</span>`;
+  // 「法人缺口」也是市場層級，一律由頁面 banner 呈現；逐列只顯示日線能否補。
+  let html = `<span class="ld-coverage">${price}</span>`;
   const hint = localFixHint(item);
   if (hint) html += `<div class="ld-hint">${escapeHtml(hint)}</div>`;
   return html;
+}
+
+function localInstitutionalInfoLabel(item) {
+  if (item?.institutional_last_date) {
+    return `<span class="ld-muted">${escapeHtml(item.institutional_last_date)}</span>`;
+  }
+  return item?.has_institutional ? "✓" : "—";
 }
 
 function dataGapShortLabel(gap, label) {
@@ -7600,29 +7615,16 @@ function dataGapShortLabel(gap, label) {
   return `<span class="ld-muted">${escapeHtml(label)}未索引</span>`;
 }
 
-// ===== 本地資料：智慧分流的一鍵修正（快照=頁面層、日線/法人=逐列） =====
-// 法人是「逐日」抓的：缺太多用單檔補會打很多次 API（很慢），改導到全市場「開始下載」。
-const INST_QUICK_FIX_MAX_DAYS = 10;
+// ===== 本地資料：智慧分流的一鍵修正（快照/法人=頁面層、日線=逐列） =====
 
 function priceNeedsFix(item) {
   const status = item?.price_gap?.status || "";
   return status === "gap" || status === "force_refresh_required";
 }
 
-function instQuickFixable(item) {
-  const gap = item?.institutional_gap || {};
-  return gap.status === "gap" && Number(gap.gap_business_days || 0) <= INST_QUICK_FIX_MAX_DAYS;
-}
-
-function instBigGap(item) {
-  const gap = item?.institutional_gap || {};
-  if (gap.status === "force_refresh_required") return true;
-  return gap.status === "gap" && Number(gap.gap_business_days || 0) > INST_QUICK_FIX_MAX_DAYS;
-}
-
-// 只有「單檔補得動」的缺口才顯示『補這檔』：日線一律可補（按月抓、便宜）；法人只在缺口小時可補。
+// 只有日線才顯示逐列『補這檔』：法人 T86 是全市場逐日資料，冷門股無進出不是逐檔缺料。
 function localRowNeedsFix(item) {
-  return priceNeedsFix(item) || instQuickFixable(item);
+  return priceNeedsFix(item);
 }
 
 function localFixHint(item) {
@@ -7631,12 +7633,6 @@ function localFixHint(item) {
   }
   if (priceNeedsFix(item)) {
     return "差幾天沒補上 · 按「補這檔」一鍵補回";
-  }
-  if (instQuickFixable(item)) {
-    return "法人差幾天 · 按「補這檔」補回";
-  }
-  if (instBigGap(item)) {
-    return "法人缺較多 · 請按上方「開始下載」全市場補";
   }
   return "";
 }
@@ -7669,6 +7665,42 @@ function renderSnapshotBanner(payload) {
   `;
 }
 
+function renderInstitutionalBanner(payload) {
+  const tbody = elements.localDataRows;
+  if (!tbody) return;
+  const anchor = tbody.closest("table") || tbody;
+  const host = anchor.parentElement;
+  if (!host) return;
+  let banner = document.querySelector("#localDataInstitutionalBanner");
+  const market = payload?.market_institutional || {};
+  const status = market.status || "";
+  const needsUpdate = status === "gap" || status === "missing";
+  if (!needsUpdate || state.institutionalBannerDismissed) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "localDataInstitutionalBanner";
+    banner.className = "ld-banner";
+    host.insertBefore(banner, anchor);
+  }
+  banner.hidden = false;
+  const days = Number(market.gap_business_days || 0);
+  const title = status === "missing"
+    ? "法人尚未下載"
+    : `法人資料待更新 ${formatInteger(days)} 日`;
+  const detail = status === "missing"
+    ? "請按上方「開始下載」抓全市場法人資料。"
+    : "法人 T86 是全市場逐日資料，請按上方「開始下載」一次補齊；冷門股沒有逐日法人進出不是缺料。";
+  banner.innerHTML = `
+    <span class="ld-banner-text"><b>${escapeHtml(title)}</b> ${escapeHtml(detail)}</span>
+    <span class="ld-banner-actions">
+      <button class="ld-banner-dismiss" type="button" data-dismiss-institutional="1">知道了</button>
+    </span>
+  `;
+}
+
 async function fixSnapshotFromLocalData(button) {
   if (button) { button.disabled = true; button.textContent = "更新中…"; }
   try {
@@ -7686,10 +7718,8 @@ async function fixOneStockFromLocalData(stockId, button) {
   if (!target) return;
   const item = (state.localData?.items || []).find((x) => String(x.stock_id) === target) || {};
   const doPrice = priceNeedsFix(item);
-  const doInst = instQuickFixable(item);
-  if (!doPrice && !doInst) {
-    // 例如「法人缺很多」：單檔補不划算，導到上方全市場下載。
-    showMessage(`${target} 沒有可單檔快速補的缺口；法人缺較多請按上方「開始下載」全市場補。`, true);
+  if (!doPrice) {
+    showMessage(`${target} 沒有可單檔快速補的日線缺口；法人資料請按上方「開始下載」全市場補。`, true);
     window.setTimeout(hideMessage, 3600);
     return;
   }
@@ -7701,11 +7731,6 @@ async function fixOneStockFromLocalData(stockId, button) {
       try {
         await postJson("/api/sync", { stock_id: target, lookback_days: STOCK_SYNC_LOOKBACK_DAYS, skip_if_current: true });
       } catch (e) { errors.push(`日線：${e.message}`); }
-    }
-    if (doInst) {
-      try {
-        await postJson("/api/institutional/sync", { stock_id: target, lookback_days: 365 });
-      } catch (e) { errors.push(`法人：${e.message}`); }
     }
     showMessage(
       errors.length ? `${target} 補資料未完成：${errors.join("、")}` : `${target} 已補到最新。`,
