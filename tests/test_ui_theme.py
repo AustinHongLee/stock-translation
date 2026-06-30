@@ -259,6 +259,8 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn('id="screenerAmplitudeList"', html)
         self.assertIn("/api/market/radar", js)
         self.assertIn("function renderMarketRadar", js)
+        self.assertIn("function renderMarketRadarQuality", js)
+        self.assertIn("資料品質", js)
         self.assertIn("marketRadarMeterPercent", js)
         self.assertIn("function screenerPriceDate", js)
         self.assertIn("function renderScreenerSnapshotRow", js)
@@ -267,6 +269,7 @@ class UIThemeTests(unittest.TestCase):
         self.assertIn("日線、法人與波段關卡仍以", js)
         self.assertIn("均息", js)
         self.assertIn(".market-radar-panel", css)
+        self.assertIn(".market-radar-quality", css)
         self.assertIn(".market-radar-card", css)
         self.assertIn(".screener-snapshot-grid", css)
 

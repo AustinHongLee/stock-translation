@@ -697,6 +697,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .market-radar-body {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
 }
+.market-radar-quality {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-2); color: var(--ink-2); font-size: 12.5px; line-height: 1.5;
+}
+.market-radar-quality strong { color: var(--ink); }
 .market-radar-card {
   min-height: 146px; padding: 13px;
   border: 1px solid var(--line); border-radius: 10px;

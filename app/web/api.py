@@ -70,7 +70,7 @@ CHART_MA_WARMUP_ROWS = 260
 LOCAL_DATA_CACHE_KEY = "local_data_v2"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
 STRUCTURE_CACHE_PREFIX = "structure"
-MARKET_RADAR_CACHE_PREFIX = "market_radar"
+MARKET_RADAR_CACHE_PREFIX = "market_radar_v2"
 MARKET_RADAR_WINDOW = 120
 MARKET_RADAR_UNIVERSE_SIZE = 150
 MARKET_RADAR_MIN_STOCKS = 30
@@ -495,21 +495,45 @@ def build_market_radar_payload(
 ) -> dict[str, object]:
     selected = _market_radar_universe(store, universe_size=universe_size)
     if len(selected) < MARKET_RADAR_MIN_STOCKS:
-        return _market_radar_unavailable(len(selected), window=window)
+        return _market_radar_unavailable(
+            len(selected),
+            window=window,
+            eligible_stock_count=0,
+            aligned_trading_days=0,
+        )
 
     series_by_stock: dict[str, list[tuple[str, float]]] = {}
     for stock_id in selected:
         prices = store.get_daily_prices(stock_id, limit=window)
         if prices:
             series_by_stock[stock_id] = [(item.date.isoformat(), item.close) for item in prices]
-    matrix = build_returns_matrix(
+    dense_series, dense_info = _market_radar_dense_series(
+        selected,
         series_by_stock,
         window=window,
         min_stocks=MARKET_RADAR_MIN_STOCKS,
         min_days=MARKET_RADAR_MIN_DAYS,
     )
+    if len(dense_series) < MARKET_RADAR_MIN_STOCKS:
+        return _market_radar_unavailable(
+            len(series_by_stock),
+            window=window,
+            eligible_stock_count=int(dense_info.get("eligible_stock_count") or 0),
+            aligned_trading_days=int(dense_info.get("aligned_trading_days") or 0),
+        )
+    matrix = build_returns_matrix(
+        dense_series,
+        window=window,
+        min_stocks=MARKET_RADAR_MIN_STOCKS,
+        min_days=MARKET_RADAR_MIN_DAYS,
+    )
     if matrix is None:
-        return _market_radar_unavailable(len(series_by_stock), window=window)
+        return _market_radar_unavailable(
+            len(series_by_stock),
+            window=window,
+            eligible_stock_count=int(dense_info.get("eligible_stock_count") or 0),
+            aligned_trading_days=int(dense_info.get("aligned_trading_days") or 0),
+        )
 
     as_of_date = matrix.dates[-1] if matrix.dates else None
     signature = _universe_signature(matrix.stock_ids)
@@ -523,6 +547,10 @@ def build_market_radar_payload(
         "as_of_date": as_of_date,
         "universe_size": len(matrix.stock_ids),
         "requested_universe_size": universe_size,
+        "candidate_universe_size": len(selected),
+        "eligible_stock_count": int(dense_info.get("eligible_stock_count") or 0),
+        "excluded_stock_count": max(0, len(series_by_stock) - len(matrix.stock_ids)),
+        "aligned_trading_days": len(matrix.dates) + 1,
         "window": window,
         "title": MARKET_RADAR_TITLE,
         "subtitle": MARKET_RADAR_SUBTITLE,
@@ -532,6 +560,87 @@ def build_market_radar_payload(
     }
     store.set_json_cache(cache_key, payload)
     return payload
+
+
+def _market_radar_dense_series(
+    selected: list[str],
+    series_by_stock: dict[str, list[tuple[str, float]]],
+    *,
+    window: int,
+    min_stocks: int,
+    min_days: int,
+) -> tuple[dict[str, list[tuple[str, float]]], dict[str, object]]:
+    by_stock = {
+        stock_id: _market_radar_clean_series(series_by_stock.get(stock_id, []))
+        for stock_id in selected
+        if stock_id in series_by_stock
+    }
+    by_stock = {stock_id: rows for stock_id, rows in by_stock.items() if len(rows) >= min_days}
+    if len(by_stock) < min_stocks:
+        return {}, {
+            "eligible_stock_count": len(by_stock),
+            "aligned_trading_days": 0,
+        }
+
+    date_sets = {stock_id: {day for day, _close in rows} for stock_id, rows in by_stock.items()}
+    ordered_ids = [stock_id for stock_id in selected if stock_id in by_stock]
+    best_ids: list[str] = []
+    best_days = 0
+    best_score: tuple[int, int] = (0, 0)
+    max_days = min(max(len(rows) for rows in by_stock.values()), max(2, int(window)))
+    for day_count in range(max_days, min_days - 1, -1):
+        for reference_id in ordered_ids:
+            ref_rows = by_stock[reference_id]
+            if len(ref_rows) < day_count:
+                continue
+            anchor_dates = {day for day, _close in ref_rows[-day_count:]}
+            keep_ids = [
+                stock_id
+                for stock_id in ordered_ids
+                if anchor_dates.issubset(date_sets[stock_id])
+            ]
+            if len(keep_ids) >= min_stocks:
+                return {stock_id: by_stock[stock_id] for stock_id in keep_ids}, {
+                    "eligible_stock_count": len(by_stock),
+                    "aligned_trading_days": day_count,
+                    "reference_stock_id": reference_id,
+                }
+        for reference_id in ordered_ids:
+            ref_rows = by_stock[reference_id]
+            if len(ref_rows) < day_count:
+                continue
+            anchor_dates = {day for day, _close in ref_rows[-day_count:]}
+            keep_ids = [
+                stock_id
+                for stock_id in ordered_ids
+                if anchor_dates.issubset(date_sets[stock_id])
+            ]
+            score = (len(keep_ids), day_count)
+            if score > best_score:
+                best_ids = keep_ids
+                best_days = day_count
+                best_score = score
+
+    return {}, {
+        "eligible_stock_count": len(by_stock),
+        "aligned_trading_days": best_days if best_ids else 0,
+        "best_aligned_stock_count": len(best_ids),
+    }
+
+
+def _market_radar_clean_series(series: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    by_date: dict[str, float] = {}
+    for raw_day, raw_close in series:
+        day = str(raw_day or "").strip()
+        if not day:
+            continue
+        try:
+            close = float(raw_close)
+        except (TypeError, ValueError):
+            continue
+        if close > 0:
+            by_date[day] = close
+    return sorted(by_date.items())
 
 
 def _market_radar_universe(store: SQLiteStore, *, universe_size: int) -> list[str]:
@@ -551,11 +660,24 @@ def _market_radar_universe(store: SQLiteStore, *, universe_size: int) -> list[st
     return [stock_id for _, stock_id in candidates[: max(0, int(universe_size))]]
 
 
-def _market_radar_unavailable(local_count: int, *, window: int) -> dict[str, object]:
+def _market_radar_unavailable(
+    local_count: int,
+    *,
+    window: int,
+    eligible_stock_count: int,
+    aligned_trading_days: int,
+) -> dict[str, object]:
+    reason = MARKET_RADAR_INSUFFICIENT_REASON
+    if local_count >= MARKET_RADAR_MIN_STOCKS and eligible_stock_count >= MARKET_RADAR_MIN_STOCKS:
+        reason = (
+            "本地股票數已足夠，但共同交易日期還不足；請先完成全市場資料下載或重試失敗清單。"
+        )
     return {
         "available": False,
-        "reason": MARKET_RADAR_INSUFFICIENT_REASON,
+        "reason": reason,
         "local_stock_count": local_count,
+        "eligible_stock_count": eligible_stock_count,
+        "aligned_trading_days": aligned_trading_days,
         "min_stocks": MARKET_RADAR_MIN_STOCKS,
         "min_days": MARKET_RADAR_MIN_DAYS,
         "window": window,

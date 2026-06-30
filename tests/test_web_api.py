@@ -573,6 +573,37 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertIsNotNone(cached)
         self.assertEqual(cached_payload["cache_key"], cache_key)
 
+    def test_market_radar_payload_excludes_misaligned_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            rows = _market_radar_prices_from(
+                id_start=1000,
+                stock_count=35,
+                start=date(2026, 4, 1),
+                days=90,
+                trade_boost=1,
+            )
+            rows.extend(
+                _market_radar_prices_from(
+                    id_start=9000,
+                    stock_count=5,
+                    start=date(2025, 9, 1),
+                    days=90,
+                    trade_boost=1000,
+                )
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(rows)
+
+                payload = build_market_radar_payload(store, window=80, universe_size=40)
+
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["candidate_universe_size"], 40)
+        self.assertEqual(payload["eligible_stock_count"], 40)
+        self.assertEqual(payload["universe_size"], 35)
+        self.assertEqual(payload["excluded_stock_count"], 5)
+        self.assertGreaterEqual(payload["aligned_trading_days"], 60)
+
     def test_glossary_payload_is_available_for_ui_terms(self) -> None:
         payload = glossary_payload()
 
@@ -852,14 +883,29 @@ class FakeQuoteProvider:
 
 
 def _market_radar_prices(*, stock_count: int, days: int) -> list[DailyPrice]:
-    start = date(2026, 1, 1)
+    return _market_radar_prices_from(
+        id_start=1000,
+        stock_count=stock_count,
+        start=date(2026, 1, 1),
+        days=days,
+    )
+
+
+def _market_radar_prices_from(
+    *,
+    id_start: int,
+    stock_count: int,
+    start: date,
+    days: int,
+    trade_boost: int = 1,
+) -> list[DailyPrice]:
     rows: list[DailyPrice] = []
     for stock_idx in range(stock_count):
-        stock_id = f"{1000 + stock_idx}"
+        stock_id = f"{id_start + stock_idx}"
         base = 40 + stock_idx * 1.7
         for day_idx in range(days):
             close = base + day_idx * 0.05 + ((stock_idx + day_idx) % 7) * 0.03
-            volume = 1000 + stock_idx * 10 + day_idx
+            volume = (1000 + stock_idx * 10 + day_idx) * trade_boost
             rows.append(
                 DailyPrice(
                     stock_id=stock_id,

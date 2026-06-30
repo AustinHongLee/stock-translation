@@ -1203,7 +1203,7 @@ function renderMarketRadar(payload) {
   const metrics = Array.isArray(payload?.metrics) ? payload.metrics : [];
   if (elements.marketRadarStatus) {
     elements.marketRadarStatus.textContent = payload?.available
-      ? `${payload.title || "市場心智雷達"} · 資料日 ${payload.as_of_date || "--"} · 宇宙 ${formatInteger(payload.universe_size || 0)} 檔 · ${payload.window || 120} 日視窗`
+      ? `${payload.title || "市場心智雷達"} · 資料日 ${payload.as_of_date || "--"} · 使用 ${formatInteger(payload.universe_size || 0)} 檔 · ${formatInteger(payload.aligned_trading_days || 0)} 個共同交易日`
       : payload?.reason || "資料不足，請先在本地資料完成全市場下載。";
   }
   if (!payload?.available || !metrics.length) {
@@ -1216,7 +1216,20 @@ function renderMarketRadar(payload) {
     `;
     return;
   }
-  elements.marketRadarBody.innerHTML = metrics.map(renderMarketRadarMetric).join("");
+  elements.marketRadarBody.innerHTML = `${renderMarketRadarQuality(payload)}${metrics.map(renderMarketRadarMetric).join("")}`;
+}
+
+function renderMarketRadarQuality(payload) {
+  const candidate = Number(payload?.candidate_universe_size || payload?.requested_universe_size || 0);
+  const used = Number(payload?.universe_size || 0);
+  const excluded = Number(payload?.excluded_stock_count || 0);
+  const days = Number(payload?.aligned_trading_days || 0);
+  return `
+    <div class="market-radar-quality">
+      <strong>資料品質</strong>
+      <span>候選 ${formatInteger(candidate)} 檔，採用 ${formatInteger(used)} 檔日期完整資料，排除 ${formatInteger(excluded)} 檔日期斷裂；共同交易日 ${formatInteger(days)} 天。</span>
+    </div>
+  `;
 }
 
 function renderMarketRadarMetric(metric) {
