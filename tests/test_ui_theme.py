@@ -299,7 +299,8 @@ class UIThemeTests(unittest.TestCase):
 
         self.assertIn("資料狀態", html)
         self.assertIn("雷達中心是另一份排行榜快照", html)
-        self.assertIn("不會重建雷達排行榜快照", html)
+        self.assertIn("增量補缺", html)
+        self.assertIn("只差幾天就只補那幾天", html)
         self.assertIn("function localDataTargetSummary", js)
         self.assertIn("最近收盤目標", js)
         self.assertIn("補正目標", js)

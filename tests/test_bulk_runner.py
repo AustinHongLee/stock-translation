@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.models import DailyPrice, DividendRecord, InstitutionalTrade, StockProfile
-from app.sync.bulk_runner import build_bulk_plan
+from app.sync.bulk_runner import BULK_RUN_KEY, build_bulk_plan
 
 
 class FixedDate(date):
@@ -26,6 +26,7 @@ class FakeBulkClient:
         self.request_interval = request_interval
         self.historical_dividend_ranges: list[tuple[date, date]] = []
         self.t86_dates: list[date] = []
+        self.price_ranges: list[tuple[str, date, date]] = []
         self.daily_last_date: date | None = None
         self.latest_all_calls = 0
 
@@ -89,6 +90,7 @@ class FakeBulkClient:
         return []
 
     def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
         last = self.daily_last_date or end_date
         return [DailyPrice(stock_id, last, 10, 11, 9, 10, 1000)]
 
@@ -130,6 +132,13 @@ class FakeBulkStore:
 
     def get_bulk_item_statuses(self, run_key: str, item_type: str) -> dict[str, str]:
         return {}
+
+    def get_bulk_item_keys_by_status(self, run_key: str, item_type: str, status: str) -> list[str]:
+        return [
+            item_key
+            for mark_run_key, mark_item_type, item_key, mark_status in self.bulk_marks
+            if mark_run_key == run_key and mark_item_type == item_type and mark_status == status
+        ]
 
     def mark_bulk_item(
         self,
@@ -173,7 +182,14 @@ class FakeBulkStore:
         suspect_reason: str = "",
     ) -> dict[str, object]:
         self.coverage_refreshes.append((stock_id, node, target_date))
-        return {}
+        latest = self.get_daily_prices(stock_id, limit=1)
+        return {
+            "stock_id": stock_id,
+            "node": node,
+            "latest_date": latest[-1].date.isoformat() if latest else None,
+            "target_date": target_date.isoformat() if target_date else None,
+            "status": status or "indexed",
+        }
 
     def delete_json_cache(self, key: str) -> None:
         self.json_cache_deletes.append(key)
@@ -215,7 +231,51 @@ class BulkRunnerTests(unittest.TestCase):
             plan.prelude(threading.Event())  # type: ignore[union-attr]
             plan.sync_one("2330")
 
-        self.assertEqual(fake_store.coverage_refreshes, [("2330", "daily_price", EXPECTED_TARGET)])
+        self.assertEqual(
+            fake_store.coverage_refreshes,
+            [
+                ("2330", "daily_price", EXPECTED_TARGET),
+                ("2330", "daily_price", EXPECTED_TARGET),
+                ("2330", "daily_price", EXPECTED_TARGET),
+            ],
+        )
+        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 11), EXPECTED_TARGET)])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_sync_one_patches_only_missing_daily_gap_when_small(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = [DailyPrice("2330", date(2026, 2, 10), 10, 11, 9, 10, 1000)]
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("2330")
+
+        self.assertEqual(fake_client.price_ranges, [("2330", EXPECTED_TARGET, EXPECTED_TARGET)])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_retry_failed_marks_done_when_single_sync_already_caught_up(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.bulk_marks.append((BULK_RUN_KEY, "stock", "2330", "failed"))
+        fake_store.daily["2330"] = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0, retry_failed_only=True)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertEqual(plan.list_stocks(), ["2330"])
+            plan.sync_one("2330")
+
+        self.assertEqual(fake_client.price_ranges, [])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_sync_one_marks_failed_when_still_behind_target(self) -> None:

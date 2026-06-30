@@ -12,7 +12,14 @@ from app.analyze.dividends import (
     dedupe_dividend_records as _dedupe_dividend_records,
     dividend_history_start_date,
 )
-from app.analyze.data_gap import DATA_NODE_DAILY_PRICE, previous_business_day
+from app.analyze.data_gap import (
+    DATA_NODE_DAILY_PRICE,
+    STATUS_CURRENT,
+    STATUS_PATCHED,
+    plan_data_gap,
+    previous_business_day,
+    resolve_post_patch_status,
+)
 from app.analyze.twse_calendar import is_twse_trading_day
 from app.sync.bulk import BulkPlan
 from app.sync.twse import TwseClient
@@ -139,10 +146,46 @@ def build_bulk_plan(
         client = ctx["client"]
         store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "running")
         try:
-            prices = client.fetch_daily_prices(sid, start, today)
+            coverage_before = store.refresh_data_coverage(
+                sid,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+            )
+            gap_plan = plan_data_gap(
+                stock_id=sid,
+                node=DATA_NODE_DAILY_PRICE,
+                coverage=coverage_before,
+                target_date=target_date,
+                lookback_days=lookback_days,
+                max_patch_business_days=45,
+            )
+            if gap_plan.status == STATUS_CURRENT:
+                store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+                return
+
+            fetch_start = gap_plan.fetch_start_date or start
+            fetch_end = gap_plan.fetch_end_date or target_date
+            prices = client.fetch_daily_prices(sid, fetch_start, fetch_end)
+            price_rows = 0
             if prices:
-                store.upsert_daily_prices(prices)
-                store.refresh_data_coverage(sid, DATA_NODE_DAILY_PRICE, target_date=target_date)
+                price_rows = store.upsert_daily_prices(prices)
+            coverage_after_raw = store.refresh_data_coverage(
+                sid,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+            )
+            post_status = resolve_post_patch_status(
+                gap_plan,
+                latest_date=coverage_after_raw.get("latest_date"),
+                rows_written=price_rows,
+            )
+            store.refresh_data_coverage(
+                sid,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+                status=post_status.status,
+                suspect_reason=post_status.reason if post_status.status != STATUS_PATCHED else "",
+            )
         except Exception as exc:  # 真的抓取例外才 raise → 觸發連續失敗自動暫停保護
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "failed", error=str(exc))
             raise
