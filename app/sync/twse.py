@@ -158,8 +158,10 @@ class TwseClient:
             raise TwseError("Unexpected TWSE stock day rows.")
 
         prices: list[DailyPrice] = []
+        unparsable = 0
         for row in rows:
             if not isinstance(row, list) or len(row) < 9:
+                unparsable += 1
                 continue
             note = str(row[9]).strip() if len(row) > 9 else ""
             change_marker = _change_marker(row[7])
@@ -182,8 +184,15 @@ class TwseClient:
                         source="TWSE_STOCK_DAY",
                     )
                 )
-            except (TypeError, ValueError, InvalidOperation) as exc:
-                raise TwseError(f"Cannot parse TWSE stock day row: {row!r}") from exc
+            except (TypeError, ValueError, InvalidOperation):
+                # 單一列(某天的特殊值)解析失敗 → 只跳過該列，不要連累整個月被丟掉。
+                unparsable += 1
+                continue
+        if rows and not prices and unparsable:
+            # 有資料列卻一筆都解析不出來 → 可能是格式變動，讓上層當失敗（會重試 / 記 warning）。
+            raise TwseError(
+                f"All {len(rows)} TWSE stock-day rows unparsable for {stock_id} {month_start:%Y-%m}."
+            )
         return prices
 
     def fetch_latest_all_prices(self) -> list[DailyPrice]:

@@ -38,6 +38,83 @@ class TwseClientTests(unittest.TestCase):
         self.assertEqual(prices[0].open, 2355.0)
         self.assertEqual(prices[0].close, 2355.0)
 
+    def test_fetch_daily_prices_for_month_skips_bad_stock_day_rows(self) -> None:
+        def fake_fetch_json(url: str) -> object:
+            return {
+                "stat": "OK",
+                "data": [
+                    [
+                        "115/06/01",
+                        "1,000",
+                        "40,000",
+                        "40.00",
+                        "41.00",
+                        "39.50",
+                        "40.50",
+                        "+0.50",
+                        "100",
+                        "",
+                    ],
+                    [
+                        "not-a-date",
+                        "1,000",
+                        "40,000",
+                        "40.00",
+                        "41.00",
+                        "39.50",
+                        "40.50",
+                        "+0.50",
+                        "100",
+                        "",
+                    ],
+                    [
+                        "115/06/03",
+                        "2,000",
+                        "82,000",
+                        "41.00",
+                        "42.00",
+                        "40.50",
+                        "41.50",
+                        "+1.00",
+                        "120",
+                        "",
+                    ],
+                ],
+            }
+
+        client = TwseClient(fetch_json=fake_fetch_json)
+        prices = client.fetch_daily_prices_for_month("2330", date(2026, 6, 1))
+
+        self.assertEqual([item.date for item in prices], [date(2026, 6, 1), date(2026, 6, 3)])
+        self.assertEqual([item.close for item in prices], [40.5, 41.5])
+
+    def test_fetch_daily_prices_for_month_raises_when_all_stock_day_rows_bad(self) -> None:
+        def fake_fetch_json(url: str) -> object:
+            return {
+                "stat": "OK",
+                "data": [
+                    [
+                        "not-a-date",
+                        "1,000",
+                        "40,000",
+                        "40.00",
+                        "41.00",
+                        "39.50",
+                        "40.50",
+                        "+0.50",
+                        "100",
+                        "",
+                    ],
+                    ["115/06/02", "too-short"],
+                ],
+            }
+
+        client = TwseClient(fetch_json=fake_fetch_json)
+        with self.assertRaises(TwseError) as caught:
+            client.fetch_daily_prices_for_month("2330", date(2026, 6, 1))
+
+        self.assertIn("unparsable", str(caught.exception))
+
     def test_fetch_daily_prices_preserves_twse_change_marker_in_note(self) -> None:
         def fake_fetch_json(url: str) -> object:
             return {
