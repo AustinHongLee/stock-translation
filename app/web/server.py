@@ -29,7 +29,7 @@ from app.portfolio import PortfolioCalculationError, calculate_portfolio
 from app.portfolio.models import PortfolioTransaction
 from app.screener.value import DEFAULT_SCREENER_PATH, refresh_value_screener
 from app.store.sqlite_store import SQLiteStore
-from app.sync.service import StockSyncService
+from app.sync.service import StockSyncService, SyncResult
 from app.sync.bulk import BULK_MANAGER
 from app.sync.bulk_runner import BULK_RUN_KEY, build_bulk_plan
 from app.sync.twse import TwseClient
@@ -284,6 +284,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "skipped": True,
                             "rows_written": 0,
                             "message": freshness["message"],
+                            "user_message": freshness["message"],
+                            "status": "skipped",
+                            "current": True,
+                            "needs_retry": False,
                             "finished_at": datetime.now().isoformat(timespec="seconds"),
                             "freshness": freshness,
                             "gap": (freshness.get("daily_price") or {}).get("gap"),
@@ -310,10 +314,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "skipped": False,
                         "rows_written": result.rows_written,
                         "message": result.message,
+                        **_sync_outcome_payload(result),
                         "finished_at": result.finished_at.isoformat(timespec="seconds"),
                         "freshness": freshness,
                         "gap": result.gap_plan,
                         "coverage": result.coverage,
+                        "post_status": result.post_status,
+                        "price_warning_count": result.price_warning_count,
+                        "first_price_warning": result.first_price_warning,
                     }
                     store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
                     self._send_json(payload)
@@ -346,6 +354,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                                         "skipped": True,
                                         "rows_written": 0,
                                         "message": freshness["message"],
+                                        "user_message": freshness["message"],
+                                        "status": "skipped",
+                                        "current": True,
+                                        "needs_retry": False,
                                         "finished_at": datetime.now().isoformat(timespec="seconds"),
                                         "freshness": freshness,
                                         "gap": (freshness.get("daily_price") or {}).get("gap"),
@@ -374,10 +386,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                                     "skipped": False,
                                     "rows_written": result.rows_written,
                                     "message": result.message,
+                                    **_sync_outcome_payload(result),
                                     "finished_at": result.finished_at.isoformat(timespec="seconds"),
                                     "freshness": freshness,
                                     "gap": result.gap_plan,
                                     "coverage": result.coverage,
+                                    "post_status": result.post_status,
+                                    "price_warning_count": result.price_warning_count,
+                                    "first_price_warning": result.first_price_warning,
                                 }
                             )
 
@@ -908,6 +924,52 @@ def _write_legacy_import_dismissed() -> None:
     marker = _legacy_import_dismissed_path()
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text("", encoding="utf-8")
+
+
+def _sync_outcome_payload(result: SyncResult) -> dict[str, object]:
+    status = _sync_outcome_status(result)
+    return {
+        "status": status,
+        "current": status == "current",
+        "needs_retry": status in {"partial", "retry"},
+        "user_message": _sync_user_message(result, status),
+    }
+
+
+def _sync_outcome_status(result: SyncResult) -> str:
+    coverage_status = str((result.coverage or {}).get("status") or "")
+    post_status = str((result.post_status or {}).get("status") or "")
+    if coverage_status in {"current", "patched"} or post_status in {"current", "patched"}:
+        return "current"
+    if result.rows_written > 0:
+        return "partial"
+    return "retry"
+
+
+def _sync_user_message(result: SyncResult, status: str) -> str:
+    coverage = result.coverage or {}
+    gap = result.gap_plan or {}
+    latest = coverage.get("latest_date") or gap.get("local_latest_date") or "無資料"
+    target = coverage.get("target_date") or gap.get("target_date") or "最近收盤日"
+    if status == "current":
+        return f"{result.stock_id} 已補到最近收盤 {target}。"
+
+    if result.rows_written > 0:
+        if result.price_warning_count:
+            return (
+                f"{result.stock_id} 有補進 {result.rows_written} 筆，但日線仍停在 {latest}，"
+                f"還沒到 {target}。剛剛有 {result.price_warning_count} 個月份抓取失敗，"
+                "通常是證交所限流或連線中斷；請等 1-2 分鐘再按一次補這檔。"
+            )
+        return (
+            f"{result.stock_id} 有補進 {result.rows_written} 筆，但日線仍停在 {latest}，"
+            f"還沒到 {target}。可能是資料源尚未公布或局部月份缺資料；請稍後再試一次。"
+        )
+
+    return (
+        f"{result.stock_id} 這次沒有抓到新的日線資料，目前最後是 {latest}，目標是 {target}。"
+        "可能是證交所暫時沒回應、正在限流，或該檔當天尚未公布；請稍後再試一次。"
+    )
 
 
 def _date_or_none(value: object) -> date | None:

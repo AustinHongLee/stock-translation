@@ -16,6 +16,7 @@ const state = {
   localDataFilter: "all",
   levelsSyncing: false,
   syncing: false,
+  localFixingStocks: new Set(),
   syncStepTimer: null,
   searchTimer: null,
   searchRequestSeq: 0,
@@ -1641,8 +1642,8 @@ async function syncStock(stockId, options = {}) {
     maybeShowNewbieGuide();
     elements.searchInput.value = "";
     await loadWatchlist();
-    showMessage(payload.sync?.message || "同步完成");
-    window.setTimeout(hideMessage, 1800);
+    showMessage(syncOutcomeMessage(payload, "同步完成"), syncNeedsAttention(payload));
+    window.setTimeout(hideMessage, syncNeedsAttention(payload) ? 7200 : 1800);
   } catch (error) {
     renderSyncFailure(target, error);
     showMessage(error.message, true);
@@ -1651,6 +1652,16 @@ async function syncStock(stockId, options = {}) {
     setSyncing(false);
     stopSyncProgress();
   }
+}
+
+function syncNeedsAttention(payload) {
+  const sync = payload?.sync || {};
+  return Boolean(sync.needs_retry || sync.status === "partial" || sync.status === "retry");
+}
+
+function syncOutcomeMessage(payload, fallback) {
+  const sync = payload?.sync || {};
+  return sync.user_message || sync.message || fallback;
 }
 
 function renderSyncLoading(stockId, options = {}) {
@@ -2442,6 +2453,7 @@ function renderStock(payload, fallbackStockId) {
   state.chartPrefs = normalizeChartPrefs(payload.indicator_prefs);
   state.chartAnnotations = Array.isArray(payload.annotations) ? payload.annotations : [];
   setupChart(prices, payload.chips_series || [], buildChartEvents(payload), payload.ma_prices || prices, payload.features || null);
+  renderSyncOutcomeNote(payload.sync);
   renderDateEvent((state.chartPrices || []).length - 1);
   renderAnnotationList();
   renderChipsCard(payload.chips);
@@ -2451,6 +2463,13 @@ function renderStock(payload, fallbackStockId) {
   renderAssessmentMerged();
   scheduleQuoteRefresh();
   loadNews(profile?.stock_id || fallbackStockId, profile?.short_name || profile?.name || "");
+}
+
+function renderSyncOutcomeNote(sync) {
+  if (!sync || sync.skipped) return;
+  if (sync.needs_retry || sync.status === "partial" || sync.status === "retry") {
+    elements.stockDataNote.textContent = sync.user_message || sync.message || elements.stockDataNote.textContent;
+  }
 }
 
 function renderPriceWindow(priceWindow, summary) {
@@ -7397,8 +7416,9 @@ async function syncTargetsConcurrently(targets, concurrency = LEVEL_SYNC_CONCURR
           stock_id: stockId,
           ok: true,
           skipped,
+          needs_retry: syncNeedsAttention(payload),
           rows_written: rows,
-          message: payload.sync?.message || "",
+          message: syncOutcomeMessage(payload, ""),
         });
       } catch (error) {
         results.push({
@@ -7716,6 +7736,11 @@ async function fixSnapshotFromLocalData(button) {
 async function fixOneStockFromLocalData(stockId, button) {
   const target = String(stockId || "").trim();
   if (!target) return;
+  if (state.localFixingStocks.has(target)) {
+    showMessage(`${target} 正在補資料，先等這次跑完。`, true);
+    window.setTimeout(hideMessage, 3000);
+    return;
+  }
   const item = (state.localData?.items || []).find((x) => String(x.stock_id) === target) || {};
   const doPrice = priceNeedsFix(item);
   if (!doPrice) {
@@ -7723,13 +7748,17 @@ async function fixOneStockFromLocalData(stockId, button) {
     window.setTimeout(hideMessage, 3600);
     return;
   }
+  state.localFixingStocks.add(target);
   if (button) { button.disabled = true; button.textContent = "補資料中…"; }
   showMessage(`正在補 ${target} 的資料...`);
   const errors = [];
   try {
     if (doPrice) {
       try {
-        await postJson("/api/sync", { stock_id: target, lookback_days: STOCK_SYNC_LOOKBACK_DAYS, skip_if_current: true });
+        const payload = await postJson("/api/sync", { stock_id: target, lookback_days: STOCK_SYNC_LOOKBACK_DAYS, skip_if_current: true });
+        if (syncNeedsAttention(payload)) {
+          errors.push(`日線：${syncOutcomeMessage(payload, "有補進資料，但還沒到最近收盤，請稍後再試一次。")}`);
+        }
       } catch (e) { errors.push(`日線：${e.message}`); }
     }
     showMessage(
@@ -7740,10 +7769,11 @@ async function fixOneStockFromLocalData(stockId, button) {
     if (state.activeStockId === target) {
       await loadStock(target, { quiet: true, keepSheet: true });
     }
-    window.setTimeout(hideMessage, errors.length ? 4200 : 1800);
+    window.setTimeout(hideMessage, errors.length ? 7200 : 1800);
   } catch (error) {
     showMessage(`${target} 補資料失敗：${error.message}`, true);
   } finally {
+    state.localFixingStocks.delete(target);
     if (button && button.isConnected) { button.disabled = false; button.textContent = "補這檔"; }
   }
 }

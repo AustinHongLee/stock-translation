@@ -127,6 +127,27 @@ class WarningClient(FakeClient):
         return prices
 
 
+class PartialWarningClient(FakeClient):
+    def fetch_daily_prices(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[DailyPrice]:
+        self.last_warnings = ["Skipped 1342 2026-06 daily prices: Cannot fetch TWSE url"]
+        return [
+            DailyPrice(
+                stock_id=stock_id,
+                date=start_date,
+                open=100.0,
+                high=101.0,
+                low=99.0,
+                close=100.5,
+                volume=123,
+            )
+        ]
+
+
 class RecordingClient(FakeClient):
     def __init__(self) -> None:
         self.price_ranges: list[tuple[str, date, date]] = []
@@ -268,6 +289,22 @@ class StockSyncServiceTests(unittest.TestCase):
 
                 self.assertIn("Skipped 1 price month", result.message)
                 self.assertIn("2025-08", result.message)
+
+    def test_sync_stock_history_exposes_partial_post_check_and_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                service = StockSyncService(client=PartialWarningClient(), store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "1342",
+                    lookback_days=7,
+                    end_date=date(2026, 6, 12),
+                )
+
+                self.assertEqual(result.price_warning_count, 1)
+                self.assertIn("2026-06", result.first_price_warning)
+                self.assertEqual(result.post_status["status"], "suspect")  # type: ignore[index]
+                self.assertEqual(result.coverage["latest_date"], "2026-06-05")  # type: ignore[index]
 
     def test_sync_stock_history_uses_gap_plan_instead_of_full_lookback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

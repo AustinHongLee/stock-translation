@@ -29,6 +29,9 @@ class SyncResult:
     skipped: bool = False
     gap_plan: dict[str, object] | None = None
     coverage: dict[str, object] | None = None
+    post_status: dict[str, object] | None = None
+    price_warning_count: int = 0
+    first_price_warning: str = ""
 
 
 class StockSyncService:
@@ -96,6 +99,10 @@ class StockSyncService:
                     skipped=False,
                     gap_plan=gap_plan.to_json(),
                     coverage=coverage_before,
+                    post_status={
+                        "status": STATUS_CURRENT,
+                        "reason": "Coverage was already current.",
+                    },
                 )
 
             if hasattr(self.client, "last_warnings"):
@@ -150,6 +157,9 @@ class StockSyncService:
                 message=message,
                 gap_plan=gap_plan.to_json(),
                 coverage=coverage_after,
+                post_status=post_status.to_json(),
+                price_warning_count=len(price_warnings),
+                first_price_warning=price_warnings[0] if price_warnings else "",
             )
         except Exception as exc:
             status = "failed"
