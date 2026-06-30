@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -238,6 +239,18 @@ def previous_business_day(day: date) -> date:
 
 def next_business_day(day: date) -> date:
     return next_twse_trading_day(day)
+
+
+def same_month_tail_date(fetch_end_date: date, max_end_date: date) -> date:
+    """Return a same-month tail date without expanding the TWSE month range."""
+    if max_end_date <= fetch_end_date:
+        return fetch_end_date
+    month_end = date(
+        fetch_end_date.year,
+        fetch_end_date.month,
+        monthrange(fetch_end_date.year, fetch_end_date.month)[1],
+    )
+    return min(max_end_date, month_end)
 
 
 def _as_date(value: date | str | None) -> date | None:

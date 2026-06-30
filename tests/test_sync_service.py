@@ -172,6 +172,32 @@ class RecordingClient(FakeClient):
         ]
 
 
+class MissingTargetTailClient(FakeClient):
+    def __init__(self) -> None:
+        self.price_ranges: list[tuple[str, date, date]] = []
+
+    def fetch_daily_prices(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        if end_date < date(2026, 6, 30):
+            return []
+        return [
+            DailyPrice(
+                stock_id=stock_id,
+                date=date(2026, 6, 30),
+                open=11.1,
+                high=11.25,
+                low=11.05,
+                close=11.2,
+                volume=2001,
+            )
+        ]
+
+
 class DividendHistoryRecordingClient(RecordingClient):
     def __init__(self) -> None:
         super().__init__()
@@ -335,6 +361,44 @@ class StockSyncServiceTests(unittest.TestCase):
             self.assertEqual(client.price_ranges, [("2330", date(2026, 6, 22), date(2026, 6, 22))])
             self.assertFalse(result.skipped)
             self.assertEqual(result.gap_plan["fetch_start_date"], "2026-06-22")  # type: ignore[index]
+            self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
+
+    def test_sync_stock_history_retries_same_month_tail_when_target_day_is_sparse(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = MissingTargetTailClient()
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="1538",
+                            date=date(2026, 6, 26),
+                            open=11.7,
+                            high=11.8,
+                            low=11.0,
+                            close=11.1,
+                            volume=6700,
+                        )
+                    ]
+                )
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "1538",
+                    lookback_days=365,
+                    end_date=date(2026, 6, 30),
+                    target_date=date(2026, 6, 29),
+                )
+                latest = store.get_daily_prices("1538", limit=1)[-1]
+
+            self.assertEqual(
+                client.price_ranges,
+                [
+                    ("1538", date(2026, 6, 29), date(2026, 6, 29)),
+                    ("1538", date(2026, 6, 29), date(2026, 6, 30)),
+                ],
+            )
+            self.assertEqual(latest.date, date(2026, 6, 30))
+            self.assertEqual(result.post_status["status"], "patched")  # type: ignore[index]
             self.assertEqual(result.coverage["status"], "patched")  # type: ignore[index]
 
     def test_sync_stock_history_uses_fixed_dividend_history_window(self) -> None:

@@ -14,6 +14,7 @@ from app.analyze.data_gap import (
     plan_data_gap,
     previous_business_day,
     resolve_post_patch_status,
+    same_month_tail_date,
 )
 from app.store.sqlite_store import SQLiteStore
 from app.sync.twse import TwseClient
@@ -109,6 +110,13 @@ class StockSyncService:
                 self.client.last_warnings = []
             prices = self.client.fetch_daily_prices(stock_id, start_date, fetch_end_date)
             price_warnings = list(getattr(self.client, "last_warnings", []))
+            tail_end_date = same_month_tail_date(fetch_end_date, end_date)
+            if tail_end_date > fetch_end_date and _latest_price_date(prices) < target_date:
+                retry_prices = self.client.fetch_daily_prices(stock_id, start_date, tail_end_date)
+                retry_warnings = list(getattr(self.client, "last_warnings", []))
+                prices = _merge_daily_prices(prices, retry_prices)
+                price_warnings = _dedupe_texts([*price_warnings, *retry_warnings])
+                fetch_end_date = tail_end_date
             price_rows = self.store.upsert_daily_prices(prices)
             rows_written += price_rows
             coverage_after_raw = self.store.refresh_data_coverage(
@@ -332,3 +340,27 @@ class StockSyncService:
                 finished_at=datetime.now(),
                 message=message,
             )
+
+
+def _latest_price_date(prices: list[DailyPrice]) -> date:
+    if not prices:
+        return date.min
+    return max(price.date for price in prices)
+
+
+def _merge_daily_prices(*groups: list[DailyPrice]) -> list[DailyPrice]:
+    by_key: dict[tuple[str, date], DailyPrice] = {}
+    for group in groups:
+        for price in group:
+            by_key[(price.stock_id, price.date)] = price
+    return sorted(by_key.values(), key=lambda item: (item.stock_id, item.date))
+
+
+def _dedupe_texts(items: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if item and item not in seen:
+            result.append(item)
+            seen.add(item)
+    return result

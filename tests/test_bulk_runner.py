@@ -16,6 +16,12 @@ class FixedDate(date):
         return cls(2026, 2, 23)
 
 
+class June30Date(date):
+    @classmethod
+    def today(cls) -> "June30Date":
+        return cls(2026, 6, 30)
+
+
 # today = 2026-02-23（農曆年後第一個交易日）。2/12~2/22 為春節連假＋週末（全休市），
 # 因此「今天之前的最後一個交易日」= 2026-02-11。新版 target_date 就是它。
 EXPECTED_TARGET = date(2026, 2, 11)
@@ -97,6 +103,14 @@ class FakeBulkClient:
     def fetch_latest_all_prices(self) -> list[DailyPrice]:
         self.latest_all_calls += 1
         return [DailyPrice("2330", date(2026, 2, 23), 10, 11, 9, 10, 1000)]
+
+
+class MissingTargetTailBulkClient(FakeBulkClient):
+    def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        if end_date < date(2026, 6, 30):
+            return []
+        return [DailyPrice(stock_id, date(2026, 6, 30), 11.1, 11.25, 11.05, 11.2, 2001)]
 
 
 class FakeBulkStore:
@@ -257,6 +271,30 @@ class BulkRunnerTests(unittest.TestCase):
             plan.sync_one("2330")
 
         self.assertEqual(fake_client.price_ranges, [("2330", EXPECTED_TARGET, EXPECTED_TARGET)])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_sync_one_retries_same_month_tail_when_target_day_is_sparse(self) -> None:
+        fake_client = MissingTargetTailBulkClient(request_interval=0)
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = [DailyPrice("2330", date(2026, 6, 26), 10, 11, 9, 10, 1000)]
+
+        with (
+            patch("app.sync.bulk_runner.date", June30Date),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("2330")
+
+        self.assertEqual(
+            fake_client.price_ranges,
+            [
+                ("2330", date(2026, 6, 29), date(2026, 6, 29)),
+                ("2330", date(2026, 6, 29), date(2026, 6, 30)),
+            ],
+        )
+        self.assertEqual(fake_store.daily["2330"][-1].date, date(2026, 6, 30))
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_retry_failed_marks_done_when_single_sync_already_caught_up(self) -> None:

@@ -19,8 +19,10 @@ from app.analyze.data_gap import (
     plan_data_gap,
     previous_business_day,
     resolve_post_patch_status,
+    same_month_tail_date,
 )
 from app.analyze.twse_calendar import is_twse_trading_day
+from app.models import DailyPrice
 from app.sync.bulk import BulkPlan
 from app.sync.twse import TwseClient
 from app.store.sqlite_store import SQLiteStore
@@ -166,6 +168,12 @@ def build_bulk_plan(
             fetch_start = gap_plan.fetch_start_date or start
             fetch_end = gap_plan.fetch_end_date or target_date
             prices = client.fetch_daily_prices(sid, fetch_start, fetch_end)
+            tail_end = same_month_tail_date(fetch_end, today)
+            if tail_end > fetch_end and _latest_price_date(prices) < target_date:
+                prices = _merge_daily_prices(
+                    prices,
+                    client.fetch_daily_prices(sid, fetch_start, tail_end),
+                )
             price_rows = 0
             if prices:
                 price_rows = store.upsert_daily_prices(prices)
@@ -258,3 +266,17 @@ def build_bulk_plan(
         on_finish=on_finish,
         retry_failed_only=retry_failed_only,
     )
+
+
+def _latest_price_date(prices: list[DailyPrice]) -> date:
+    if not prices:
+        return date.min
+    return max(price.date for price in prices)
+
+
+def _merge_daily_prices(*groups: list[DailyPrice]) -> list[DailyPrice]:
+    by_key: dict[tuple[str, date], DailyPrice] = {}
+    for group in groups:
+        for price in group:
+            by_key[(price.stock_id, price.date)] = price
+    return sorted(by_key.values(), key=lambda item: (item.stock_id, item.date))

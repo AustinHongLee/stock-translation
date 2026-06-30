@@ -17,6 +17,7 @@ from app.analyze.data_gap import (
     plan_data_gap,
     previous_business_day,
     resolve_post_patch_status,
+    same_month_tail_date,
 )
 
 
@@ -128,6 +129,11 @@ class DataGapTests(unittest.TestCase):
             market_node_freshness(date(2026, 6, 18), None)["status"],
             STATUS_SOURCE_PENDING,
         )
+
+    def test_same_month_tail_date_never_crosses_into_extra_month(self) -> None:
+        self.assertEqual(same_month_tail_date(date(2026, 6, 29), date(2026, 6, 30)), date(2026, 6, 30))
+        self.assertEqual(same_month_tail_date(date(2026, 6, 29), date(2026, 7, 3)), date(2026, 6, 30))
+        self.assertEqual(same_month_tail_date(date(2026, 6, 29), date(2026, 6, 28)), date(2026, 6, 29))
 
 
 if __name__ == "__main__":
