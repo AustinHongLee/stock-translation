@@ -305,6 +305,8 @@ def _top_up_latest_all_prices(store, client) -> None:
         latest_all = client.fetch_latest_all_prices()
         if latest_all:
             store.upsert_daily_prices(latest_all)
+            if hasattr(store, "delete_json_cache"):
+                store.delete_json_cache("local_data_v2")
     except Exception:  # noqa: BLE001 - 安全網失敗不影響主流程
         pass
 

@@ -199,6 +199,12 @@ def build_local_data_payload(
             target_date=target_date,
             cached=price_coverage_by_stock.get(sid),
         )
+        if _date_or_none(price_coverage.get("latest_date")) != last:
+            price_coverage = store.refresh_data_coverage(
+                sid,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+            )
         institutional_coverage = _coverage_snapshot(
             store,
             sid,
