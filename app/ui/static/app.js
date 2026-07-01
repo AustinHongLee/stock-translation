@@ -2516,6 +2516,10 @@ function renderStructureCard(structure) {
     structure.window ? `${escapeHtml(structure.window)} 日視窗` : "",
     structureSufficiencyLabel(sufficiency.grade),
   ].filter(Boolean).join(" · ");
+  const human = structureHumanReading(structure, dimensions, sufficiency);
+  const traits = human.traits.map((trait) => (
+    `<span class="structure-trait">${escapeHtml(trait)}</span>`
+  )).join("");
   const rows = dimensions.map(renderStructureDimension).join("");
   card.innerHTML = `
     <div class="structure-head">
@@ -2526,9 +2530,130 @@ function renderStructureCard(structure) {
       </div>
       <span class="structure-pill">${escapeHtml(structureAvailabilityLabel(structure))}</span>
     </div>
+    <div class="structure-reading">
+      <div class="structure-reading-main">
+        <span class="structure-kicker">白話性格</span>
+        <strong>${escapeHtml(human.headline)}</strong>
+        <p>${escapeHtml(human.body)}</p>
+      </div>
+      <div class="structure-reading-note">
+        <span class="structure-kicker">讀法提醒</span>
+        <p>${escapeHtml(human.note)}</p>
+      </div>
+    </div>
+    <div class="structure-traits">${traits}</div>
     <div class="structure-grid">${rows}</div>
     <p class="disclaimer">${escapeHtml(structure.disclaimer || "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議")}</p>
   `;
+}
+
+function structureHumanReading(structure, dimensions, sufficiency = {}) {
+  const byKey = structureDimensionMap(dimensions);
+  const scores = {
+    memory: structureDimensionScore(byKey.memory),
+    complexity: structureDimensionScore(byKey.complexity),
+    agitation: structureDimensionScore(byKey.agitation),
+    chroma: structureDimensionScore(byKey.chroma),
+    turbulence: structureDimensionScore(byKey.turbulence),
+  };
+  const traits = [
+    structureTrait("連續感", scores.memory, "容易中斷", "普通", "慣性明顯"),
+    structureTrait("路況", scores.complexity, "較單純", "中等複雜", "很複雜"),
+    structureTrait("波動", scores.agitation, "較分散", "有群聚", "常成群"),
+    structureTrait("雜訊", scores.chroma, "偏乾淨", "中等", "偏厚"),
+    structureTrait("震動", scores.turbulence, "相對平穩", "中等", "偏高"),
+  ].filter(Boolean);
+  if (!structure?.available) {
+    const bars = Number(sufficiency?.bars_available || 0);
+    const countText = bars > 0 ? `目前只有 ${bars} 筆日線，` : "";
+    return {
+      headline: "資料還不夠，先別替它下性格結論",
+      body: `${countText}結構指紋需要較長的收盤價路徑才看得穩。等日線補齊後，這裡會把分數翻成比較像人的描述。`,
+      note: "現在的分數格以資料不足為主；可以先看價量、法人與基本資料，不要把這張卡當結論。",
+      traits: traits.length ? traits : ["日線不足", "等待補資料"],
+    };
+  }
+  return {
+    headline: structureHeadline(scores),
+    body: structureBody(scores),
+    note: structureReadingNote(structure),
+    traits,
+  };
+}
+
+function structureDimensionMap(dimensions) {
+  return dimensions.reduce((mapping, item) => {
+    if (item?.key) mapping[item.key] = item;
+    return mapping;
+  }, {});
+}
+
+function structureDimensionScore(item) {
+  if (!item || item.locked || !item.available) return null;
+  const max = Number(item.bar_max || 5);
+  const level = Number(item.bar_level);
+  if (!Number.isFinite(max) || max <= 0 || !Number.isFinite(level)) return null;
+  return clamp(Math.round((level / max) * 5), 0, 5);
+}
+
+function structureTrait(label, score, low, middle, high) {
+  if (score == null) return null;
+  if (score >= 4) return `${label}：${high}`;
+  if (score <= 2) return `${label}：${low}`;
+  return `${label}：${middle}`;
+}
+
+function structureHeadline(scores) {
+  const memory = scores.memory ?? 3;
+  const complexity = scores.complexity ?? 3;
+  const agitation = scores.agitation ?? 3;
+  const chroma = scores.chroma ?? 3;
+  const turbulence = scores.turbulence ?? 3;
+  const noisyCount = [complexity, agitation, chroma, turbulence].filter((score) => score >= 4).length;
+  if (memory <= 2 && noisyCount >= 2) return "現在像吵雜路況：訊號很多，但連續感偏弱";
+  if (complexity >= 4 && chroma >= 4) return "現在像雜訊型：細節很多，訊號容易互相干擾";
+  if (agitation >= 4 || turbulence >= 4) return "現在像高震動型：大波動比較集中出現";
+  if (memory >= 4 && complexity <= 3 && turbulence <= 3) return "現在像順路型：近期節奏比較連貫";
+  if (complexity <= 2 && chroma <= 2 && turbulence <= 2) return "現在像安靜路況：結構相對單純";
+  if (memory <= 2) return "現在連續感偏鬆：前後段節奏不太黏";
+  return "現在是混合型：幾個特徵一起影響盤面";
+}
+
+function structureBody(scores) {
+  const sentences = [];
+  if (scores.memory != null) {
+    sentences.push(scores.memory <= 2
+      ? "最近價格路徑比較容易斷開，上一段走法不一定能順順接到下一段。"
+      : scores.memory >= 4
+        ? "最近價格路徑比較有慣性，前後段節奏比較容易連在一起。"
+        : "最近價格路徑的連續感中等。");
+  }
+  if (scores.complexity >= 4) {
+    sentences.push("路徑細節偏多，單看某一個訊號時容易覺得忽明忽暗。");
+  } else if (scores.complexity <= 2) {
+    sentences.push("路徑相對單純，雜亂程度沒有特別突出。");
+  }
+  if (scores.agitation >= 4) {
+    sentences.push("波動有成群出現的味道，大波後比較常接著較大的波。");
+  } else if (scores.agitation <= 2) {
+    sentences.push("大波動沒有明顯黏在一起，波動比較分散。");
+  }
+  if (scores.chroma >= 4) {
+    sentences.push("雜訊偏厚，短時間的訊號比較容易被震盪蓋掉。");
+  }
+  if (scores.turbulence >= 4) {
+    sentences.push("目前波動相對它自己的歷史位置偏高。");
+  } else if (scores.turbulence <= 2) {
+    sentences.push("目前波動相對它自己的歷史位置偏平穩。");
+  }
+  return (sentences.length ? sentences : ["目前沒有特別突出的結構特徵，先把它當成一般混合型盤面。"]).slice(0, 3).join(" ");
+}
+
+function structureReadingNote(structure) {
+  if (structure?.synchrony_locked) {
+    return "分數越滿代表該特徵越明顯；同步性要靠全市場資料，個股頁先不硬判斷。";
+  }
+  return "分數越滿代表該特徵越明顯；這張卡描述現在的路況，不替未來下結論。";
 }
 
 function renderStructureDimension(item) {

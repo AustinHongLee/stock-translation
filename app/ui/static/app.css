@@ -911,6 +911,15 @@ td.down { color: var(--down); font-weight: 600; }
 .structure-head h3 { font-size: 16px; margin: 2px 0 4px; color: var(--ink); }
 .structure-head p { font-size: 12px; color: var(--muted); line-height: 1.55; }
 .structure-pill { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--brand); background: var(--brand-soft); border: 1px solid var(--brand-soft-line); border-radius: 999px; padding: 4px 10px; }
+.structure-reading { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .85fr); gap: 16px; padding: 12px 0 14px; margin: 0 0 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.structure-reading-main,
+.structure-reading-note { min-width: 0; }
+.structure-kicker { display: block; font-size: 11px; font-weight: 800; color: var(--brand-2); margin-bottom: 4px; }
+.structure-reading-main strong { display: block; font-size: 15px; line-height: 1.45; color: var(--ink); margin-bottom: 5px; }
+.structure-reading p { font-size: 12.5px; color: var(--ink-2); line-height: 1.65; }
+.structure-reading-note p { color: var(--muted); }
+.structure-traits { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px; }
+.structure-trait { display: inline-flex; align-items: center; min-height: 24px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); font-size: 11.5px; font-weight: 700; }
 .structure-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .structure-row { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); overflow: hidden; }
 .structure-row summary { min-height: 42px; display: grid; grid-template-columns: minmax(72px, 1fr) auto minmax(54px, auto); align-items: center; gap: 8px; padding: 9px 11px; cursor: pointer; list-style: none; }
@@ -944,6 +953,7 @@ td.down { color: var(--down); font-weight: 600; }
 }
 
 @media (max-width: 900px) {
+  .structure-reading { grid-template-columns: 1fr; gap: 10px; }
   .structure-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

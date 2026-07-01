@@ -70,9 +70,13 @@ class UIThemeTests(unittest.TestCase):
 
         self.assertIn('id="structureCard"', html)
         self.assertIn("structure-card", css)
+        self.assertIn("structure-reading", css)
+        self.assertIn("structure-trait", css)
         self.assertIn("structure-grid", css)
         self.assertIn("structureCard", js)
         self.assertIn("function renderStructureCard", js)
+        self.assertIn("function structureHumanReading", js)
+        self.assertIn("白話性格", js)
         self.assertIn("renderStructureCard(payload.structure)", js)
 
     def test_chart_advanced_controls_are_large_chart_only(self) -> None:
