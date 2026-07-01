@@ -985,6 +985,9 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
     with SQLiteStore(db_path) as store:
         persisted = store.get_bulk_progress_summary(BULK_RUN_KEY)
     status["persisted"] = persisted
+    persisted_counts = persisted.get("counts") if isinstance(persisted.get("counts"), dict) else {}
+    source_pending_count = int(persisted_counts.get("source_pending", 0)) if persisted_counts else 0
+    status["source_pending_count"] = source_pending_count
     status["can_retry_failed"] = bool(persisted.get("failed_count")) and not bool(status.get("running"))
 
     if not status.get("running") and status.get("status") == "idle" and persisted.get("total"):
@@ -998,6 +1001,7 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
                 "done": done,
                 "failed": persisted.get("failed", []),
                 "failed_count": failed_count,
+                "source_pending_count": source_pending_count,
                 "message": "讀到上次下載進度；按開始下載會接續，或只重試失敗清單。",
                 "running": False,
                 "paused": False,

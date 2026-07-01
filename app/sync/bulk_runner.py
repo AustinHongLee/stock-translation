@@ -16,6 +16,7 @@ from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     STATUS_CURRENT,
     STATUS_PATCHED,
+    STATUS_SOURCE_PENDING,
     plan_data_gap,
     previous_business_day,
     resolve_post_patch_status,
@@ -32,6 +33,7 @@ T86_MAX_EMPTY = 12  # 連續無資料日就停（假期/邊界）
 # 法人是全市場逐日資料，補一天 = 補齊所有股票，所以這幾次 API 很划算。
 T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
+BULK_STATUS_SOURCE_PENDING = "source_pending"
 
 
 def build_bulk_plan(
@@ -147,6 +149,8 @@ def build_bulk_plan(
         store = ctx["store"]
         client = ctx["client"]
         store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "running")
+        price_warnings: list[str] = []
+        post_status = None
         try:
             coverage_before = store.refresh_data_coverage(
                 sid,
@@ -168,12 +172,12 @@ def build_bulk_plan(
             fetch_start = gap_plan.fetch_start_date or start
             fetch_end = gap_plan.fetch_end_date or target_date
             prices = client.fetch_daily_prices(sid, fetch_start, fetch_end)
+            price_warnings = _dedupe_texts(list(getattr(client, "last_warnings", [])))
             tail_end = same_month_tail_date(fetch_end, today)
             if tail_end > fetch_end and _latest_price_date(prices) < target_date:
-                prices = _merge_daily_prices(
-                    prices,
-                    client.fetch_daily_prices(sid, fetch_start, tail_end),
-                )
+                tail_prices = client.fetch_daily_prices(sid, fetch_start, tail_end)
+                price_warnings = _dedupe_texts([*price_warnings, *list(getattr(client, "last_warnings", []))])
+                prices = _merge_daily_prices(prices, tail_prices)
             price_rows = 0
             if prices:
                 price_rows = store.upsert_daily_prices(prices)
@@ -204,6 +208,23 @@ def build_bulk_plan(
         latest = store.get_daily_prices(sid, limit=1)
         if latest and latest[-1].date >= target_date:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+        elif price_warnings:
+            have = latest[-1].date.isoformat() if latest else "無資料"
+            error = _bulk_unstable_source_error(sid, have, target_date, price_warnings)
+            store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "failed", error=error)
+            raise RuntimeError(error)
+        elif _is_short_source_pending(gap_plan, post_status):
+            have = latest[-1].date.isoformat() if latest else "無資料"
+            store.mark_bulk_item(
+                BULK_RUN_KEY,
+                "stock",
+                sid,
+                BULK_STATUS_SOURCE_PENDING,
+                error=(
+                    f"日線暫時只到 {have}，目標={target_date.isoformat()}；"
+                    "可能是最新交易日尚未公布或該檔當日無交易，稍後再重試。"
+                ),
+            )
         else:
             have = latest[-1].date.isoformat() if latest else "無資料"
             store.mark_bulk_item(
@@ -280,3 +301,33 @@ def _merge_daily_prices(*groups: list[DailyPrice]) -> list[DailyPrice]:
         for price in group:
             by_key[(price.stock_id, price.date)] = price
     return sorted(by_key.values(), key=lambda item: (item.stock_id, item.date))
+
+
+def _dedupe_texts(items: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if item and item not in seen:
+            result.append(item)
+            seen.add(item)
+    return result
+
+
+def _bulk_unstable_source_error(
+    stock_id: str,
+    latest_date_text: str,
+    target_date: date,
+    warnings: list[str],
+) -> str:
+    first = warnings[0] if warnings else "TWSE 暫時沒有回應"
+    return (
+        f"TWSE 抓取不穩，{stock_id} 日線未補齊"
+        f"（最後={latest_date_text}，目標={target_date.isoformat()}）。"
+        f"已先停止硬補；稍後按重試失敗。首個警告：{first}"
+    )
+
+
+def _is_short_source_pending(gap_plan, post_status) -> bool:
+    if post_status is None or post_status.status != STATUS_SOURCE_PENDING:
+        return False
+    return 0 <= int(getattr(gap_plan, "gap_business_days", 0) or 0) <= 2

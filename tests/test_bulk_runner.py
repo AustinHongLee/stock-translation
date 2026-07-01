@@ -22,6 +22,12 @@ class June30Date(date):
         return cls(2026, 6, 30)
 
 
+class July1Date(date):
+    @classmethod
+    def today(cls) -> "July1Date":
+        return cls(2026, 7, 1)
+
+
 # today = 2026-02-23（農曆年後第一個交易日）。2/12~2/22 為春節連假＋週末（全休市），
 # 因此「今天之前的最後一個交易日」= 2026-02-11。新版 target_date 就是它。
 EXPECTED_TARGET = date(2026, 2, 11)
@@ -111,6 +117,20 @@ class MissingTargetTailBulkClient(FakeBulkClient):
         if end_date < date(2026, 6, 30):
             return []
         return [DailyPrice(stock_id, date(2026, 6, 30), 11.1, 11.25, 11.05, 11.2, 2001)]
+
+
+class EmptyNoWarningBulkClient(FakeBulkClient):
+    def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        self.last_warnings = []
+        return []
+
+
+class WarningEmptyBulkClient(FakeBulkClient):
+    def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        self.last_warnings = [f"Skipped {stock_id} {start_date:%Y-%m} daily prices after retry: timeout"]
+        return []
 
 
 class FakeBulkStore:
@@ -296,6 +316,41 @@ class BulkRunnerTests(unittest.TestCase):
         )
         self.assertEqual(fake_store.daily["2330"][-1].date, date(2026, 6, 30))
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_sync_one_marks_short_latest_gap_as_source_pending_not_failed(self) -> None:
+        fake_client = EmptyNoWarningBulkClient(request_interval=0)
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = [DailyPrice("2330", date(2026, 6, 29), 10, 11, 9, 10, 1000)]
+
+        with (
+            patch("app.sync.bulk_runner.date", July1Date),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("2330")
+
+        statuses = _statuses_for(fake_store, "2330")
+        self.assertEqual(statuses[-1], "source_pending")
+        self.assertNotIn("failed", statuses)
+
+    def test_sync_one_turns_twse_warnings_into_retryable_failure(self) -> None:
+        fake_client = WarningEmptyBulkClient(request_interval=0)
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = [DailyPrice("2330", date(2026, 6, 29), 10, 11, 9, 10, 1000)]
+
+        with (
+            patch("app.sync.bulk_runner.date", July1Date),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            with self.assertRaisesRegex(RuntimeError, "TWSE 抓取不穩"):
+                plan.sync_one("2330")
+
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "failed")
 
     def test_retry_failed_marks_done_when_single_sync_already_caught_up(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)

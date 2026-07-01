@@ -7237,6 +7237,7 @@ function renderBulk(st) {
   if (!wrap) return;
   const active = Boolean(st.running);
   const failedCount = Number(st.failed_count || 0);
+  const sourcePendingCount = Number(st.source_pending_count || 0);
   wrap.classList.toggle("hidden", st.status === "idle");
   if (bar) {
     const pct = st.total ? Math.round((Number(st.done) / Number(st.total)) * 100) : (st.status === "preparing" ? 5 : 0);
@@ -7250,6 +7251,7 @@ function renderBulk(st) {
     if (st.current) s += `　目前：${st.current}`;
     if (st.eta_seconds != null) s += `　ETA ${formatDuration(st.eta_seconds)}`;
     if (st.skipped) s += `　已跳過 ${st.skipped}`;
+    if (sourcePendingCount) s += `　待來源 ${sourcePendingCount}`;
     if (failedCount) s += `　失敗 ${failedCount}`;
     if (st.message) s += `　${st.message}`;
     txt.textContent = s;
