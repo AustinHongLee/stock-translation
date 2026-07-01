@@ -15,13 +15,12 @@ set "SHA_PATH=%ZIP_PATH%.sha256"
 python tools\make_app_icon.py
 if errorlevel 1 goto fail
 
+python tools\build_seed.py
+if errorlevel 1 goto fail
+
 python -m PyInstaller --noconfirm --clean stock_translator.spec
 if errorlevel 1 goto fail
 
-if not exist "%APP_DIR%\data" mkdir "%APP_DIR%\data"
-copy /Y "data\stock_translator.sqlite3" "%APP_DIR%\data\stock_translator.sqlite3" >nul
-copy /Y "data\stock_catalog.json" "%APP_DIR%\data\stock_catalog.json" >nul
-copy /Y "data\value_screener.json" "%APP_DIR%\data\value_screener.json" >nul
 copy /Y "README_給測試者.txt" "%APP_DIR%\README_給測試者.txt" >nul
 
 python tools\package_release.py "%APP_DIR%" "%ZIP_PATH%" "%SHA_PATH%"

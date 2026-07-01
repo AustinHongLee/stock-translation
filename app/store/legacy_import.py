@@ -94,31 +94,40 @@ def import_legacy_data(legacy_db: Path | str, current_db: Path | str) -> dict[st
 
     回傳 {"imported": {table: added_rows}, "tables": n, "rows": total}。
     """
-    legacy = Path(legacy_db)
+    return merge_sqlite(legacy_db, current_db, IMPORTABLE_TABLES)
+
+
+def merge_sqlite(source_db: Path | str, current_db: Path | str, tables: tuple[str, ...]) -> dict[str, object]:
+    """INSERT OR IGNORE source DB rows into current DB for the given tables.
+
+    The merge is intentionally non-destructive: existing target rows win, missing
+    tables are skipped, and only columns present on both sides are copied.
+    """
+    source = Path(source_db)
     current = Path(current_db)
     summary: dict[str, object] = {"imported": {}, "tables": 0, "rows": 0}
-    if not legacy.is_file():
+    if not source.is_file():
         return summary
 
     current.parent.mkdir(parents=True, exist_ok=True)
     conn = _connect(current)
     try:
         conn.execute("PRAGMA busy_timeout = 5000")
-        conn.execute("ATTACH DATABASE ? AS legacy", (str(legacy),))
+        conn.execute("ATTACH DATABASE ? AS source", (str(source),))
         try:
-            for table in IMPORTABLE_TABLES:
-                if not _table_exists(conn, "main", table) or not _table_exists(conn, "legacy", table):
+            for table in tables:
+                if not _table_exists(conn, "main", table) or not _table_exists(conn, "source", table):
                     continue
                 main_cols = _table_columns(conn, "main", table)
-                legacy_cols = set(_table_columns(conn, "legacy", table))
-                cols = [c for c in main_cols if c in legacy_cols]
+                source_cols = set(_table_columns(conn, "source", table))
+                cols = [c for c in main_cols if c in source_cols]
                 if not cols:
                     continue
                 col_list = ", ".join(f'"{c}"' for c in cols)
                 before = int(conn.execute(f'SELECT COUNT(*) FROM main."{table}"').fetchone()[0])
                 conn.execute(
                     f'INSERT OR IGNORE INTO main."{table}" ({col_list}) '
-                    f'SELECT {col_list} FROM legacy."{table}"'
+                    f'SELECT {col_list} FROM source."{table}"'
                 )
                 after = int(conn.execute(f'SELECT COUNT(*) FROM main."{table}"').fetchone()[0])
                 added = after - before
@@ -130,7 +139,7 @@ def import_legacy_data(legacy_db: Path | str, current_db: Path | str) -> dict[st
                     summary["tables"] = int(summary["tables"]) + 1
             conn.commit()
         finally:
-            conn.execute("DETACH DATABASE legacy")
+            conn.execute("DETACH DATABASE source")
     finally:
         conn.close()
     return summary

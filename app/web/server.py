@@ -20,8 +20,17 @@ from app.exporters.excel import (
 )
 from app.exporters.html_report import assert_report_has_no_forbidden, build_stock_report_html
 from app.news import fetch_company_news
-from app.runtime_paths import data_dir, data_path, ensure_seeded_data_file, external_root, migrate_legacy_data, static_dir
+from app.runtime_paths import (
+    data_dir,
+    data_path,
+    ensure_seeded_data_file,
+    external_root,
+    migrate_legacy_data,
+    seed_dir,
+    static_dir,
+)
 from app.store.legacy_import import copy_legacy_snapshot, import_legacy_data, legacy_import_status
+from app.store.seed_merge import applied_seed_version, maybe_merge_seed, seed_manifest_version
 from app.update.checker import check_for_update
 from app.update.installer import prepare_update, start_prepared_update
 from app.version import APP_VERSION
@@ -111,7 +120,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/indicators/catalog":
                 self._send_json(build_indicator_catalog_payload())
             elif parsed.path == "/api/app-info":
-                self._send_json(_app_info_payload())
+                self._send_json(_app_info_payload(self.server.db_path))
             elif parsed.path == "/api/update/check":
                 params = parse_qs(parsed.query)
                 force = (params.get("force") or ["0"])[0] in {"1", "true", "yes"}
@@ -821,6 +830,7 @@ def main(argv: list[str] | None = None) -> int:
     args.db.parent.mkdir(parents=True, exist_ok=True)
     with SQLiteStore(args.db):
         pass
+    _start_seed_merge_if_needed(args.db)
 
     url = f"http://{args.host}:{args.port}"
     try:
@@ -847,6 +857,27 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _start_seed_merge_if_needed(db_path: Path) -> None:
+    if not getattr(sys, "frozen", False):
+        return
+
+    def _worker() -> None:
+        with SQLiteStore(db_path) as store:
+            result = maybe_merge_seed(
+                store,
+                seed_dir=seed_dir(),
+                current_db=db_path,
+                app_version=APP_VERSION,
+                backups_dir=data_dir() / "backups",
+            )
+        if result.get("applied"):
+            print(f"Seed data merged: version {result.get('version')} ({result.get('rows', 0)} rows)")
+        elif result.get("reason") not in {"missing_manifest", "already_applied"}:
+            print(f"Seed data skipped: {result.get('reason')}")
+
+    threading.Thread(target=_worker, name="seed-merge", daemon=True).start()
+
+
 def _configure_output() -> None:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -857,11 +888,16 @@ def _quote_provider() -> TwseMisQuoteProvider:
     return TwseMisQuoteProvider(TwseClient(timeout=5.0, request_interval=0.0))
 
 
-def _app_info_payload() -> dict[str, object]:
+def _app_info_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
+    seed_version = 0
+    with SQLiteStore(DEFAULT_DB) as store:
+        seed_version = applied_seed_version(store)
     return {
         "version": APP_VERSION,
         "update_source": "GitHub Releases",
         "update_privacy": "只連 GitHub 取得版本號與下載連結，不上傳任何本地資料。",
+        "data_snapshot_version": seed_version,
+        "bundled_data_snapshot_version": seed_manifest_version(seed_dir()),
         "frozen": bool(getattr(sys, "frozen", False)),
     }
 

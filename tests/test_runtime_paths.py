@@ -25,6 +25,7 @@ class RuntimePathsTests(unittest.TestCase):
             ):
                 self.assertEqual(runtime_paths.external_data_root(), local_app_data / "StockTranslator")
                 self.assertEqual(runtime_paths.data_dir(), local_app_data / "StockTranslator" / "data")
+                self.assertEqual(runtime_paths.seed_dir(), runtime_paths.resource_root() / "seed")
 
     def test_migrate_legacy_data_copies_database_and_sidecars(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

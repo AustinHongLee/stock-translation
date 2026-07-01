@@ -44,16 +44,25 @@ VSVersionInfo(
     encoding="utf-8",
 )
 
+datas = [
+    (str(ROOT / "app" / "ui" / "static"), "app/ui/static"),
+    (str(ROOT / "data" / "stock_catalog.json"), "data"),
+    (str(ROOT / "data" / "value_screener.json"), "data"),
+]
+seed_output = ROOT / "dist" / "seed"
+if (seed_output / "seed.sqlite3").is_file() and (seed_output / "manifest.json").is_file():
+    datas.extend(
+        [
+            (str(seed_output / "seed.sqlite3"), "seed"),
+            (str(seed_output / "manifest.json"), "seed"),
+        ]
+    )
+
 a = Analysis(
     ["app/web/server.py"],
     pathex=[str(ROOT)],
     binaries=[],
-    datas=[
-        (str(ROOT / "app" / "ui" / "static"), "app/ui/static"),
-        (str(ROOT / "data" / "stock_catalog.json"), "data"),
-        (str(ROOT / "data" / "value_screener.json"), "data"),
-        (str(ROOT / "data" / "stock_translator.sqlite3"), "data"),
-    ],
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

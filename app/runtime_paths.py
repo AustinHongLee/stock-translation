@@ -40,6 +40,10 @@ def bundled_data_dir() -> Path:
     return resource_root() / "data"
 
 
+def seed_dir() -> Path:
+    return resource_root() / "seed"
+
+
 def data_path(filename: str, *, writable: bool = False) -> Path:
     external = data_dir() / filename
     if writable or external.is_file():
