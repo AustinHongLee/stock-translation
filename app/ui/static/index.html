@@ -376,7 +376,7 @@
                 <h3>全市場資料下載</h3>
                 <span class="muted-tag">本地資料庫・增量補缺・含三大法人</span>
               </div>
-              <p class="bulk-hint">這裡負責補齊本機資料庫（日線、三大法人、波段關卡用它）。第一次會跑很久；之後會先跳過已最新的股票，只差幾天就只補那幾天，缺太多才重建近一年；可暫停／停止，關掉也會記住進度，下次接續。</p>
+              <p class="bulk-hint">這裡會先用全市場資料快速補到最近收盤，讓已最新的股票直接跳過；個股歷史不足時，進「看個股」或按「補這檔」再補完整日線。三大法人與共用資料也會一起更新；可暫停／停止，關掉也會記住進度，下次接續。</p>
               <div class="bulk-controls">
                 <button id="bulkStartBtn" type="button" class="primary-button" onclick="bulkStart()">開始下載</button>
                 <button id="bulkPauseBtn" type="button" class="chart-size-btn" onclick="bulkPause()" disabled>暫停</button>

@@ -297,16 +297,8 @@ class BulkRunnerTests(unittest.TestCase):
             plan.prelude(threading.Event())  # type: ignore[union-attr]
             plan.sync_one("2330")
 
-        self.assertEqual(
-            fake_store.coverage_refreshes,
-            [
-                ("2330", "daily_price", EXPECTED_TARGET),
-                ("2330", "daily_price", EXPECTED_TARGET),
-                ("2330", "daily_price", EXPECTED_TARGET),
-                ("2330", "daily_price", EXPECTED_TARGET),
-            ],
-        )
-        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 23), EXPECTED_TARGET)])
+        self.assertEqual(fake_store.coverage_refreshes, [("2330", "daily_price", EXPECTED_TARGET)])
+        self.assertEqual(fake_client.price_ranges, [])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_sync_one_patches_only_missing_daily_gap_when_small(self) -> None:
@@ -346,7 +338,7 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertEqual(fake_client.price_ranges, [])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
-    def test_latest_all_single_row_does_not_skip_history_backfill(self) -> None:
+    def test_latest_all_single_row_skips_bulk_history_backfill(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
         fake_client.latest_all_prices = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
@@ -358,10 +350,10 @@ class BulkRunnerTests(unittest.TestCase):
         ):
             plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
             plan.prelude(threading.Event())  # type: ignore[union-attr]
-            self.assertFalse(plan.skip("2330"))
+            self.assertTrue(plan.skip("2330"))
             plan.sync_one("2330")
 
-        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 23), EXPECTED_TARGET)])
+        self.assertEqual(fake_client.price_ranges, [])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_sync_one_retries_same_month_tail_when_target_day_is_sparse(self) -> None:
@@ -445,6 +437,7 @@ class BulkRunnerTests(unittest.TestCase):
 
     def test_sync_one_marks_failed_when_still_behind_target(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
         fake_client.daily_last_date = date(2026, 1, 5)
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
 

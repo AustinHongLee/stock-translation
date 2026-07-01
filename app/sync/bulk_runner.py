@@ -17,7 +17,6 @@ from app.analyze.data_gap import (
     STATUS_CURRENT,
     STATUS_PATCHED,
     STATUS_SOURCE_PENDING,
-    count_business_days,
     plan_data_gap,
     previous_business_day,
     resolve_post_patch_status,
@@ -35,7 +34,6 @@ T86_MAX_EMPTY = 12  # 連續無資料日就停（假期/邊界）
 T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
 BULK_STATUS_SOURCE_PENDING = "source_pending"
-MIN_HISTORY_COVERAGE_RATIO = 0.55
 
 
 def build_bulk_plan(
@@ -170,11 +168,8 @@ def build_bulk_plan(
                 max_patch_business_days=45,
             )
             if gap_plan.status == STATUS_CURRENT:
-                if _daily_history_is_sufficient(store, sid, coverage_before, start, target_date):
-                    store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
-                    return
-                fetch_start = start
-                fetch_end = target_date
+                store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+                return
             else:
                 fetch_start = gap_plan.fetch_start_date or start
                 fetch_end = gap_plan.fetch_end_date or target_date
@@ -214,14 +209,7 @@ def build_bulk_plan(
         # 若無條件標 done，半套／過期資料會被當成完成，且之後永遠被略過。
         # 因此一律用『本地實際最後一筆日期』驗收；未達標就標 failed（會被重試與下次下載重抓）。
         latest = store.get_daily_prices(sid, limit=1)
-        coverage_final = store.compute_data_coverage(sid, DATA_NODE_DAILY_PRICE, target_date=target_date)
-        if latest and latest[-1].date >= target_date and _daily_history_is_sufficient(
-            store,
-            sid,
-            coverage_final,
-            start,
-            target_date,
-        ):
+        if latest and latest[-1].date >= target_date:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
         elif price_warnings:
             have = latest[-1].date.isoformat() if latest else "無資料"
@@ -262,8 +250,8 @@ def build_bulk_plan(
         # 重點修正：不再用 bulk_progress 的 "done" 短路。
         # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
         # 改成每次都用『本地最後一筆 vs 目標交易日』判斷新鮮度（精確、不用 <=3 天的近似）。
-        coverage = store.compute_data_coverage(sid, DATA_NODE_DAILY_PRICE, target_date=target_date)
-        if _daily_history_is_sufficient(store, sid, coverage, start, target_date):
+        latest = store.get_daily_prices(sid, limit=1)
+        if latest and latest[-1].date >= target_date:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
             return True
         return False
@@ -272,7 +260,7 @@ def build_bulk_plan(
         store = ctx.get("store")
         client = ctx.get("client")
         # 1) 收尾再跑一次全市場最新日線 top-up：長時間下載期間來源可能更新。
-        #    prelude 已先跑過一次；skip/驗收會檢查歷史量，避免只有最新一根就誤判完成。
+        #    全市場下載採「最新日優先」；個別歷史不足留給看個股 / 補這檔時再補。
         if client is not None and store is not None and not retry_failed_only:
             _top_up_latest_all_prices(store, client)
         # 2) 同步刷新雷達快照：讓『全市場下載』也更新 value_screener。
@@ -321,34 +309,6 @@ def _top_up_latest_all_prices(store, client) -> None:
         pass
 
 
-def _daily_history_is_sufficient(
-    store,
-    stock_id: str,
-    coverage: dict[str, object],
-    start_date: date,
-    target_date: date,
-) -> bool:
-    latest = _date_or_none(coverage.get("latest_date"))
-    if latest is None or latest < target_date:
-        return False
-    row_count = int(coverage.get("row_count") or 0)
-    if row_count <= 1:
-        return False
-    expected_start = start_date
-    profile_getter = getattr(store, "get_profile", None)
-    if callable(profile_getter):
-        try:
-            profile = profile_getter(stock_id)
-            listed_date = getattr(profile, "listed_date", None) if profile is not None else None
-            if listed_date is not None and listed_date > expected_start:
-                expected_start = listed_date
-        except Exception:  # noqa: BLE001 - coverage fallback is enough for bulk gating
-            pass
-    expected_days = max(1, count_business_days(expected_start, target_date))
-    required_rows = max(2, int(expected_days * MIN_HISTORY_COVERAGE_RATIO))
-    return row_count >= required_rows
-
-
 def _dedupe_texts(items: list[str]) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
@@ -377,11 +337,3 @@ def _is_short_source_pending(gap_plan, post_status) -> bool:
     if post_status is None or post_status.status != STATUS_SOURCE_PENDING:
         return False
     return 0 <= int(getattr(gap_plan, "gap_business_days", 0) or 0) <= 2
-
-
-def _date_or_none(value: object) -> date | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, date):
-        return value
-    return date.fromisoformat(str(value))
