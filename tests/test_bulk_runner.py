@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -41,6 +41,7 @@ class FakeBulkClient:
         self.price_ranges: list[tuple[str, date, date]] = []
         self.daily_last_date: date | None = None
         self.latest_all_calls = 0
+        self.latest_all_prices = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
 
     def fetch_listed_profiles(self) -> list[StockProfile]:
         return [StockProfile(stock_id="2330", name="台積電", short_name="台積電")]
@@ -104,11 +105,16 @@ class FakeBulkClient:
     def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
         self.price_ranges.append((stock_id, start_date, end_date))
         last = self.daily_last_date or end_date
+        if (end_date - start_date).days > 90 and self.daily_last_date is None:
+            return [
+                DailyPrice(stock_id, end_date - timedelta(days=offset), 10, 11, 9, 10, 1000)
+                for offset in range(180)
+            ]
         return [DailyPrice(stock_id, last, 10, 11, 9, 10, 1000)]
 
     def fetch_latest_all_prices(self) -> list[DailyPrice]:
         self.latest_all_calls += 1
-        return [DailyPrice("2330", date(2026, 2, 23), 10, 11, 9, 10, 1000)]
+        return list(self.latest_all_prices)
 
 
 class MissingTargetTailBulkClient(FakeBulkClient):
@@ -221,9 +227,28 @@ class FakeBulkStore:
             "stock_id": stock_id,
             "node": node,
             "latest_date": latest[-1].date.isoformat() if latest else None,
+            "row_count": len(self.get_daily_prices(stock_id)),
+            "hole_count": 0,
             "target_date": target_date.isoformat() if target_date else None,
             "status": status or "indexed",
         }
+
+    def compute_data_coverage(
+        self,
+        stock_id: str,
+        node: str,
+        *,
+        target_date: date | None = None,
+        status: str | None = None,
+        suspect_reason: str = "",
+    ) -> dict[str, object]:
+        return self.refresh_data_coverage(
+            stock_id,
+            node,
+            target_date=target_date,
+            status=status,
+            suspect_reason=suspect_reason,
+        )
 
     def delete_json_cache(self, key: str) -> None:
         self.json_cache_deletes.append(key)
@@ -231,6 +256,13 @@ class FakeBulkStore:
 
 def _statuses_for(store: FakeBulkStore, sid: str) -> list[str]:
     return [mark[3] for mark in store.bulk_marks if mark[1] == "stock" and mark[2] == sid]
+
+
+def _history_rows(stock_id: str, latest: date, count: int = 180) -> list[DailyPrice]:
+    return [
+        DailyPrice(stock_id, latest - timedelta(days=offset), 10, 11, 9, 10, 1000)
+        for offset in range(count)
+    ]
 
 
 class BulkRunnerTests(unittest.TestCase):
@@ -271,15 +303,17 @@ class BulkRunnerTests(unittest.TestCase):
                 ("2330", "daily_price", EXPECTED_TARGET),
                 ("2330", "daily_price", EXPECTED_TARGET),
                 ("2330", "daily_price", EXPECTED_TARGET),
+                ("2330", "daily_price", EXPECTED_TARGET),
             ],
         )
-        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 11), EXPECTED_TARGET)])
+        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 23), EXPECTED_TARGET)])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_sync_one_patches_only_missing_daily_gap_when_small(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
-        fake_store.daily["2330"] = [DailyPrice("2330", date(2026, 2, 10), 10, 11, 9, 10, 1000)]
+        fake_store.daily["2330"] = _history_rows("2330", date(2026, 2, 10))
 
         with (
             patch("app.sync.bulk_runner.date", FixedDate),
@@ -293,10 +327,48 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertEqual(fake_client.price_ranges, [("2330", EXPECTED_TARGET, EXPECTED_TARGET)])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
+    def test_prelude_latest_all_topup_lets_one_day_gap_skip_without_month_fetch(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = _history_rows("2330", date(2026, 2, 10))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertTrue(plan.skip("2330"))
+
+        self.assertEqual(fake_client.latest_all_calls, 1)
+        self.assertEqual(fake_client.price_ranges, [])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_latest_all_single_row_does_not_skip_history_backfill(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertFalse(plan.skip("2330"))
+            plan.sync_one("2330")
+
+        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 23), EXPECTED_TARGET)])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
     def test_sync_one_retries_same_month_tail_when_target_day_is_sparse(self) -> None:
         fake_client = MissingTargetTailBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
-        fake_store.daily["2330"] = [DailyPrice("2330", date(2026, 6, 26), 10, 11, 9, 10, 1000)]
+        fake_store.daily["2330"] = _history_rows("2330", date(2026, 6, 26))
 
         with (
             patch("app.sync.bulk_runner.date", June30Date),
@@ -356,7 +428,7 @@ class BulkRunnerTests(unittest.TestCase):
         fake_client = FakeBulkClient(request_interval=0)
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
         fake_store.bulk_marks.append((BULK_RUN_KEY, "stock", "2330", "failed"))
-        fake_store.daily["2330"] = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
+        fake_store.daily["2330"] = _history_rows("2330", EXPECTED_TARGET)
 
         with (
             patch("app.sync.bulk_runner.date", FixedDate),
@@ -405,7 +477,7 @@ class BulkRunnerTests(unittest.TestCase):
             fake_store.bulk_marks.append(("full_market", "stock", "1101", "done"))
             self.assertFalse(plan.skip("1101"))
 
-            fake_store.daily["2454"] = [DailyPrice("2454", date(2026, 2, 23), 10, 11, 9, 10, 1000)]
+            fake_store.daily["2454"] = _history_rows("2454", date(2026, 2, 23))
             self.assertTrue(plan.skip("2454"))
 
             self.assertFalse(plan.skip("9999"))
@@ -424,9 +496,9 @@ class BulkRunnerTests(unittest.TestCase):
             plan.prelude(threading.Event())  # type: ignore[union-attr]
             plan.on_finish({})
 
-        self.assertEqual(fake_client.latest_all_calls, 1)
+        self.assertEqual(fake_client.latest_all_calls, 2)
         self.assertTrue(fake_store.daily.get("2330"))
-        self.assertEqual(fake_store.daily["2330"][-1].date, date(2026, 2, 23))
+        self.assertEqual(fake_store.daily["2330"][-1].date, EXPECTED_TARGET)
         mock_refresh.assert_called_once()
         self.assertIn("local_data_v2", fake_store.json_cache_deletes)
 
