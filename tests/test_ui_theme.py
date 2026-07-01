@@ -68,8 +68,11 @@ class UIThemeTests(unittest.TestCase):
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
         js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
 
-        self.assertIn('id="structureCard"', html)
+        self.assertIn('<details id="structureCard"', html)
+        self.assertLess(html.index("company-brief-panel"), html.index('id="structureCard"'))
+        self.assertEqual(html.count('id="companyBriefTitle"'), 1)
         self.assertIn("structure-card", css)
+        self.assertIn("structure-collapse-body", css)
         self.assertIn("structure-reading", css)
         self.assertIn("structure-trait", css)
         self.assertIn("structure-grid", css)

@@ -908,10 +908,27 @@ td.down { color: var(--down); font-weight: 600; }
 
 .structure-card { border-left: 3px solid var(--brand-2); padding: 16px 18px; }
 .structure-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.structure-card > summary.structure-head { cursor: pointer; list-style: none; margin-bottom: 0; }
+.structure-card > summary.structure-head::-webkit-details-marker { display: none; }
+.structure-card > summary.structure-head::after {
+  content: "展開";
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--brand-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.structure-card[open] > summary.structure-head { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.structure-card[open] > summary.structure-head::after { content: "收合"; }
 .structure-head h3 { font-size: 16px; margin: 2px 0 4px; color: var(--ink); }
 .structure-head p { font-size: 12px; color: var(--muted); line-height: 1.55; }
 .structure-pill { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--brand); background: var(--brand-soft); border: 1px solid var(--brand-soft-line); border-radius: 999px; padding: 4px 10px; }
+.structure-collapse-body { display: grid; gap: 12px; }
 .structure-reading { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(220px, .85fr); gap: 16px; padding: 12px 0 14px; margin: 0 0 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.structure-collapse-body .structure-reading { border-top: 0; padding-top: 0; margin-bottom: 0; }
 .structure-reading-main,
 .structure-reading-note { min-width: 0; }
 .structure-kicker { display: block; font-size: 11px; font-weight: 800; color: var(--brand-2); margin-bottom: 4px; }

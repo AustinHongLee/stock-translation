@@ -635,7 +635,15 @@
               </div>
             </div>
 
-            <section id="structureCard" class="surface structure-card" hidden></section>
+            <section class="surface company-brief-panel">
+              <div class="brief-body">
+                <p class="eyebrow">先看這家公司</p>
+                <h3 id="companyBriefTitle">--</h3>
+                <p id="companyBriefText" class="brief-text">--</p>
+                <p id="companyBriefAdvice" class="disclaimer"></p>
+              </div>
+              <div id="companyRiskTags" class="risk-tag-list"></div>
+            </section>
 
             <section id="syncProgressPanel" class="sync-progress-panel hidden" aria-live="polite">
               <div class="sync-progress-head">
@@ -661,7 +669,7 @@
 
             <!-- 第一層 -->
             <section id="layerOverview" class="layer">
-              <div class="layer-tag"><span class="layer-num">1</span><div><h3>30 秒看懂</h3><p>先給白話結論、公司在做什麼、最近收盤與風險，以及這檔適不適合用股利法估價。</p></div></div>
+              <div class="layer-tag"><span class="layer-num">1</span><div><h3>30 秒看懂</h3><p>先給盤中報價、消息面、明牌驗證與這檔適不適合用股利法估價。</p></div></div>
 
               <section id="newbieGuideCard" class="surface newbie-guide hidden">
                 <div class="surface-head compact">
@@ -707,16 +715,6 @@
                 <p id="quoteNote" class="disclaimer"></p>
               </section>
 
-              <section class="surface company-brief-panel">
-                <div class="brief-body">
-                  <p class="eyebrow">先看這家公司</p>
-                  <h3 id="companyBriefTitle">--</h3>
-                  <p id="companyBriefText" class="brief-text">--</p>
-                  <p id="companyBriefAdvice" class="disclaimer"></p>
-                </div>
-                <div id="companyRiskTags" class="risk-tag-list"></div>
-              </section>
-
               <section class="surface validation-panel">
                 <div class="surface-head compact">
                   <h3 id="validationTitle">明牌驗證工作台</h3>
@@ -735,6 +733,8 @@
                 <div id="newsChipTop" class="news-chip-top"></div>
                 <a class="text-button" href="#newsPanel">看完整消息面 ↓</a>
               </section>
+
+              <details id="structureCard" class="surface structure-card" hidden></details>
             </section>
 
             <!-- 第二層 -->

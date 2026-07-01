@@ -2510,6 +2510,7 @@ function renderStructureCard(structure) {
     return;
   }
   card.hidden = false;
+  card.open = false;
   const sufficiency = structure.sufficiency || {};
   const meta = [
     structure.as_of_date ? `資料日 ${escapeHtml(structure.as_of_date)}` : "",
@@ -2522,28 +2523,30 @@ function renderStructureCard(structure) {
   )).join("");
   const rows = dimensions.map(renderStructureDimension).join("");
   card.innerHTML = `
-    <div class="structure-head">
+    <summary class="structure-head structure-summary">
       <div>
         <p class="eyebrow">${escapeHtml(structure.title || "結構指紋")}</p>
-        <h3>${escapeHtml(structure.subtitle || "這檔股票現在的性格")}</h3>
-        <p>${escapeHtml(meta || "資料充足度待確認")}</p>
+        <h3>${escapeHtml(`${structure.title || "結構指紋"}（進階參考）`)}</h3>
+        <p>${escapeHtml(meta || "資料充足度待確認")} · 只描述價格路徑，不收斂消息面</p>
       </div>
       <span class="structure-pill">${escapeHtml(structureAvailabilityLabel(structure))}</span>
-    </div>
-    <div class="structure-reading">
-      <div class="structure-reading-main">
-        <span class="structure-kicker">白話性格</span>
-        <strong>${escapeHtml(human.headline)}</strong>
-        <p>${escapeHtml(human.body)}</p>
+    </summary>
+    <div class="structure-collapse-body">
+      <div class="structure-reading">
+        <div class="structure-reading-main">
+          <span class="structure-kicker">白話性格</span>
+          <strong>${escapeHtml(human.headline)}</strong>
+          <p>${escapeHtml(human.body)}</p>
+        </div>
+        <div class="structure-reading-note">
+          <span class="structure-kicker">讀法提醒</span>
+          <p>${escapeHtml(human.note)}</p>
+        </div>
       </div>
-      <div class="structure-reading-note">
-        <span class="structure-kicker">讀法提醒</span>
-        <p>${escapeHtml(human.note)}</p>
-      </div>
+      <div class="structure-traits">${traits}</div>
+      <div class="structure-grid">${rows}</div>
+      <p class="disclaimer">${escapeHtml(structure.disclaimer || "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議")}</p>
     </div>
-    <div class="structure-traits">${traits}</div>
-    <div class="structure-grid">${rows}</div>
-    <p class="disclaimer">${escapeHtml(structure.disclaimer || "結構描述工具 · 描述現在 · 不預測未來 · 非投資建議")}</p>
   `;
 }
 
