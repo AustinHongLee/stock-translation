@@ -60,6 +60,7 @@ def maybe_merge_seed(
     current_db: Path | str,
     app_version: str,
     backups_dir: Path | str,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Merge bundled public seed data into the user's DB without overwriting rows.
 
@@ -81,7 +82,7 @@ def maybe_merge_seed(
             return {"applied": False, "reason": "app_too_old", "version": seed_version}
 
         current_applied = applied_seed_version(store)
-        if seed_version <= current_applied:
+        if not force and seed_version <= current_applied:
             return {
                 "applied": False,
                 "reason": "already_applied",

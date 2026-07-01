@@ -75,6 +75,33 @@ class SeedMergeTests(unittest.TestCase):
         self.assertFalse(second["applied"])
         self.assertEqual(second["reason"], "already_applied")
 
+    def test_force_merge_reapplies_same_seed_version_for_missing_rows(self) -> None:
+        self._write_seed(version=20260701)
+        with SQLiteStore(self.current) as store:
+            first = maybe_merge_seed(
+                store,
+                seed_dir=self.seed_dir,
+                current_db=self.current,
+                app_version="2.0.2",
+                backups_dir=self.backups,
+            )
+            self.assertTrue(first["applied"])
+            store.conn.execute("DELETE FROM daily_prices WHERE stock_id = ?", ("2317",))
+            store.conn.commit()
+            forced = maybe_merge_seed(
+                store,
+                seed_dir=self.seed_dir,
+                current_db=self.current,
+                app_version="2.0.2",
+                backups_dir=self.backups,
+                force=True,
+            )
+            rows = store.conn.execute("SELECT stock_id FROM daily_prices WHERE stock_id = '2317'").fetchall()
+
+        self.assertTrue(forced["applied"])
+        self.assertEqual(forced["imported"].get("daily_prices"), 1)
+        self.assertEqual(len(rows), 1)
+
     def test_seed_with_bad_hash_or_too_new_app_is_skipped(self) -> None:
         self._write_seed(version=20260701, sha256="0" * 64)
         with SQLiteStore(self.current) as store:

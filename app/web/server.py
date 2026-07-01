@@ -822,6 +822,11 @@ def main(argv: list[str] | None = None) -> int:
         dest="open",
         help="Do not open the browser.",
     )
+    parser.add_argument(
+        "--apply-seed",
+        action="store_true",
+        help="Apply bundled public seed data to the local database and exit.",
+    )
     args = parser.parse_args(argv)
 
     if args.db == DEFAULT_DB:
@@ -830,6 +835,10 @@ def main(argv: list[str] | None = None) -> int:
     args.db.parent.mkdir(parents=True, exist_ok=True)
     with SQLiteStore(args.db):
         pass
+    if args.apply_seed:
+        result = _apply_seed_now(args.db, force=True)
+        print(_seed_merge_message(result, manual=True))
+        return 0
     _start_seed_merge_if_needed(args.db)
 
     url = f"http://{args.host}:{args.port}"
@@ -862,20 +871,47 @@ def _start_seed_merge_if_needed(db_path: Path) -> None:
         return
 
     def _worker() -> None:
-        with SQLiteStore(db_path) as store:
-            result = maybe_merge_seed(
-                store,
-                seed_dir=seed_dir(),
-                current_db=db_path,
-                app_version=APP_VERSION,
-                backups_dir=data_dir() / "backups",
-            )
-        if result.get("applied"):
-            print(f"Seed data merged: version {result.get('version')} ({result.get('rows', 0)} rows)")
-        elif result.get("reason") not in {"missing_manifest", "already_applied"}:
-            print(f"Seed data skipped: {result.get('reason')}")
+        result = _apply_seed_now(db_path, force=False)
+        message = _seed_merge_message(result, manual=False)
+        if message:
+            print(message)
 
     threading.Thread(target=_worker, name="seed-merge", daemon=True).start()
+
+
+def _apply_seed_now(db_path: Path, *, force: bool) -> dict[str, object]:
+    with SQLiteStore(db_path) as store:
+        return maybe_merge_seed(
+            store,
+            seed_dir=seed_dir(),
+            current_db=db_path,
+            app_version=APP_VERSION,
+            backups_dir=data_dir() / "backups",
+            force=force,
+        )
+
+
+def _seed_merge_message(result: dict[str, object], *, manual: bool) -> str:
+    if result.get("applied"):
+        rows = int(result.get("rows") or 0)
+        version = result.get("version") or "--"
+        return f"官方資料包已套用：版本 {version}，新增 {rows} 筆公開資料。你的自選股、持倉與設定不會被覆蓋。"
+    reason = str(result.get("reason") or "")
+    if not manual and reason in {"missing_manifest", "already_applied"}:
+        return ""
+    labels = {
+        "missing_manifest": "這個版本沒有隨包官方資料包。",
+        "invalid_manifest_version": "官方資料包版本資訊不完整，已跳過。",
+        "app_too_old": "官方資料包需要更新的程式版本，已跳過。",
+        "already_applied": "這份官方資料包已經套用過。",
+        "missing_seed_db": "找不到官方資料包資料庫。",
+        "sha256_mismatch": "官方資料包驗證失敗，已跳過。",
+        "error": "套用官方資料包時發生錯誤，未改動你的資料。",
+    }
+    detail = labels.get(reason, f"官方資料包未套用：{reason or '未知原因'}。")
+    if result.get("error"):
+        detail = f"{detail} ({result.get('error')})"
+    return detail
 
 
 def _configure_output() -> None:
@@ -890,7 +926,7 @@ def _quote_provider() -> TwseMisQuoteProvider:
 
 def _app_info_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
     seed_version = 0
-    with SQLiteStore(DEFAULT_DB) as store:
+    with SQLiteStore(db_path) as store:
         seed_version = applied_seed_version(store)
     return {
         "version": APP_VERSION,

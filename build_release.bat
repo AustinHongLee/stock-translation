@@ -22,6 +22,7 @@ python -m PyInstaller --noconfirm --clean stock_translator.spec
 if errorlevel 1 goto fail
 
 copy /Y "README_給測試者.txt" "%APP_DIR%\README_給測試者.txt" >nul
+copy /Y "套用官方資料包.bat" "%APP_DIR%\套用官方資料包.bat" >nul
 
 python tools\package_release.py "%APP_DIR%" "%ZIP_PATH%" "%SHA_PATH%"
 if errorlevel 1 goto fail
