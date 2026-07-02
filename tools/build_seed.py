@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import sys
@@ -16,7 +17,6 @@ if str(ROOT) not in sys.path:
 
 from app.version import APP_VERSION
 
-DEFAULT_SOURCE = ROOT / "data" / "stock_translator.sqlite3"
 DEFAULT_OUTPUT_DIR = ROOT / "dist" / "seed"
 SEED_TABLES = (
     "stock_profiles",
@@ -41,7 +41,7 @@ PRIVATE_TABLES = (
 def main() -> int:
     _configure_output()
     parser = argparse.ArgumentParser(description="Build the bundled public seed data package.")
-    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
+    parser.add_argument("--source", type=Path, default=_default_source_db())
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--days", type=int, default=370)
     args = parser.parse_args()
@@ -74,10 +74,26 @@ def main() -> int:
         "tables": _table_stats(seed_db),
     }
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Source DB: {source}")
     print(f"Seed DB: {seed_db}")
     print(f"Manifest: {manifest_path}")
     print(f"sha256: {digest}")
     return 0
+
+
+def _default_source_db() -> Path:
+    try:
+        raw = os.environ.get("STOCK_TRANSLATOR_SEED_SOURCE", "")
+        if raw:
+            return Path(raw)
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidate = Path(local_app_data) / "StockTranslator" / "data" / "stock_translator.sqlite3"
+            if candidate.is_file():
+                return candidate
+    except OSError:
+        pass
+    return ROOT / "data" / "stock_translator.sqlite3"
 
 
 def _trim_seed_db(path: Path, *, cutoff: str) -> None:
