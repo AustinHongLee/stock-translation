@@ -19,5 +19,6 @@ if not exist "股票翻譯機.exe" (
 "股票翻譯機.exe" --apply-seed --no-open
 echo.
 echo 完成。若上方顯示新增 0 筆，代表你的本機資料已經有這份資料包能補的內容。
+echo 若你的本機資料明顯比官方包少，請改用「強制套用完整DATA.bat」。
 echo.
 pause

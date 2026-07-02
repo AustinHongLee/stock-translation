@@ -18,11 +18,17 @@ if errorlevel 1 goto fail
 python tools\build_seed.py
 if errorlevel 1 goto fail
 
+python tools\build_official_data_pack.py
+if errorlevel 1 goto fail
+
 python -m PyInstaller --noconfirm --clean stock_translator.spec
 if errorlevel 1 goto fail
 
 copy /Y "README_給測試者.txt" "%APP_DIR%\README_給測試者.txt" >nul
 copy /Y "套用官方資料包.bat" "%APP_DIR%\套用官方資料包.bat" >nul
+copy /Y "強制套用完整DATA.bat" "%APP_DIR%\強制套用完整DATA.bat" >nul
+robocopy "dist\official_data" "%APP_DIR%\official_data" /MIR /R:2 /W:1 >nul
+if errorlevel 8 goto fail
 
 python tools\package_release.py "%APP_DIR%" "%ZIP_PATH%" "%SHA_PATH%"
 if errorlevel 1 goto fail
