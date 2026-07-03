@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from app.analyze.dividends import (
     dedupe_dividend_records as _dedupe_dividend_records,
@@ -34,6 +34,7 @@ T86_MAX_EMPTY = 12  # 連續無資料日就停（假期/邊界）
 T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
 BULK_STATUS_SOURCE_PENDING = "source_pending"
+BULK_FAILED_RETRY_BACKOFF_SECONDS = 30 * 60
 
 
 def build_bulk_plan(
@@ -62,6 +63,7 @@ def build_bulk_plan(
 
         if retry_failed_only:
             ctx["ids"] = store.get_bulk_item_keys_by_status(BULK_RUN_KEY, "stock", "failed")
+            ctx["ids"] = _prioritized_stock_ids(ctx, ctx["ids"], target_date, lookback_days)
             return
 
         # 1) 上市清單（必要；失敗就讓整批報錯）
@@ -73,6 +75,7 @@ def build_bulk_plan(
             p.stock_id: p.listed_date for p in profiles if p.listed_date is not None
         }
         store.ensure_bulk_items(BULK_RUN_KEY, "stock", ctx["ids"])
+        ctx["ids"] = _prioritized_stock_ids(ctx, ctx["ids"], target_date, lookback_days)
         if stop_event.is_set():
             return
 
@@ -252,6 +255,8 @@ def build_bulk_plan(
             return False
         if retry_failed_only:
             return False
+        if _bulk_failed_backoff_until(ctx, sid) is not None:
+            return True
         # 重點修正：不再用 bulk_progress 的 "done" 短路。
         # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
         # 同時不可只看最新日期：STOCK_DAY_ALL top-up 可能只補到最新幾筆，
@@ -320,6 +325,81 @@ def _listed_date_for(ctx: dict, stock_id: str) -> date | None:
     except Exception:  # noqa: BLE001 - 查不到上市日就退回無 clamp 的原行為
         return None
     return getattr(profile, "listed_date", None) if profile is not None else None
+
+
+def _prioritized_stock_ids(
+    ctx: dict,
+    stock_ids: list[str],
+    target_date: date,
+    lookback_days: int,
+) -> list[str]:
+    store = ctx.get("store")
+    if store is None:
+        return list(stock_ids)
+
+    def key_for(sid: str) -> tuple[int, int, str]:
+        if _bulk_failed_backoff_until(ctx, sid) is not None:
+            return (6, 0, sid)
+        try:
+            coverage = store.refresh_data_coverage(
+                sid,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+            )
+            plan = plan_data_gap(
+                stock_id=sid,
+                node=DATA_NODE_DAILY_PRICE,
+                coverage=coverage,
+                target_date=target_date,
+                lookback_days=lookback_days,
+                max_patch_business_days=45,
+                listed_date=_listed_date_for(ctx, sid),
+            )
+        except Exception:  # noqa: BLE001 - 單檔排序失敗不應阻斷整批下載
+            return (8, 0, sid)
+        return _bulk_stock_priority_key(plan, sid)
+
+    return sorted((str(sid) for sid in stock_ids), key=key_for)
+
+
+def _bulk_stock_priority_key(plan, stock_id: str) -> tuple[int, int, str]:
+    """讓小缺口先跑，避免只差一天的股票排在大量歷史回補後面。"""
+    if plan.status == STATUS_CURRENT:
+        return (9, 0, stock_id)
+    if plan.status == STATUS_SOURCE_PENDING:
+        return (7, 0, stock_id)
+    if plan.can_patch:
+        if plan.local_latest_date is None:
+            return (4, int(plan.gap_business_days or 0), stock_id)
+        return (0, int(plan.gap_business_days or 0), stock_id)
+    if plan.local_latest_date is not None and plan.target_date is not None:
+        if plan.local_latest_date >= plan.target_date:
+            return (3, int(plan.gap_business_days or 0), stock_id)
+        return (2, int(plan.gap_business_days or 0), stock_id)
+    return (5, int(plan.gap_business_days or 0), stock_id)
+
+
+def _bulk_failed_backoff_until(ctx: dict, stock_id: str) -> datetime | None:
+    store = ctx.get("store")
+    getter = getattr(store, "get_bulk_item", None)
+    if getter is None:
+        return None
+    try:
+        item = getter(BULK_RUN_KEY, "stock", stock_id)
+    except Exception:  # noqa: BLE001
+        return None
+    if not item or item.get("status") != "failed":
+        return None
+    updated_at = item.get("updated_at")
+    if not updated_at:
+        return None
+    try:
+        retry_at = datetime.fromisoformat(str(updated_at)) + timedelta(
+            seconds=BULK_FAILED_RETRY_BACKOFF_SECONDS
+        )
+    except ValueError:
+        return None
+    return retry_at if retry_at > datetime.now() else None
 
 
 def _latest_price_date(prices: list[DailyPrice]) -> date:

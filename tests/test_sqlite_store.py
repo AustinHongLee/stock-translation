@@ -159,6 +159,7 @@ class SQLiteStoreTests(unittest.TestCase):
                 summary = store.get_bulk_progress_summary("full_market")
                 failed = store.get_bulk_item_keys_by_status("full_market", "stock", "failed")
                 statuses = store.get_bulk_item_statuses("full_market", "stock")
+                failed_item = store.get_bulk_item("full_market", "stock", "2303")
 
                 store.set_json_cache("local_data_v1", {"count": 2, "items": [{"stock_id": "2330"}]})
                 cached = store.get_json_cache("local_data_v1")
@@ -169,6 +170,8 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(summary["failed_count"], 1)
             self.assertEqual(failed, ["2303"])
             self.assertEqual(statuses["2330"], "done")
+            self.assertEqual(failed_item["status"], "failed")  # type: ignore[index]
+            self.assertEqual(failed_item["error"], "no network")  # type: ignore[index]
             self.assertIsNotNone(cached)
             self.assertEqual(cached[0]["count"], 2)  # type: ignore[index]
             with SQLiteStore(db_path) as store:

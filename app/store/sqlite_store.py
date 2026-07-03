@@ -1162,6 +1162,24 @@ class SQLiteStore:
         ).fetchall()
         return [row["item_key"] for row in rows]
 
+    def get_bulk_item(self, run_key: str, item_type: str, item_key: str) -> dict[str, object] | None:
+        row = self.conn.execute(
+            """
+            SELECT item_key, status, error, updated_at
+            FROM bulk_progress
+            WHERE run_key = ? AND item_type = ? AND item_key = ?
+            """,
+            (run_key, item_type, item_key),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "item_key": row["item_key"],
+            "status": row["status"],
+            "error": row["error"],
+            "updated_at": row["updated_at"],
+        }
+
     def get_bulk_progress_summary(self, run_key: str, item_type: str = "stock") -> dict[str, object]:
         rows = self.conn.execute(
             """

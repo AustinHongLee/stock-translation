@@ -148,7 +148,7 @@ class BulkDownloadManager:
             self._update(
                 status="running",
                 total=len(ids),
-                message="階段②：逐檔補歷史／缺口（已最新且歷史完整的會跳過）",
+                message="階段②：逐檔補歷史／缺口（小缺口優先；剛失敗的先退避；已最新且歷史完整的會跳過）",
             )
             consec = 0
             for i, sid in enumerate(ids):
