@@ -338,6 +338,7 @@ elements.searchInput.addEventListener("focus", handleSearchInput);
 elements.searchSuggestions.addEventListener("click", handleSearchSuggestionClick);
 elements.themeToggle?.addEventListener("click", toggleTheme);
 elements.autoUpdateCheckToggle?.addEventListener("change", handleAutoUpdateToggle);
+elements.dataPackBadge?.addEventListener("click", applyBundledDataPack);
 elements.updateBanner?.addEventListener("click", handleUpdateBannerClick);
 elements.refreshLocalButton.addEventListener("click", loadWatchlist);
 elements.dashboardRefreshButton.addEventListener("click", loadWatchlist);
@@ -596,8 +597,35 @@ function renderDataPackBadge(payload = state.appInfo) {
   elements.dataPackBadge.classList.remove("hidden");
   elements.dataPackBadge.textContent = pending ? "資料包待套用" : `資料包 ${bundled}`;
   elements.dataPackBadge.title = pending
-    ? `隨包資料包 ${bundled} 尚未套用完；正式版啟動後會在背景補進本機資料庫，不覆蓋自選股、持倉或設定。`
-    : `已套用官方資料包 ${applied}；它只補公開市場資料，不碰自選股、持倉或設定。`;
+    ? `隨包資料包 ${bundled} 尚未套用完；按一下可立即補進本機資料庫，不覆蓋自選股、持倉或設定。`
+    : `已套用官方資料包 ${applied}；按一下可重新補缺的公開市場資料，不碰自選股、持倉或設定。`;
+}
+
+async function applyBundledDataPack(button = elements.dataPackBadge) {
+  if (!button || button.disabled) return;
+  const oldText = button.textContent || "資料包";
+  button.disabled = true;
+  button.textContent = "套用中...";
+  try {
+    const payload = await postJson("/api/data/seed/apply", {});
+    if (payload.app_info) {
+      state.appInfo = payload.app_info;
+      state.appVersion = payload.app_info.version || state.appVersion;
+      renderAppVersion();
+      renderDataPackBadge(payload.app_info);
+    } else {
+      await loadAppInfo();
+    }
+    showMessage(payload.message || "官方資料包已處理完成。", !payload.ok && payload.reason !== "already_applied");
+    if (state.activeSheet === "data") await loadLocalData();
+  } catch (error) {
+    showMessage(`套用官方資料包失敗：${error.message}`, true);
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      if (button.textContent === "套用中...") button.textContent = oldText;
+    }
+  }
 }
 
 function autoUpdateCheckEnabled() {

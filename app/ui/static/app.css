@@ -227,8 +227,10 @@ button { font-family: inherit; }
 .data-pack-badge {
   color: var(--muted); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
   padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-soft);
-  white-space: nowrap;
+  white-space: nowrap; cursor: pointer; font-family: inherit;
 }
+.data-pack-badge:disabled { opacity: .72; cursor: wait; }
+.data-pack-badge:hover:not(:disabled) { border-color: var(--brand-soft-line); color: var(--brand-2); }
 .data-pack-badge.data-pack-pending {
   color: var(--warn); border-color: var(--warn-line); background: var(--warn-bg);
 }

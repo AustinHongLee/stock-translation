@@ -565,6 +565,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/data/legacy-import/dismiss":
                 _write_legacy_import_dismissed()
                 self._send_json({"ok": True})
+            elif parsed.path == "/api/data/seed/apply":
+                result = _apply_seed_now(self.server.db_path, force=True)
+                self._send_json(
+                    {
+                        "ok": bool(result.get("applied")),
+                        **result,
+                        "message": _seed_merge_message(result, manual=True),
+                        "app_info": _app_info_payload(self.server.db_path),
+                    }
+                )
             elif parsed.path == "/api/watchlist":
                 body = self._read_json_body()
                 stock_id = str(body.get("stock_id", "")).strip()
