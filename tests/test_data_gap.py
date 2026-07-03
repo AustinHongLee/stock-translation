@@ -5,12 +5,18 @@ from datetime import date
 
 from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
+    DEPTH_DEEP,
+    DEPTH_EMPTY,
+    DEPTH_LATEST_ONLY,
+    DEPTH_SHALLOW,
+    DEPTH_USABLE,
     STATUS_CURRENT,
     STATUS_FORCE_REFRESH_REQUIRED,
     STATUS_GAP,
     STATUS_PATCHED,
     STATUS_SOURCE_PENDING,
     STATUS_SUSPECT,
+    assess_daily_depth,
     count_business_days,
     market_node_freshness,
     next_business_day,
@@ -143,6 +149,138 @@ class DataGapTests(unittest.TestCase):
             market_node_freshness(date(2026, 6, 18), None)["status"],
             STATUS_SOURCE_PENDING,
         )
+
+    def test_depth_levels_follow_expected_trading_days(self) -> None:
+        target = date(2026, 6, 22)
+        expected = count_business_days(date(2025, 6, 22), target)
+
+        deep = assess_daily_depth(
+            coverage={
+                "row_count": int(expected * 0.95),
+                "earliest_date": "2025-07-01",
+                "latest_date": "2026-06-22",
+            },
+            target_date=target,
+        )
+        self.assertEqual(deep.level, DEPTH_DEEP)
+        self.assertFalse(deep.needs_backfill)
+
+        usable = assess_daily_depth(
+            coverage={
+                "row_count": int(expected * 0.6),
+                "earliest_date": "2025-11-01",
+                "latest_date": "2026-06-22",
+            },
+            target_date=target,
+        )
+        self.assertEqual(usable.level, DEPTH_USABLE)
+        self.assertFalse(usable.needs_backfill)
+
+        shallow = assess_daily_depth(
+            coverage={
+                "row_count": int(expected * 0.3),
+                "earliest_date": "2026-02-01",
+                "latest_date": "2026-06-22",
+            },
+            target_date=target,
+        )
+        self.assertEqual(shallow.level, DEPTH_SHALLOW)
+        self.assertTrue(shallow.needs_backfill)
+
+        latest_only = assess_daily_depth(
+            coverage={
+                "row_count": 2,
+                "earliest_date": "2026-06-18",
+                "latest_date": "2026-06-22",
+            },
+            target_date=target,
+        )
+        self.assertEqual(latest_only.level, DEPTH_LATEST_ONLY)
+        self.assertTrue(latest_only.needs_backfill)
+
+        empty = assess_daily_depth(coverage={"row_count": 0}, target_date=target)
+        self.assertEqual(empty.level, DEPTH_EMPTY)
+        self.assertTrue(empty.needs_backfill)
+
+    def test_invariant_fresh_but_shallow_is_never_current(self) -> None:
+        # 防回歸主約束：latest 頂到 target 但近一年筆數遠低於期望時，
+        # 永遠不得判 current——不論筆數是 1 還是 40。
+        # 用迴圈掃參數空間，未來任何「常數門檻」式修法（5 也好、50 也好）都會被抓到。
+        target = date(2026, 6, 22)
+        for rows in range(1, 41):
+            plan = plan_data_gap(
+                stock_id="2330",
+                node=DATA_NODE_DAILY_PRICE,
+                coverage={
+                    "latest_date": "2026-06-22",
+                    "row_count": rows,
+                    "earliest_date": "2026-04-01",
+                },
+                target_date=target,
+                lookback_days=365,
+            )
+            self.assertNotEqual(plan.status, STATUS_CURRENT, msg=f"rows={rows}")
+            self.assertTrue(plan.force_refresh_required, msg=f"rows={rows}")
+            self.assertEqual(plan.fetch_start_date, date(2025, 6, 22), msg=f"rows={rows}")
+
+    def test_accumulated_topup_rows_still_require_backfill(self) -> None:
+        # 事故殘餘地雷：受災股被每日 top-up 累到 10 筆（> 舊門檻 5），
+        # 舊常數門檻會誤判 current → 歷史永遠補不回。深度軸必須攔下。
+        plan = plan_data_gap(
+            stock_id="2330",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={
+                "latest_date": "2026-06-22",
+                "row_count": 10,
+                "earliest_date": "2026-06-05",
+            },
+            target_date=date(2026, 6, 22),
+            lookback_days=365,
+        )
+        self.assertEqual(plan.status, STATUS_FORCE_REFRESH_REQUIRED)
+        self.assertIsNotNone(plan.depth)
+        self.assertTrue(plan.depth.needs_backfill)
+
+    def test_new_listing_with_full_history_since_listing_is_current(self) -> None:
+        # 上市 2 個交易日、2 筆都在 → 期望深度以上市日推導 → current。
+        # 舊門檻會每次強制重抓 13 個月（幾乎全空），形成 ping-pong。
+        plan = plan_data_gap(
+            stock_id="9999",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={
+                "latest_date": "2026-06-22",
+                "row_count": 2,
+                "earliest_date": "2026-06-18",
+            },
+            target_date=date(2026, 6, 22),
+            lookback_days=365,
+            listed_date=date(2026, 6, 18),
+        )
+        self.assertEqual(plan.status, STATUS_CURRENT)
+        self.assertEqual(plan.depth.level, DEPTH_DEEP)
+
+    def test_new_listing_initial_backfill_starts_at_listed_date(self) -> None:
+        plan = plan_data_gap(
+            stock_id="9999",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage=None,
+            target_date=date(2026, 6, 22),
+            lookback_days=365,
+            listed_date=date(2026, 6, 18),
+        )
+        self.assertEqual(plan.status, STATUS_GAP)
+        self.assertEqual(plan.fetch_start_date, date(2026, 6, 18))
+
+    def test_depth_without_row_count_stays_lenient(self) -> None:
+        # 極簡 coverage（只有 latest_date）：深度未知不強制回補，維持舊語意。
+        plan = plan_data_gap(
+            stock_id="2330",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={"latest_date": "2026-06-22"},
+            target_date=date(2026, 6, 22),
+            lookback_days=365,
+        )
+        self.assertEqual(plan.status, STATUS_CURRENT)
 
     def test_same_month_tail_date_never_crosses_into_extra_month(self) -> None:
         self.assertEqual(same_month_tail_date(date(2026, 6, 29), date(2026, 6, 30)), date(2026, 6, 30))

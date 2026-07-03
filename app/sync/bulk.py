@@ -135,14 +135,21 @@ class BulkDownloadManager:
     def _run(self, plan: BulkPlan) -> None:
         try:
             if plan.prelude is not None:
-                self._update(status="preparing", message="抓取全市場共用資料（股利／財報／營收／估值／法人）…")
+                self._update(
+                    status="preparing",
+                    message="階段①：補全市場最新收盤＋共用資料（清單／股利／財報／營收／估值／法人）…",
+                )
                 plan.prelude(self._stop)
             if self._stop.is_set():
                 self._update(status="stopped", finished_at=_now(), current=None, message="已停止")
                 return
 
             ids = list(plan.list_stocks())
-            self._update(status="running", total=len(ids), message="")
+            self._update(
+                status="running",
+                total=len(ids),
+                message="階段②：逐檔補歷史／缺口（已最新且歷史完整的會跳過）",
+            )
             consec = 0
             for i, sid in enumerate(ids):
                 if self._stop.is_set():

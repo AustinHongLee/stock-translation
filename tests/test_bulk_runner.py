@@ -117,6 +117,20 @@ class FakeBulkClient:
         return list(self.latest_all_prices)
 
 
+class ListedProfileBulkClient(FakeBulkClient):
+    """上市日很近的新股（2026-02-09 上市，target=2026-02-11）。"""
+
+    def fetch_listed_profiles(self) -> list[StockProfile]:
+        return [
+            StockProfile(
+                stock_id="2330",
+                name="台積電",
+                short_name="台積電",
+                listed_date=date(2026, 2, 9),
+            )
+        ]
+
+
 class MissingTargetTailBulkClient(FakeBulkClient):
     def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
         self.price_ranges.append((stock_id, start_date, end_date))
@@ -495,6 +509,69 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertEqual(fake_store.daily["2330"][-1].date, EXPECTED_TARGET)
         mock_refresh.assert_called_once()
         self.assertIn("local_data_v2", fake_store.json_cache_deletes)
+
+    def test_new_listing_with_history_since_listing_skips(self) -> None:
+        # 新上市股只有上市以來的 3 筆 → 深度以上市日推導為「完整」→ 跳過，不再 ping-pong 重抓。
+        fake_client = ListedProfileBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = [
+            DailyPrice("2330", date(2026, 2, 9), 10, 11, 9, 10, 1000),
+            DailyPrice("2330", date(2026, 2, 10), 10, 11, 9, 10, 1000),
+            DailyPrice("2330", date(2026, 2, 11), 10, 11, 9, 10, 1000),
+        ]
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertTrue(plan.skip("2330"))
+
+        self.assertEqual(fake_client.price_ranges, [])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_new_listing_backfill_starts_at_listed_date(self) -> None:
+        # 新上市股完全沒資料 → 回補起點是上市日，不是 target-365（省掉 12 個月空請求）。
+        fake_client = ListedProfileBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertFalse(plan.skip("2330"))
+            plan.sync_one("2330")
+
+        self.assertEqual(fake_client.price_ranges, [("2330", date(2026, 2, 9), EXPECTED_TARGET)])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_accumulated_topup_rows_do_not_skip_history_backfill(self) -> None:
+        # 防回歸：受災股被每日 top-up 累到 10 筆（> 舊門檻 5）且 latest 頂到 target，
+        # 舊常數門檻會判 current → 永遠跳過。深度軸必須讓它回補整年歷史。
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = _history_rows("2330", EXPECTED_TARGET, count=10)
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertFalse(plan.skip("2330"))
+            plan.sync_one("2330")
+
+        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 11), EXPECTED_TARGET)])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_prelude_does_not_mark_empty_t86_dates_done(self) -> None:
         # 防回歸：T86 某天回空(尚未公布)時不可標 done，否則會被永久跳過 → 全市場「法人缺 N 日」補不回。

@@ -72,6 +72,7 @@ class StockSyncService:
             target_date=target_date,
             lookback_days=lookback_days,
             max_patch_business_days=45,
+            listed_date=_stored_listed_date(self.store, stock_id),
         )
         start_date = gap_plan.fetch_start_date or (target_date - timedelta(days=lookback_days))
         fetch_end_date = gap_plan.fetch_end_date or target_date
@@ -340,6 +341,18 @@ class StockSyncService:
                 finished_at=datetime.now(),
                 message=message,
             )
+
+
+def _stored_listed_date(store: SQLiteStore, stock_id: str) -> date | None:
+    """從本地 profile 取上市日；第一次同步還沒有 profile 時回 None（維持原行為）。"""
+    getter = getattr(store, "get_profile", None)
+    if getter is None:
+        return None
+    try:
+        profile = getter(stock_id)
+    except Exception:  # noqa: BLE001
+        return None
+    return getattr(profile, "listed_date", None) if profile is not None else None
 
 
 def _latest_price_date(prices: list[DailyPrice]) -> date:

@@ -16,6 +16,7 @@ from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     DATA_NODE_INSTITUTIONAL,
     STATUS_CURRENT,
+    STATUS_FORCE_REFRESH_REQUIRED,
     market_node_freshness,
     plan_data_gap,
 )
@@ -212,6 +213,8 @@ def build_local_data_payload(
             target_date=target_date,
             cached=institutional_coverage_by_stock.get(sid),
         )
+        profile = store.get_profile(sid)
+        name = (profile.short_name or profile.name) if profile else ""
         price_gap = plan_data_gap(
             stock_id=sid,
             node=DATA_NODE_DAILY_PRICE,
@@ -219,9 +222,8 @@ def build_local_data_payload(
             target_date=target_date,
             lookback_days=HISTORICAL_VALUATION_DAYS,
             max_patch_business_days=45,
+            listed_date=profile.listed_date if profile else None,
         )
-        profile = store.get_profile(sid)
-        name = (profile.short_name or profile.name) if profile else ""
         sr = compute_support_resistance(prices)
         items.append({
             "stock_id": sid,
@@ -233,6 +235,7 @@ def build_local_data_payload(
             "data_target_date": target_date.isoformat() if target_date else None,
             "data_target": target.to_json() if target else None,
             "price_gap": price_gap.to_json(),
+            "history_depth": _history_depth_json(price_gap),
             "institutional_gap": market_institutional,
             "institutional_last_date": institutional_coverage.get("latest_date"),
             "sr_status": sr.get("status"),
@@ -250,6 +253,25 @@ def build_local_data_payload(
         "items": items,
         "near": near,
     }
+
+
+_DEPTH_LABELS = {
+    "empty": "無資料",
+    "latest_only": "只有最新幾筆",
+    "shallow": "歷史不足",
+    "usable": "夠用（未滿一年）",
+    "deep": "完整（約一年）",
+}
+
+
+def _history_depth_json(price_gap) -> dict[str, object] | None:
+    """把 depth 軸整理成 UI 可直接顯示的白話欄位（最新度另看 price_gap.status）。"""
+    depth = getattr(price_gap, "depth", None)
+    if depth is None:
+        return None
+    payload = depth.to_json()
+    payload["label"] = _DEPTH_LABELS.get(depth.level, depth.level)
+    return payload
 
 
 def build_cached_local_data_payload(
@@ -310,6 +332,7 @@ def build_sync_freshness_payload(
         DATA_NODE_INSTITUTIONAL,
         target_date=target_date,
     )
+    profile = store.get_profile(stock_id)
     daily_gap = plan_data_gap(
         stock_id=stock_id,
         node=DATA_NODE_DAILY_PRICE,
@@ -317,17 +340,33 @@ def build_sync_freshness_payload(
         target_date=target_date,
         lookback_days=lookback_days,
         max_patch_business_days=45,
+        listed_date=profile.listed_date if profile else None,
     )
     institutional_gap = _market_institutional_freshness(store, target.expected_latest_close_date)
     local_date = _date_or_none(daily_coverage.get("latest_date"))
     is_current = daily_gap.status == STATUS_CURRENT
     can_decide = target_date is not None
+    fresh_but_shallow = (
+        daily_gap.status == STATUS_FORCE_REFRESH_REQUIRED
+        and daily_gap.depth is not None
+        and daily_gap.depth.needs_backfill
+        and local_date is not None
+        and target_date is not None
+        and local_date >= target_date
+    )
     if is_current and not target.snapshot_stale:
         status = "current"
         message = f"{stock_id} 本地日線已到最近收盤 {target_date.isoformat()}，不需要重新同步。"
     elif is_current:
         status = "current"
         message = f"{stock_id} 本地日線已到目標日 {target_date.isoformat()}；雷達快照可能過舊，建議先更新雷達確認。"
+    elif fresh_but_shallow:
+        status = "shallow_history"
+        message = (
+            f"{stock_id} 最新收盤已到 {target_date.isoformat()}，"
+            f"但近一年日線只有 {daily_gap.depth.row_count} 筆（應約 {daily_gap.depth.expected_days} 筆），"
+            "建議同步一次補齊歷史。"
+        )
     elif target.snapshot_stale:
         status = "stale_snapshot"
         message = f"雷達快照停在 {reference_date.isoformat() if reference_date else '未知日期'}，會以 {target_date.isoformat()} 做補正目標。"

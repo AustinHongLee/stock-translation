@@ -451,7 +451,8 @@ class StockSyncServiceTests(unittest.TestCase):
                             close=100,
                             volume=10,
                         )
-                        for offset in range(10)
+                        # 近一年歷史都在（深度足夠），此測試只驗證週末 target 的預設行為。
+                        for offset in range(400)
                     ]
                 )
                 service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
@@ -469,6 +470,39 @@ class StockSyncServiceTests(unittest.TestCase):
             self.assertFalse(result.skipped)
             self.assertGreater(result.rows_written, 0)
             self.assertEqual(result.gap_plan["target_date"], "2026-06-18")  # type: ignore[index]
+
+    def test_sync_stock_history_backfills_when_fresh_but_shallow(self) -> None:
+        # 防回歸：STOCK_DAY_ALL top-up 讓 latest 頂到 target、但近一年只有幾筆時，
+        # 手動同步不可回「已是最新」，必須整年回補。
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = RecordingClient()
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            stock_id="2330",
+                            date=date(2026, 6, 22) - timedelta(days=offset),
+                            open=100,
+                            high=101,
+                            low=99,
+                            close=100,
+                            volume=10,
+                        )
+                        for offset in range(5)
+                    ]
+                )
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "2330",
+                    lookback_days=365,
+                    end_date=date(2026, 6, 23),
+                    target_date=date(2026, 6, 22),
+                )
+
+        self.assertEqual(client.price_ranges, [("2330", date(2025, 6, 22), date(2026, 6, 22))])
+        self.assertTrue(result.gap_plan["force_refresh_required"])  # type: ignore[index]
+        self.assertEqual(result.post_status["status"], "patched")  # type: ignore[index]
 
     def test_sync_institutional_uses_gap_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

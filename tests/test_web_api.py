@@ -74,7 +74,8 @@ class WebApiPayloadTests(unittest.TestCase):
                             close=104,
                             volume=10,
                         )
-                        for offset in range(6)
+                        # 歷史深度足夠，避免觸發「已最新但歷史不足」的回補判定。
+                        for offset in range(400)
                     ]
                 )
 
@@ -217,6 +218,42 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(payload["daily_price"]["gap"]["status"], "gap")
         self.assertEqual(payload["daily_price"]["gap"]["target_date"], "2026-06-23")
 
+    def test_sync_freshness_flags_fresh_but_shallow_history(self) -> None:
+        # 防回歸：latest 頂到 target 但近一年只有幾筆 → 不可 can_skip_sync，
+        # 要提示補歷史（shallow_history），而不是說「已是最新」。
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {"items": [{"stock_id": "2330", "price_date": "2026-06-22"}]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 22), 100, 105, 99, 104, 10),
+                        DailyPrice("2330", date(2026, 6, 17), 100, 105, 99, 104, 10),
+                        DailyPrice("2330", date(2026, 6, 16), 100, 105, 99, 104, 10),
+                    ]
+                )
+
+                payload = build_sync_freshness_payload(
+                    store,
+                    "2330",
+                    screener_path=screener_path,
+                    today=date(2026, 6, 22),
+                )
+
+        self.assertEqual(payload["status"], "shallow_history")
+        self.assertFalse(payload["can_skip_sync"])
+        self.assertFalse(payload["is_current"])
+        self.assertEqual(payload["daily_price"]["gap"]["status"], "force_refresh_required")  # type: ignore[index]
+        self.assertTrue(payload["daily_price"]["gap"]["depth"]["needs_backfill"])  # type: ignore[index]
+
     def test_local_data_payload_exposes_report_date_and_target_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -270,7 +307,8 @@ class WebApiPayloadTests(unittest.TestCase):
                 store.upsert_daily_prices(
                     [
                         DailyPrice("1442", date(2026, 6, 29) - timedelta(days=offset), 26.7, 27.0, 26.5, 26.85, 10)
-                        for offset in range(6)
+                        # 歷史深度足夠，此測試只驗證 coverage 過期後會先刷新再貼標籤。
+                        for offset in range(400)
                     ]
                 )
                 store.refresh_data_coverage(
@@ -295,6 +333,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(item["last_date"], "2026-06-30")  # type: ignore[index]
         self.assertEqual(item["price_gap"]["status"], "current")  # type: ignore[index]
         self.assertEqual(item["price_gap"]["local_latest_date"], "2026-06-30")  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["level"], "deep")  # type: ignore[index]
         self.assertEqual(refreshed["latest_date"], "2026-06-30")  # type: ignore[index]
 
     def test_local_data_uses_market_level_institutional_freshness(self) -> None:

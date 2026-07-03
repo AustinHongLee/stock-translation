@@ -68,6 +68,10 @@ def build_bulk_plan(
         profiles = client.fetch_listed_profiles()
         store.upsert_profiles(profiles)
         ctx["ids"] = [p.stock_id for p in profiles]
+        # 上市日期供深度評估與抓取窗口 clamp（新上市股不空抓一年）。
+        ctx["listed_dates"] = {
+            p.stock_id: p.listed_date for p in profiles if p.listed_date is not None
+        }
         store.ensure_bulk_items(BULK_RUN_KEY, "stock", ctx["ids"])
         if stop_event.is_set():
             return
@@ -166,6 +170,7 @@ def build_bulk_plan(
                 target_date=target_date,
                 lookback_days=lookback_days,
                 max_patch_business_days=45,
+                listed_date=_listed_date_for(ctx, sid),
             )
             if gap_plan.status == STATUS_CURRENT:
                 store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
@@ -249,8 +254,9 @@ def build_bulk_plan(
             return False
         # 重點修正：不再用 bulk_progress 的 "done" 短路。
         # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
-        # 同時不可只看最新日期：STOCK_DAY_ALL top-up 可能只補到 1~2 筆最新日，
-        # 這種「假最新」仍要回補歷史。
+        # 同時不可只看最新日期：STOCK_DAY_ALL top-up 可能只補到最新幾筆，
+        # 這種「假最新」仍要回補歷史（plan_data_gap 內用 depth 軸判定，
+        # 期望筆數由上市日 + 交易日曆推導，頂到 target 也擋不住深度不足）。
         coverage = store.refresh_data_coverage(
             sid,
             DATA_NODE_DAILY_PRICE,
@@ -263,6 +269,7 @@ def build_bulk_plan(
             target_date=target_date,
             lookback_days=lookback_days,
             max_patch_business_days=45,
+            listed_date=_listed_date_for(ctx, sid),
         )
         if gap_plan.status == STATUS_CURRENT:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
@@ -297,6 +304,22 @@ def build_bulk_plan(
         on_finish=on_finish,
         retry_failed_only=retry_failed_only,
     )
+
+
+def _listed_date_for(ctx: dict, stock_id: str) -> date | None:
+    """先查 prelude 建的 map；retry_failed_only 沒跑清單 → 退回 store 的 profile。"""
+    listed = (ctx.get("listed_dates") or {}).get(stock_id)
+    if listed is not None:
+        return listed
+    store = ctx.get("store")
+    getter = getattr(store, "get_profile", None)
+    if getter is None:
+        return None
+    try:
+        profile = getter(stock_id)
+    except Exception:  # noqa: BLE001 - 查不到上市日就退回無 clamp 的原行為
+        return None
+    return getattr(profile, "listed_date", None) if profile is not None else None
 
 
 def _latest_price_date(prices: list[DailyPrice]) -> date:
