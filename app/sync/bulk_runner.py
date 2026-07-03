@@ -249,9 +249,22 @@ def build_bulk_plan(
             return False
         # 重點修正：不再用 bulk_progress 的 "done" 短路。
         # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
-        # 改成每次都用『本地最後一筆 vs 目標交易日』判斷新鮮度（精確、不用 <=3 天的近似）。
-        latest = store.get_daily_prices(sid, limit=1)
-        if latest and latest[-1].date >= target_date:
+        # 同時不可只看最新日期：STOCK_DAY_ALL top-up 可能只補到 1~2 筆最新日，
+        # 這種「假最新」仍要回補歷史。
+        coverage = store.refresh_data_coverage(
+            sid,
+            DATA_NODE_DAILY_PRICE,
+            target_date=target_date,
+        )
+        gap_plan = plan_data_gap(
+            stock_id=sid,
+            node=DATA_NODE_DAILY_PRICE,
+            coverage=coverage,
+            target_date=target_date,
+            lookback_days=lookback_days,
+            max_patch_business_days=45,
+        )
+        if gap_plan.status == STATUS_CURRENT:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
             return True
         return False

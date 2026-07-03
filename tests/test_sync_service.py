@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from app.models import (
@@ -341,13 +341,14 @@ class StockSyncServiceTests(unittest.TestCase):
                     [
                         DailyPrice(
                             stock_id="2330",
-                            date=date(2026, 6, 18),
+                            date=date(2026, 6, 18) - timedelta(days=offset),
                             open=100,
                             high=101,
                             low=99,
                             close=100,
                             volume=10,
                         )
+                        for offset in range(10)
                     ]
                 )
                 service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
@@ -410,13 +411,14 @@ class StockSyncServiceTests(unittest.TestCase):
                     [
                         DailyPrice(
                             stock_id="2330",
-                            date=date(2026, 6, 18),
+                            date=date(2026, 6, 18) - timedelta(days=offset),
                             open=100,
                             high=101,
                             low=99,
                             close=100,
                             volume=10,
                         )
+                        for offset in range(10)
                     ]
                 )
                 service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
@@ -442,13 +444,14 @@ class StockSyncServiceTests(unittest.TestCase):
                     [
                         DailyPrice(
                             stock_id="2330",
-                            date=date(2026, 6, 18),
+                            date=date(2026, 6, 18) - timedelta(days=offset),
                             open=100,
                             high=101,
                             low=99,
                             close=100,
                             volume=10,
                         )
+                        for offset in range(10)
                     ]
                 )
                 service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]

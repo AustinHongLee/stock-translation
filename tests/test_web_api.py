@@ -67,13 +67,14 @@ class WebApiPayloadTests(unittest.TestCase):
                     [
                         DailyPrice(
                             stock_id="2330",
-                            date=date(2026, 6, 22),
+                            date=date(2026, 6, 22) - timedelta(days=offset),
                             open=100,
                             high=105,
                             low=99,
                             close=104,
                             volume=10,
                         )
+                        for offset in range(6)
                     ]
                 )
 
@@ -268,7 +269,8 @@ class WebApiPayloadTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 store.upsert_daily_prices(
                     [
-                        DailyPrice("1442", date(2026, 6, 29), 26.7, 27.0, 26.5, 26.85, 10),
+                        DailyPrice("1442", date(2026, 6, 29) - timedelta(days=offset), 26.7, 27.0, 26.5, 26.85, 10)
+                        for offset in range(6)
                     ]
                 )
                 store.refresh_data_coverage(

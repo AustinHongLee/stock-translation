@@ -35,6 +35,20 @@ class DataGapTests(unittest.TestCase):
         self.assertIsNone(plan.fetch_start_date)
         self.assertFalse(plan.can_patch)
 
+    def test_latest_only_daily_rows_force_history_backfill(self) -> None:
+        plan = plan_data_gap(
+            stock_id="2330",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={"latest_date": "2026-06-22", "row_count": 2},
+            target_date=date(2026, 6, 22),
+            lookback_days=365,
+        )
+
+        self.assertEqual(plan.status, STATUS_FORCE_REFRESH_REQUIRED)
+        self.assertEqual(plan.fetch_start_date, date(2025, 6, 22))
+        self.assertEqual(plan.fetch_end_date, date(2026, 6, 22))
+        self.assertTrue(plan.force_refresh_required)
+
     def test_small_gap_patches_only_missing_business_days(self) -> None:
         plan = plan_data_gap(
             stock_id="2330",

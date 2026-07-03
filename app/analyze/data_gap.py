@@ -20,6 +20,7 @@ STATUS_SOURCE_PENDING = "source_pending"
 STATUS_PATCHED = "patched"
 STATUS_SUSPECT = "suspect"
 STATUS_FORCE_REFRESH_REQUIRED = "force_refresh_required"
+TOP_UP_ONLY_DAILY_ROW_THRESHOLD = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +93,33 @@ def plan_data_gap(
             can_patch=False,
             force_refresh_required=False,
             reason="No target date is available for this source yet.",
+        )
+
+    row_count = _int_or_none((coverage or {}).get("row_count"))
+    if (
+        node == DATA_NODE_DAILY_PRICE
+        and latest is not None
+        and latest >= target
+        and row_count is not None
+        and 0 < row_count <= TOP_UP_ONLY_DAILY_ROW_THRESHOLD
+    ):
+        fetch_start = target - timedelta(days=lookback_days)
+        gap_days = count_business_days(fetch_start, target)
+        return DataGapPlan(
+            stock_id=sid,
+            node=node,
+            status=STATUS_FORCE_REFRESH_REQUIRED,
+            local_latest_date=latest,
+            target_date=target,
+            fetch_start_date=fetch_start,
+            fetch_end_date=target,
+            gap_business_days=gap_days,
+            can_patch=False,
+            force_refresh_required=True,
+            reason=(
+                f"{node} only has {row_count} row(s) although latest date is current; "
+                "historical backfill is required."
+            ),
         )
 
     if latest is not None and latest >= target:
@@ -261,3 +289,10 @@ def _as_date(value: date | str | None) -> date | None:
 
 def _date_json(value: date | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def _int_or_none(value: object) -> int | None:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None

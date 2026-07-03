@@ -287,6 +287,7 @@ class BulkRunnerTests(unittest.TestCase):
     def test_sync_one_refreshes_daily_coverage_and_marks_done_when_current(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = _history_rows("2330", EXPECTED_TARGET)
 
         with (
             patch("app.sync.bulk_runner.date", FixedDate),
@@ -338,7 +339,7 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertEqual(fake_client.price_ranges, [])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
-    def test_latest_all_single_row_skips_bulk_history_backfill(self) -> None:
+    def test_latest_all_single_row_does_not_skip_history_backfill(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
         fake_client.latest_all_prices = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
@@ -350,10 +351,10 @@ class BulkRunnerTests(unittest.TestCase):
         ):
             plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
             plan.prelude(threading.Event())  # type: ignore[union-attr]
-            self.assertTrue(plan.skip("2330"))
+            self.assertFalse(plan.skip("2330"))
             plan.sync_one("2330")
 
-        self.assertEqual(fake_client.price_ranges, [])
+        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 11), EXPECTED_TARGET)])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
     def test_sync_one_retries_same_month_tail_when_target_day_is_sparse(self) -> None:
