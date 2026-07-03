@@ -51,6 +51,7 @@ const state = {
     patterns: [],
   },
   appVersion: "",
+  appInfo: null,
   updateInfo: null,
   updateNotesOpen: false,
   legacyImportInfo: null,
@@ -83,6 +84,7 @@ const elements = {
   themeToggle: document.querySelector("#themeToggle"),
   themeColorMeta: document.querySelector('meta[name="theme-color"]'),
   appVersionBadge: document.querySelector("#appVersionBadge"),
+  dataPackBadge: document.querySelector("#dataPackBadge"),
   autoUpdateCheckToggle: document.querySelector("#autoUpdateCheckToggle"),
   updateBanner: document.querySelector("#updateBanner"),
   localStocks: document.querySelector("#localStocks"),
@@ -567,8 +569,10 @@ function setupUpdateControls() {
 async function loadAppInfo() {
   try {
     const payload = await getJson("/api/app-info");
+    state.appInfo = payload;
     state.appVersion = payload.version || "";
     renderAppVersion();
+    renderDataPackBadge(payload);
   } catch (error) {
     console.warn("App info unavailable", error);
   }
@@ -577,6 +581,23 @@ async function loadAppInfo() {
 function renderAppVersion(version = state.appVersion || state.updateInfo?.current || "") {
   if (!elements.appVersionBadge) return;
   elements.appVersionBadge.textContent = version ? `v${String(version).replace(/^v/i, "")}` : "v--";
+}
+
+function renderDataPackBadge(payload = state.appInfo) {
+  if (!elements.dataPackBadge) return;
+  const bundled = Number(payload?.bundled_data_snapshot_version || 0);
+  const applied = Number(payload?.data_snapshot_version || 0);
+  if (!bundled) {
+    elements.dataPackBadge.classList.add("hidden");
+    return;
+  }
+  const pending = bundled > applied;
+  elements.dataPackBadge.classList.toggle("data-pack-pending", pending);
+  elements.dataPackBadge.classList.remove("hidden");
+  elements.dataPackBadge.textContent = pending ? "資料包待套用" : `資料包 ${bundled}`;
+  elements.dataPackBadge.title = pending
+    ? `隨包資料包 ${bundled} 尚未套用完；正式版啟動後會在背景補進本機資料庫，不覆蓋自選股、持倉或設定。`
+    : `已套用官方資料包 ${applied}；它只補公開市場資料，不碰自選股、持倉或設定。`;
 }
 
 function autoUpdateCheckEnabled() {
