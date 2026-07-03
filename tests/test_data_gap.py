@@ -241,6 +241,25 @@ class DataGapTests(unittest.TestCase):
         self.assertIsNotNone(plan.depth)
         self.assertTrue(plan.depth.needs_backfill)
 
+    def test_depth_uses_horizon_rows_not_total_rows(self) -> None:
+        # 老資料很多但近一年只有最新一天，仍然要補歷史；不能用總筆數自我安慰成 deep。
+        plan = plan_data_gap(
+            stock_id="2330",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={
+                "latest_date": "2026-06-22",
+                "earliest_date": "2021-01-01",
+                "row_count": 260,
+                "horizon_row_count": 1,
+            },
+            target_date=date(2026, 6, 22),
+            lookback_days=365,
+        )
+
+        self.assertEqual(plan.status, STATUS_FORCE_REFRESH_REQUIRED)
+        self.assertEqual(plan.depth.level, DEPTH_SHALLOW)
+        self.assertEqual(plan.depth.row_count, 1)
+
     def test_new_listing_with_full_history_since_listing_is_current(self) -> None:
         # 上市 2 個交易日、2 筆都在 → 期望深度以上市日推導 → current。
         # 舊門檻會每次強制重抓 13 個月（幾乎全空），形成 ping-pong。

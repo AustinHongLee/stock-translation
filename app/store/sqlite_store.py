@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from app.analyze.twse_calendar import count_twse_trading_days
@@ -872,7 +872,7 @@ class SQLiteStore:
             status=status,
             suspect_reason=suspect_reason,
         )
-        return self.record_data_coverage(
+        recorded = self.record_data_coverage(
             stock_id=stock_id,
             node=node,
             earliest_date=_date_or_none(coverage["earliest_date"]),
@@ -885,6 +885,10 @@ class SQLiteStore:
             last_checked_at=datetime.now(),
             last_success_at=datetime.now() if coverage["latest_date"] else None,
         )
+        for key in ("horizon_start_date", "horizon_row_count"):
+            if key in coverage:
+                recorded[key] = coverage[key]
+        return recorded
 
     def compute_data_coverage(
         self,
@@ -910,6 +914,19 @@ class SQLiteStore:
         hole_count = 0
         if earliest is not None and latest is not None:
             hole_count = max(0, _business_day_count(earliest, latest) - row_count)
+        horizon_start: date | None = None
+        horizon_row_count: int | None = None
+        if node == "daily_price" and target_date is not None:
+            horizon_start = target_date - timedelta(days=365)
+            horizon_row = self.conn.execute(
+                f"""
+                SELECT COUNT(*) AS row_count
+                FROM {table}
+                WHERE stock_id = ? AND date >= ? AND date <= ?
+                """,
+                (stock_id, _d(horizon_start), _d(target_date)),
+            ).fetchone()
+            horizon_row_count = int(horizon_row["row_count"] or 0) if horizon_row else 0
         resolved_status = status
         if resolved_status is None:
             if latest is None:
@@ -928,6 +945,8 @@ class SQLiteStore:
             "latest_date": _d(latest),
             "row_count": row_count,
             "hole_count": hole_count,
+            "horizon_start_date": _d(horizon_start),
+            "horizon_row_count": horizon_row_count,
             "status": resolved_status,
             "suspect_reason": suspect_reason,
             "target_date": _d(target_date),

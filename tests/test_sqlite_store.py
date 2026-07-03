@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from app.models import (
@@ -255,8 +255,10 @@ class SQLiteStoreTests(unittest.TestCase):
 
             self.assertEqual(computed["latest_date"], "2026-06-22")
             self.assertEqual(computed["status"], "current")
+            self.assertEqual(computed["horizon_row_count"], 2)
             self.assertEqual(price_coverage["latest_date"], "2026-06-22")
             self.assertEqual(price_coverage["row_count"], 2)
+            self.assertEqual(price_coverage["horizon_row_count"], 2)
             self.assertEqual(price_coverage["hole_count"], 0)
             self.assertEqual(price_coverage["status"], "current")
             self.assertEqual(inst_coverage["latest_date"], "2026-06-22")
@@ -264,6 +266,34 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(inst_coverage["status"], "gap")
             self.assertEqual(coverage_map["2330"]["latest_date"], "2026-06-22")
             self.assertEqual(coverage_map["2330"]["row_count"], 2)
+
+    def test_daily_coverage_counts_rows_inside_depth_horizon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                old_start = date(2024, 1, 1)
+                rows = [
+                    DailyPrice("2330", old_start + timedelta(days=offset), 100, 101, 99, 100, 10)
+                    for offset in range(260)
+                ]
+                rows.append(DailyPrice("2330", date(2026, 6, 22), 101, 102, 100, 101, 12))
+                store.upsert_daily_prices(rows)
+
+                computed = store.compute_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=date(2026, 6, 22),
+                )
+                refreshed = store.refresh_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=date(2026, 6, 22),
+                )
+
+            self.assertEqual(computed["row_count"], 261)
+            self.assertEqual(computed["horizon_start_date"], "2025-06-22")
+            self.assertEqual(computed["horizon_row_count"], 1)
+            self.assertEqual(refreshed["horizon_row_count"], 1)
 
     def test_portfolio_transactions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

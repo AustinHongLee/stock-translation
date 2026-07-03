@@ -92,7 +92,9 @@ def assess_daily_depth(
     top-up-only 的股票 earliest≈latest，用 earliest 起算會自我安慰成 deep。
     """
     target = _as_date(target_date)
-    raw_row_count = _int_or_none((coverage or {}).get("row_count"))
+    raw_row_count = _int_or_none((coverage or {}).get("horizon_row_count"))
+    if raw_row_count is None:
+        raw_row_count = _int_or_none((coverage or {}).get("row_count"))
     row_count = raw_row_count or 0
     earliest = _as_date((coverage or {}).get("earliest_date"))
     latest = _as_date((coverage or {}).get("latest_date"))

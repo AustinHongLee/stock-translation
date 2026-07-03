@@ -518,6 +518,28 @@ def _coverage_snapshot(
     cached: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if cached is not None:
+        needs_horizon = (
+            node == DATA_NODE_DAILY_PRICE
+            and target_date is not None
+            and "horizon_row_count" not in cached
+        )
+        if needs_horizon:
+            fresh = store.compute_data_coverage(
+                stock_id,
+                node,
+                target_date=target_date,
+            )
+            if (
+                cached.get("latest_date") != fresh.get("latest_date")
+                or cached.get("row_count") != fresh.get("row_count")
+                or cached.get("hole_count") != fresh.get("hole_count")
+            ):
+                return store.refresh_data_coverage(
+                    stock_id,
+                    node,
+                    target_date=target_date,
+                )
+            return fresh
         snapshot = dict(cached)
         snapshot["target_date"] = target_date.isoformat() if target_date else None
         return snapshot

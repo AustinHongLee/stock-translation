@@ -336,6 +336,47 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(item["history_depth"]["level"], "deep")  # type: ignore[index]
         self.assertEqual(refreshed["latest_date"], "2026-06-30")  # type: ignore[index]
 
+    def test_local_data_depth_ignores_cached_total_rows_without_horizon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-06-23T08:00:00+08:00",
+                        "items": [{"stock_id": "2330", "price_date": "2026-06-22"}],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                old_start = date(2024, 1, 1)
+                rows = [
+                    DailyPrice("2330", old_start + timedelta(days=offset), 100, 101, 99, 100, 10)
+                    for offset in range(260)
+                ]
+                rows.append(DailyPrice("2330", date(2026, 6, 22), 101, 102, 100, 101, 12))
+                store.upsert_daily_prices(rows)
+                store.refresh_data_coverage(
+                    "2330",
+                    DATA_NODE_DAILY_PRICE,
+                    target_date=date(2026, 6, 22),
+                )
+
+                payload = build_local_data_payload(
+                    store,
+                    today=date(2026, 6, 23),
+                    screener_path=screener_path,
+                )
+
+        item = payload["items"][0]  # type: ignore[index]
+        self.assertEqual(item["last_date"], "2026-06-22")  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["row_count"], 1)  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["level"], "shallow")  # type: ignore[index]
+        self.assertEqual(item["price_gap"]["status"], "force_refresh_required")  # type: ignore[index]
+
     def test_local_data_uses_market_level_institutional_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
