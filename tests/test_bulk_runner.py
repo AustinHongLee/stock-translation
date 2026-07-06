@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.models import DailyPrice, DividendRecord, InstitutionalTrade, StockProfile
-from app.sync.bulk_runner import BULK_RUN_KEY, build_bulk_plan
+from app.sync.bulk_runner import BULK_RUN_KEY, BULK_STATUS_HISTORY_PENDING, build_bulk_plan
 
 
 class FixedDate(date):
@@ -428,7 +428,7 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertEqual(fake_client.price_ranges, [])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
-    def test_latest_all_single_row_does_not_skip_history_backfill(self) -> None:
+    def test_manual_latest_all_single_row_defers_history_backfill(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
         fake_client.latest_all_prices = [DailyPrice("2330", EXPECTED_TARGET, 10, 11, 9, 10, 1000)]
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
@@ -440,11 +440,11 @@ class BulkRunnerTests(unittest.TestCase):
         ):
             plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
             plan.prelude(threading.Event())  # type: ignore[union-attr]
-            self.assertFalse(plan.skip("2330"))
+            self.assertTrue(plan.skip("2330"))
             plan.sync_one("2330")
 
-        self.assertEqual(fake_client.price_ranges, [("2330", date(2025, 2, 11), EXPECTED_TARGET)])
-        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+        self.assertEqual(fake_client.price_ranges, [])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], BULK_STATUS_HISTORY_PENDING)
 
     def test_sync_one_retries_same_month_tail_when_target_day_is_sparse(self) -> None:
         fake_client = MissingTargetTailBulkClient(request_interval=0)
@@ -627,9 +627,10 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertEqual(fake_client.price_ranges, [("2330", date(2026, 2, 9), EXPECTED_TARGET)])
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
 
-    def test_accumulated_topup_rows_do_not_skip_history_backfill(self) -> None:
+    def test_manual_accumulated_topup_rows_defer_history_backfill(self) -> None:
         # 防回歸：受災股被每日 top-up 累到 10 筆（> 舊門檻 5）且 latest 頂到 target，
-        # 舊常數門檻會判 current → 永遠跳過。深度軸必須讓它回補整年歷史。
+        # 舊常數門檻會判 current → 永遠跳過。現在手動全市場不當場補整年，
+        # 但也不能標 done；要留下 history_pending 讓背景/單檔補歷史。
         fake_client = FakeBulkClient(request_interval=0)
         fake_client.latest_all_prices = []
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
@@ -641,6 +642,25 @@ class BulkRunnerTests(unittest.TestCase):
             patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
         ):
             plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            self.assertTrue(plan.skip("2330"))
+            plan.sync_one("2330")
+
+        self.assertEqual(fake_client.price_ranges, [])
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], BULK_STATUS_HISTORY_PENDING)
+
+    def test_quiet_mode_backfills_fresh_but_shallow_history(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = _history_rows("2330", EXPECTED_TARGET, count=10)
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0, quiet=True)
             plan.prelude(threading.Event())  # type: ignore[union-attr]
             self.assertFalse(plan.skip("2330"))
             plan.sync_one("2330")

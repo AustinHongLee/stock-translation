@@ -53,6 +53,8 @@ class SyncBatchTests(unittest.TestCase):
         self.assertIn('postJson("/api/bulk-download/retry-failed"', js)
         self.assertIn("formatDuration(st.eta_seconds)", js)
         self.assertIn("failedCount === 0", js)
+        self.assertIn("history_pending_count", js)
+        self.assertIn("歷史待背景", js)
         self.assertIn(".bulk-controls .chart-size-btn", css)
         self.assertIn("min-height: 38px", css)
 

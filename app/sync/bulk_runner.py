@@ -15,6 +15,7 @@ from app.analyze.dividends import (
 from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     STATUS_CURRENT,
+    STATUS_FORCE_REFRESH_REQUIRED,
     STATUS_PATCHED,
     STATUS_SOURCE_PENDING,
     plan_data_gap,
@@ -34,6 +35,7 @@ T86_MAX_EMPTY = 12  # 連續無資料日就停（假期/邊界）
 T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
 BULK_STATUS_SOURCE_PENDING = "source_pending"
+BULK_STATUS_HISTORY_PENDING = "history_pending"
 # 背景安靜模式：慢速、低額度，把回補攤平到時間上以避開限流；使用者主動下載可隨時搶佔。
 QUIET_REQUEST_INTERVAL = 2.5
 QUIET_BACKFILL_MAX_STOCKS = 30
@@ -216,6 +218,15 @@ def build_bulk_plan(
                 max_patch_business_days=45,
                 listed_date=_listed_date_for(ctx, sid),
             )
+            if _should_defer_history_backfill(gap_plan, quiet=quiet, retry_failed_only=retry_failed_only):
+                store.mark_bulk_item(
+                    BULK_RUN_KEY,
+                    "stock",
+                    sid,
+                    BULK_STATUS_HISTORY_PENDING,
+                    error=_history_pending_message(gap_plan),
+                )
+                return
             if gap_plan.status == STATUS_CURRENT:
                 store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
                 return
@@ -317,6 +328,15 @@ def build_bulk_plan(
             max_patch_business_days=45,
             listed_date=_listed_date_for(ctx, sid),
         )
+        if _should_defer_history_backfill(gap_plan, quiet=quiet, retry_failed_only=retry_failed_only):
+            store.mark_bulk_item(
+                BULK_RUN_KEY,
+                "stock",
+                sid,
+                BULK_STATUS_HISTORY_PENDING,
+                error=_history_pending_message(gap_plan),
+            )
+            return True
         if gap_plan.status == STATUS_CURRENT:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
             return True
@@ -448,6 +468,36 @@ def _bulk_stock_priority_key(plan, stock_id: str) -> tuple[int, int, str]:
             return (3, int(plan.gap_business_days or 0), stock_id)
         return (2, int(plan.gap_business_days or 0), stock_id)
     return (5, int(plan.gap_business_days or 0), stock_id)
+
+
+def _should_defer_history_backfill(
+    plan,
+    *,
+    quiet: bool,
+    retry_failed_only: bool,
+) -> bool:
+    """手動全市場只補最新/缺口；已最新但歷史淺，交給背景或單檔補。"""
+    if quiet or retry_failed_only:
+        return False
+    if plan.status != STATUS_FORCE_REFRESH_REQUIRED:
+        return False
+    if plan.local_latest_date is None or plan.target_date is None:
+        return False
+    if plan.local_latest_date < plan.target_date:
+        return False
+    depth = getattr(plan, "depth", None)
+    return bool(depth is not None and depth.needs_backfill)
+
+
+def _history_pending_message(plan) -> str:
+    depth = getattr(plan, "depth", None)
+    if depth is None:
+        return "日線已到最新；較早歷史留給背景慢速同步或單檔補齊。"
+    return (
+        "日線已到最新；近一年歷史仍偏少"
+        f"（{depth.row_count}/{depth.expected_days} 筆），"
+        "留給背景慢速同步或單檔補齊。"
+    )
 
 
 def _bulk_failed_backoff_until(ctx: dict, stock_id: str) -> datetime | None:

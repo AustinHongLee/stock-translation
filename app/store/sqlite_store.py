@@ -1201,7 +1201,12 @@ class SQLiteStore:
                 latest_updated_at = updated_at
             if status == "failed":
                 failed.append({"stock_id": row["item_key"], "error": row["error"]})
-        completed = counts.get("done", 0) + counts.get("skipped", 0)
+        completed = (
+            counts.get("done", 0)
+            + counts.get("skipped", 0)
+            + counts.get("source_pending", 0)
+            + counts.get("history_pending", 0)
+        )
         return {
             "total": len(rows),
             "done": completed,

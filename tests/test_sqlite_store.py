@@ -177,6 +177,23 @@ class SQLiteStoreTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 self.assertIsNone(store.get_json_cache("local_data_v1"))
 
+    def test_bulk_progress_counts_non_error_waiting_states_as_completed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.ensure_bulk_items("full_market", "stock", ["2330", "2303", "2454"])
+                store.mark_bulk_item("full_market", "stock", "2330", "done")
+                store.mark_bulk_item("full_market", "stock", "2303", "history_pending")
+                store.mark_bulk_item("full_market", "stock", "2454", "source_pending")
+
+                summary = store.get_bulk_progress_summary("full_market")
+
+            self.assertEqual(summary["total"], 3)
+            self.assertEqual(summary["done"], 3)
+            self.assertEqual(summary["failed_count"], 0)
+            self.assertEqual(summary["counts"]["history_pending"], 1)  # type: ignore[index]
+            self.assertEqual(summary["counts"]["source_pending"], 1)  # type: ignore[index]
+
     def test_indicator_prefs_and_chart_annotations_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"
