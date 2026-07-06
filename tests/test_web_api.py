@@ -418,6 +418,53 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(item["history_depth"]["level"], "deep")  # type: ignore[index]
         self.assertEqual(item["history_depth"]["horizon_start"], "2026-06-29")  # type: ignore[index]
 
+    def test_profileless_market_product_short_window_is_not_marked_stale_on_stock_page(self) -> None:
+        class July6Date(date):
+            @classmethod
+            def today(cls) -> "July6Date":
+                return cls(2026, 7, 6)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {"items": [{"stock_id": "00405A", "price_date": "2026-07-03"}]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("00405A", day, 10, 11, 9, 10, 10)
+                        for day in (
+                            date(2026, 6, 29),
+                            date(2026, 6, 30),
+                            date(2026, 7, 2),
+                            date(2026, 7, 3),
+                        )
+                    ]
+                )
+
+                with patch("app.web.api.date", July6Date):
+                    stock_payload = build_stock_payload(store, "00405A", days=365)
+                freshness = build_sync_freshness_payload(
+                    store,
+                    "00405A",
+                    screener_path=screener_path,
+                    today=date(2026, 7, 6),
+                )
+
+        self.assertEqual(stock_payload["price_window"]["expected_end"], "2026-07-03")  # type: ignore[index]
+        self.assertEqual(stock_payload["price_window"]["actual_end"], "2026-07-03")  # type: ignore[index]
+        self.assertEqual(stock_payload["price_window"]["stale_days"], 0)  # type: ignore[index]
+        self.assertFalse(stock_payload["price_window"]["is_stale"])  # type: ignore[index]
+        self.assertTrue(stock_payload["price_window"]["is_short_history"])  # type: ignore[index]
+        self.assertTrue(freshness["can_skip_sync"])
+        self.assertEqual(freshness["status"], "current")
+
     def test_local_data_uses_market_level_institutional_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

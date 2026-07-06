@@ -172,6 +172,16 @@ class RecordingClient(FakeClient):
         ]
 
 
+class NoPriceFetchClient(FakeClient):
+    def fetch_daily_prices(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[DailyPrice]:
+        raise AssertionError("daily prices should not be fetched")
+
+
 class MissingTargetTailClient(FakeClient):
     def __init__(self) -> None:
         self.price_ranges: list[tuple[str, date, date]] = []
@@ -503,6 +513,33 @@ class StockSyncServiceTests(unittest.TestCase):
         self.assertEqual(client.price_ranges, [("2330", date(2025, 6, 22), date(2026, 6, 22))])
         self.assertTrue(result.gap_plan["force_refresh_required"])  # type: ignore[index]
         self.assertEqual(result.post_status["status"], "patched")  # type: ignore[index]
+
+    def test_sync_stock_history_skips_current_profileless_market_product_short_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("00405A", day, 10, 11, 9, 10, 10)
+                        for day in (
+                            date(2026, 6, 29),
+                            date(2026, 6, 30),
+                            date(2026, 7, 2),
+                            date(2026, 7, 3),
+                        )
+                    ]
+                )
+                service = StockSyncService(client=NoPriceFetchClient(), store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "00405A",
+                    lookback_days=365,
+                    end_date=date(2026, 7, 6),
+                    target_date=date(2026, 7, 3),
+                )
+
+        self.assertEqual(result.gap_plan["status"], "current")  # type: ignore[index]
+        self.assertFalse(result.gap_plan["force_refresh_required"])  # type: ignore[index]
+        self.assertEqual(result.post_status["status"], "current")  # type: ignore[index]
 
     def test_sync_institutional_uses_gap_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

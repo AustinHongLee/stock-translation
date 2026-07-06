@@ -2544,8 +2544,11 @@ function renderPriceWindow(priceWindow, summary) {
     : "近一年收盤價（日線）";
   elements.dateRange.textContent = priceWindow?.label || fallbackLabel;
   elements.dateRange.classList.toggle("stale", isPartial);
-  if (isPartial && priceWindow?.stale_days != null) {
-    elements.stockDataNote.textContent += `｜日線資料過期 ${priceWindow.stale_days} 天，請重新同步`;
+  if (priceWindow?.is_stale && priceWindow?.stale_days != null && Number(priceWindow.stale_days) > 0) {
+    elements.stockDataNote.textContent += `｜日線資料落後 ${priceWindow.stale_days} 個交易日，請重新同步`;
+  } else if (priceWindow?.is_short_history) {
+    const rows = Number(summary.rows || 0);
+    elements.stockDataNote.textContent += `｜日線樣本較短（目前 ${formatInteger(rows)} 個交易日），不是同步失敗`;
   }
 }
 

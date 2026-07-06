@@ -17,6 +17,7 @@ from app.analyze.data_gap import (
     DATA_NODE_INSTITUTIONAL,
     STATUS_CURRENT,
     STATUS_FORCE_REFRESH_REQUIRED,
+    count_business_days,
     market_node_freshness,
     plan_data_gap,
 )
@@ -398,7 +399,7 @@ def build_sync_freshness_payload(
         "stock_id": stock_id,
         "status": status,
         "is_current": is_current,
-        "can_skip_sync": is_current and not target.snapshot_stale,
+        "can_skip_sync": is_current,
         "local_latest_date": local_date.isoformat() if local_date else None,
         "reference_latest_date": reference_date.isoformat() if reference_date else None,
         "target_latest_date": target_date.isoformat(),
@@ -1864,26 +1865,36 @@ def price_window_to_json(
     requested_end: date,
 ) -> dict[str, object]:
     actual_end = date.fromisoformat(summary.end_date) if summary.end_date else None
-    stale_days = (requested_end - actual_end).days if actual_end else None
-    is_stale = stale_days is None or stale_days > 10
-    is_partial = (
+    expected_end = previous_completed_business_day(requested_end)
+    stale_days = (
+        count_business_days(actual_end + timedelta(days=1), expected_end)
+        if actual_end and actual_end < expected_end
+        else 0 if actual_end else None
+    )
+    is_stale = stale_days is None or stale_days > 0
+    is_short_history = (
         summary.start_date is None
         or summary.end_date is None
-        or is_stale
         or date.fromisoformat(summary.start_date) > requested_start + timedelta(days=10)
+    )
+    is_partial = (
+        is_short_history
+        or is_stale
     )
     label = "--"
     if summary.start_date and summary.end_date:
         label = f"{summary.start_date} 至 {summary.end_date}"
-        if stale_days is not None and stale_days > 10:
-            label += f" · 資料過期 {stale_days} 天"
+        if stale_days is not None and stale_days > 0:
+            label += f" · 資料落後 {stale_days} 個交易日"
     return {
         "requested_start": requested_start.isoformat(),
         "requested_end": requested_end.isoformat(),
+        "expected_end": expected_end.isoformat(),
         "actual_start": summary.start_date,
         "actual_end": summary.end_date,
         "stale_days": stale_days,
         "is_stale": is_stale,
+        "is_short_history": is_short_history,
         "is_partial": is_partial,
         "label": label,
     }

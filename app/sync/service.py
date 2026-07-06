@@ -65,6 +65,7 @@ class StockSyncService:
             DATA_NODE_DAILY_PRICE,
             target_date=target_date,
         )
+        listed_date = _listed_date_for_gap(self.store, stock_id, coverage_before)
         gap_plan = plan_data_gap(
             stock_id=stock_id,
             node=DATA_NODE_DAILY_PRICE,
@@ -72,7 +73,7 @@ class StockSyncService:
             target_date=target_date,
             lookback_days=lookback_days,
             max_patch_business_days=45,
-            listed_date=_stored_listed_date(self.store, stock_id),
+            listed_date=listed_date,
         )
         start_date = gap_plan.fetch_start_date or (target_date - timedelta(days=lookback_days))
         fetch_end_date = gap_plan.fetch_end_date or target_date
@@ -353,6 +354,28 @@ def _stored_listed_date(store: SQLiteStore, stock_id: str) -> date | None:
     except Exception:  # noqa: BLE001
         return None
     return getattr(profile, "listed_date", None) if profile is not None else None
+
+
+def _listed_date_for_gap(store: SQLiteStore, stock_id: str, coverage: dict[str, object]) -> date | None:
+    listed_date = _stored_listed_date(store, stock_id)
+    if listed_date is not None:
+        return listed_date
+    if _is_profileless_market_product(stock_id):
+        return _date_or_none(coverage.get("earliest_date"))
+    return None
+
+
+def _is_profileless_market_product(stock_id: str) -> bool:
+    sid = str(stock_id or "").strip().upper()
+    return sid.startswith("00") or any(not ch.isdigit() for ch in sid)
+
+
+def _date_or_none(value: object) -> date | None:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value:
+        return date.fromisoformat(value)
+    return None
 
 
 def _latest_price_date(prices: list[DailyPrice]) -> date:
