@@ -7886,7 +7886,8 @@ function dataGapShortLabel(gap, label) {
     return `<span class="ld-gap">${escapeHtml(label)}缺 ${formatInteger(days)} 日</span>`;
   }
   if (status === "force_refresh_required") {
-    return `<span class="ld-stale">${escapeHtml(label)}需重建</span>`;
+    const text = isFreshButShallowGap(gap) ? "歷史待補" : "需補整段";
+    return `<span class="ld-stale">${escapeHtml(label)}${text}</span>`;
   }
   if (status === "source_pending") {
     return `<span class="ld-muted">${escapeHtml(label)}待來源</span>`;
@@ -7907,13 +7908,24 @@ function localRowNeedsFix(item) {
 }
 
 function localFixHint(item) {
-  if ((item?.price_gap?.status || "") === "force_refresh_required") {
-    return "資料對不上 · 按「補這檔」重抓這檔";
+  const gap = item?.price_gap || {};
+  if ((gap.status || "") === "force_refresh_required") {
+    if (isFreshButShallowGap(gap)) {
+      return "已到最新 · 背景會慢慢補歷史，急用再按「補這檔」";
+    }
+    return "缺太多天 · 按「補這檔」補整段日線";
   }
   if (priceNeedsFix(item)) {
     return "差幾天沒補上 · 按「補這檔」一鍵補回";
   }
   return "";
+}
+
+function isFreshButShallowGap(gap) {
+  if (!gap || gap.status !== "force_refresh_required") return false;
+  if (!gap.local_latest_date || !gap.target_date) return false;
+  return String(gap.local_latest_date) >= String(gap.target_date)
+    && Boolean(gap.depth?.needs_backfill);
 }
 
 function renderSnapshotBanner(payload) {

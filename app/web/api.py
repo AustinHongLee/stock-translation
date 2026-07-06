@@ -68,7 +68,7 @@ from app.store.sqlite_store import SQLiteStore
 HISTORICAL_VALUATION_DAYS = 365 * 5
 CHART_MA_WARMUP_DAYS = 400
 CHART_MA_WARMUP_ROWS = 260
-LOCAL_DATA_CACHE_KEY = "local_data_v2"
+LOCAL_DATA_CACHE_KEY = "local_data_v3"
 LOCAL_DATA_CACHE_TTL_SECONDS = 300
 STRUCTURE_CACHE_PREFIX = "structure"
 MARKET_RADAR_CACHE_PREFIX = "market_radar_v2"
@@ -215,6 +215,7 @@ def build_local_data_payload(
         )
         profile = store.get_profile(sid)
         name = (profile.short_name or profile.name) if profile else ""
+        listed_date = _listed_date_for_gap(profile, sid, price_coverage)
         price_gap = plan_data_gap(
             stock_id=sid,
             node=DATA_NODE_DAILY_PRICE,
@@ -222,7 +223,7 @@ def build_local_data_payload(
             target_date=target_date,
             lookback_days=HISTORICAL_VALUATION_DAYS,
             max_patch_business_days=45,
-            listed_date=profile.listed_date if profile else None,
+            listed_date=listed_date,
         )
         sr = compute_support_resistance(prices)
         items.append({
@@ -272,6 +273,21 @@ def _history_depth_json(price_gap) -> dict[str, object] | None:
     payload = depth.to_json()
     payload["label"] = _DEPTH_LABELS.get(depth.level, depth.level)
     return payload
+
+
+def _listed_date_for_gap(profile, stock_id: str, coverage: dict[str, object]) -> date | None:
+    if profile is not None and profile.listed_date is not None:
+        return profile.listed_date
+    if _is_profileless_market_product(stock_id):
+        # ETF/ETN/特殊商品常會出現在 STOCK_DAY_ALL，但不在一般股票 profile 清單。
+        # 沒有上市日時用本機最早日當深度起點，避免把新商品誤判成缺一整年。
+        return _date_or_none(coverage.get("earliest_date"))
+    return None
+
+
+def _is_profileless_market_product(stock_id: str) -> bool:
+    sid = str(stock_id or "").strip().upper()
+    return sid.startswith("00") or any(not ch.isdigit() for ch in sid)
 
 
 def build_cached_local_data_payload(
@@ -333,6 +349,7 @@ def build_sync_freshness_payload(
         target_date=target_date,
     )
     profile = store.get_profile(stock_id)
+    listed_date = _listed_date_for_gap(profile, stock_id, daily_coverage)
     daily_gap = plan_data_gap(
         stock_id=stock_id,
         node=DATA_NODE_DAILY_PRICE,
@@ -340,7 +357,7 @@ def build_sync_freshness_payload(
         target_date=target_date,
         lookback_days=lookback_days,
         max_patch_business_days=45,
-        listed_date=profile.listed_date if profile else None,
+        listed_date=listed_date,
     )
     institutional_gap = _market_institutional_freshness(store, target.expected_latest_close_date)
     local_date = _date_or_none(daily_coverage.get("latest_date"))

@@ -348,7 +348,7 @@ def build_bulk_plan(
         if quiet:
             # 安靜模式收尾輕量：只失效快取，不重抓、不重算雷達。
             if store is not None:
-                store.delete_json_cache("local_data_v2")
+                store.delete_json_cache("local_data_v3")
             return
         # 1) 收尾再跑一次全市場最新日線 top-up：長時間下載期間來源可能更新。
         #    全市場下載採「最新日優先」；個別歷史不足留給看個股 / 補這檔時再補。
@@ -365,7 +365,7 @@ def build_bulk_plan(
             except Exception:  # noqa: BLE001
                 pass
         if store is not None:
-            store.delete_json_cache("local_data_v2")
+            store.delete_json_cache("local_data_v3")
 
     return BulkPlan(
         list_stocks=list_stocks,
@@ -415,7 +415,7 @@ def _fetch_missing_recent_t86(store, client, stop_event) -> None:
                     wrote += 1
         day -= timedelta(days=1)
     if wrote and hasattr(store, "delete_json_cache"):
-        store.delete_json_cache("local_data_v2")
+        store.delete_json_cache("local_data_v3")
 
 
 def _prioritized_stock_ids(
@@ -543,7 +543,7 @@ def _top_up_latest_all_prices(store, client) -> None:
         if latest_all:
             store.upsert_daily_prices(latest_all)
             if hasattr(store, "delete_json_cache"):
-                store.delete_json_cache("local_data_v2")
+                store.delete_json_cache("local_data_v3")
     except Exception:  # noqa: BLE001 - 安全網失敗不影響主流程
         pass
 

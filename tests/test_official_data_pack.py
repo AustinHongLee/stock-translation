@@ -22,7 +22,7 @@ class OfficialDataPackTests(unittest.TestCase):
             with SQLiteStore(source) as store:
                 _insert_daily(store.conn, "2330", "2026-06-30", 100.0)
                 store.conn.execute("INSERT INTO watchlist (stock_id, added_at) VALUES (?, ?)", ("2330", "2026-07-01"))
-                store.set_json_cache("local_data_v2", {"private": True})
+                store.set_json_cache("local_data_v3", {"private": True})
                 store.conn.commit()
 
             manifest = build_pack(source, root / "official_data")

@@ -126,7 +126,7 @@ class QuietPlanTests(unittest.TestCase):
 
         self.assertEqual(fake_client.latest_all_calls, 1)  # 只有 prelude 的一次 top-up
         mock_refresh.assert_not_called()
-        self.assertIn("local_data_v2", fake_store.json_cache_deletes)
+        self.assertIn("local_data_v3", fake_store.json_cache_deletes)
 
 
 class ThrottleTests(unittest.TestCase):

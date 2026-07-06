@@ -583,7 +583,7 @@ class BulkRunnerTests(unittest.TestCase):
         self.assertTrue(fake_store.daily.get("2330"))
         self.assertEqual(fake_store.daily["2330"][-1].date, EXPECTED_TARGET)
         mock_refresh.assert_called_once()
-        self.assertIn("local_data_v2", fake_store.json_cache_deletes)
+        self.assertIn("local_data_v3", fake_store.json_cache_deletes)
 
     def test_new_listing_with_history_since_listing_skips(self) -> None:
         # 新上市股只有上市以來的 3 筆 → 深度以上市日推導為「完整」→ 跳過，不再 ping-pong 重抓。

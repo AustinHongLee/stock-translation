@@ -14,7 +14,7 @@ from app.update.checker import parse_version
 SEED_DB_NAME = "seed.sqlite3"
 SEED_MANIFEST_NAME = "manifest.json"
 SEED_APPLIED_CACHE_KEY = "seed_applied_version"
-LOCAL_DATA_CACHE_KEY = "local_data_v2"
+LOCAL_DATA_CACHE_KEY = "local_data_v3"
 
 SEED_MERGE_TABLES: tuple[str, ...] = (
     "stock_profiles",

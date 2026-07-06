@@ -27,7 +27,7 @@ class SeedMergeTests(unittest.TestCase):
         with SQLiteStore(self.current) as store:
             _insert_daily(store.conn, "2330", "2026-06-30", 100.0)
             store.conn.execute("INSERT INTO watchlist (stock_id, added_at) VALUES (?, ?)", ("2330", "2026-07-01"))
-            store.set_json_cache("local_data_v2", {"stale": True})
+            store.set_json_cache("local_data_v3", {"stale": True})
             store.conn.commit()
 
     def test_merge_adds_missing_market_rows_without_overwriting_existing_or_private_tables(self) -> None:
@@ -46,7 +46,7 @@ class SeedMergeTests(unittest.TestCase):
                 "SELECT stock_id, close FROM daily_prices ORDER BY stock_id"
             ).fetchall()
             watchlist = store.conn.execute("SELECT stock_id FROM watchlist ORDER BY stock_id").fetchall()
-            self.assertIsNone(store.get_json_cache("local_data_v2"))
+            self.assertIsNone(store.get_json_cache("local_data_v3"))
             self.assertEqual(applied_seed_version(store), 20260701)
 
         self.assertEqual([(row["stock_id"], row["close"]) for row in rows], [("2317", 50.0), ("2330", 100.0)])

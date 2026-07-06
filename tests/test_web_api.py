@@ -377,6 +377,47 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(item["history_depth"]["level"], "shallow")  # type: ignore[index]
         self.assertEqual(item["price_gap"]["status"], "force_refresh_required")  # type: ignore[index]
 
+    def test_local_data_profileless_market_product_uses_local_earliest_as_depth_start(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-07-03T18:00:00+08:00",
+                        "items": [{"stock_id": "00400A", "price_date": "2026-07-03"}],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("00400A", day, 10, 11, 9, 10, 10)
+                        for day in (
+                            date(2026, 6, 29),
+                            date(2026, 6, 30),
+                            date(2026, 7, 1),
+                            date(2026, 7, 2),
+                            date(2026, 7, 3),
+                        )
+                    ]
+                )
+
+                payload = build_local_data_payload(
+                    store,
+                    today=date(2026, 7, 6),
+                    screener_path=screener_path,
+                )
+
+        item = payload["items"][0]  # type: ignore[index]
+        self.assertEqual(item["stock_id"], "00400A")  # type: ignore[index]
+        self.assertEqual(item["price_gap"]["status"], "current")  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["level"], "deep")  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["horizon_start"], "2026-06-29")  # type: ignore[index]
+
     def test_local_data_uses_market_level_institutional_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
