@@ -31,6 +31,7 @@ class BulkPlan:
     skip: Callable[[str], bool] | None = None
     on_finish: Callable[[dict[str, Any]], None] | None = None
     retry_failed_only: bool = False
+    mode: str = "manual"  # manual（使用者主動）/ quiet（背景慢速）
 
 
 class BulkDownloadManager:
@@ -56,6 +57,7 @@ class BulkDownloadManager:
             "started_at": None,
             "finished_at": None,
             "retry_failed_only": False,
+            "mode": "manual",
         }
 
     # ---- 控制 ----
@@ -69,6 +71,7 @@ class BulkDownloadManager:
             self._state["status"] = "preparing"
             self._state["started_at"] = _now()
             self._state["retry_failed_only"] = plan.retry_failed_only
+            self._state["mode"] = getattr(plan, "mode", "manual")
             self._started_monotonic = time.monotonic()
             self._thread = threading.Thread(target=self._run, args=(plan,), daemon=True)
             self._thread.start()

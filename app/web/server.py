@@ -40,7 +40,7 @@ from app.screener.value import DEFAULT_SCREENER_PATH, refresh_value_screener
 from app.store.sqlite_store import SQLiteStore
 from app.sync.service import StockSyncService, SyncResult
 from app.sync.bulk import BULK_MANAGER
-from app.sync.bulk_runner import BULK_RUN_KEY, build_bulk_plan
+from app.sync.bulk_runner import BULK_RUN_KEY, QUIET_REQUEST_INTERVAL, build_bulk_plan
 from app.sync.twse import TwseClient
 from app.glossary.service import glossary_payload
 from app.quote.providers import TwseMisQuoteProvider
@@ -83,6 +83,10 @@ TWSE_FETCH_BLOCKED_DURING_BULK = {
 }
 UPDATE_CHECK_CACHE_SECONDS = 300
 _UPDATE_CHECK_CACHE: dict[str, object] = {"checked_at": 0.0, "payload": None}
+# 背景安靜同步：app 開著時每隔一段時間自動「補最新 + 慢速補歷史」。
+QUIET_SYNC_STATE_KEY = "quiet_sync_state"
+QUIET_SYNC_MIN_INTERVAL_HOURS = 4.0
+QUIET_SYNC_LOOP_SECONDS = 1800.0
 
 
 class StockTranslatorServer(ThreadingHTTPServer):
@@ -459,6 +463,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/bulk-download/start":
                 body = self._read_json_body()
                 lookback_days = int(body.get("lookback_days", 365))
+                _preempt_quiet_run(BULK_MANAGER)
                 try:
                     BULK_MANAGER.start(build_bulk_plan(self.server.db_path, lookback_days=lookback_days))
                 except RuntimeError as exc:
@@ -473,6 +478,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     if int(summary.get("failed_count", 0)) <= 0:
                         self._send_error(HTTPStatus.BAD_REQUEST, "目前沒有失敗清單可重試")
                         return
+                _preempt_quiet_run(BULK_MANAGER)
                 try:
                     BULK_MANAGER.start(
                         build_bulk_plan(
@@ -837,6 +843,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Apply bundled public seed data to the local database and exit.",
     )
+    parser.add_argument(
+        "--no-auto-sync",
+        action="store_false",
+        dest="auto_sync",
+        default=True,
+        help="Disable the quiet background data sync loop.",
+    )
     args = parser.parse_args(argv)
 
     if args.db == DEFAULT_DB:
@@ -850,6 +863,8 @@ def main(argv: list[str] | None = None) -> int:
         print(_seed_merge_message(result, manual=True))
         return 0
     _start_seed_merge_if_needed(args.db)
+    if args.auto_sync:
+        _start_quiet_sync_loop(args.db)
 
     url = f"http://{args.host}:{args.port}"
     try:
@@ -874,6 +889,60 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         server.server_close()
     return 0
+
+
+def _preempt_quiet_run(manager) -> None:
+    """使用者主動下載時先讓路：停掉正在跑的背景安靜同步。"""
+    status = manager.status()
+    if status.get("running") and status.get("mode") == "quiet":
+        manager.stop()
+        manager.join(15)
+
+
+def _quiet_sync_due(store, *, now: datetime | None = None) -> bool:
+    """距離上次背景同步超過間隔才 due；沒有紀錄視為 due。"""
+    cached = store.get_json_cache(QUIET_SYNC_STATE_KEY)
+    if cached is None:
+        return True
+    _payload, updated_at = cached
+    now = now or datetime.now()
+    return (now - updated_at).total_seconds() >= QUIET_SYNC_MIN_INTERVAL_HOURS * 3600
+
+
+def _run_quiet_sync_once(db_path: Path) -> bool:
+    """時間到且沒有任務在跑，就啟動一輪背景安靜同步（補最新 + 慢速補歷史）。"""
+    status = BULK_MANAGER.status()
+    if status.get("running") or status.get("paused"):
+        return False
+    with SQLiteStore(db_path) as store:
+        if not _quiet_sync_due(store):
+            return False
+        store.set_json_cache(
+            QUIET_SYNC_STATE_KEY,
+            {"last": datetime.now().isoformat(timespec="seconds")},
+        )
+    try:
+        BULK_MANAGER.start(
+            build_bulk_plan(db_path, request_interval=QUIET_REQUEST_INTERVAL, quiet=True)
+        )
+    except RuntimeError:
+        return False  # 使用者剛好自己啟動了下載，讓給使用者
+    return True
+
+
+def _start_quiet_sync_loop(db_path: Path) -> None:
+    """背景安靜同步迴圈：只在 main() 啟動（測試直接 import 不受影響）。"""
+
+    def _worker() -> None:
+        time.sleep(5.0)  # 先讓 server 與 seed merge 起跑
+        while True:
+            try:
+                _run_quiet_sync_once(db_path)
+            except Exception:  # noqa: BLE001 - 背景安全網，任何失敗都不影響 app
+                pass
+            time.sleep(QUIET_SYNC_LOOP_SECONDS)
+
+    threading.Thread(target=_worker, name="quiet-sync", daemon=True).start()
 
 
 def _start_seed_merge_if_needed(db_path: Path) -> None:
@@ -1101,6 +1170,9 @@ def _bulk_blocks_twse_fetch(path: str, status: dict[str, object] | None = None) 
     if path not in TWSE_FETCH_BLOCKED_DURING_BULK:
         return False
     current = status if status is not None else BULK_MANAGER.status()
+    if current.get("mode") == "quiet":
+        # 背景安靜補歷史不鎖使用者操作（間隔慢，與使用者請求並行無虞）。
+        return False
     return bool(
         current.get("running")
         or current.get("paused")

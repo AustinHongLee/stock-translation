@@ -34,6 +34,9 @@ T86_MAX_EMPTY = 12  # 連續無資料日就停（假期/邊界）
 T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
 BULK_STATUS_SOURCE_PENDING = "source_pending"
+# 背景安靜模式：慢速、低額度，把回補攤平到時間上以避開限流；使用者主動下載可隨時搶佔。
+QUIET_REQUEST_INTERVAL = 2.5
+QUIET_BACKFILL_MAX_STOCKS = 30
 BULK_FAILED_RETRY_BACKOFF_SECONDS = 30 * 60
 
 
@@ -43,6 +46,8 @@ def build_bulk_plan(
     lookback_days: int = 365,
     request_interval: float = 0.2,
     retry_failed_only: bool = False,
+    quiet: bool = False,
+    quiet_max_stocks: int = QUIET_BACKFILL_MAX_STOCKS,
 ) -> BulkPlan:
     ctx: dict = {}
     today = date.today()
@@ -75,6 +80,11 @@ def build_bulk_plan(
             p.stock_id: p.listed_date for p in profiles if p.listed_date is not None
         }
         store.ensure_bulk_items(BULK_RUN_KEY, "stock", ctx["ids"])
+        if quiet:
+            # 安靜模式輕 prelude：不做全量排序（list_stocks 會自己挑最缺的），
+            # 只補「近幾個交易日缺的 T86」；共用檔留給使用者主動的全市場下載。
+            _fetch_missing_recent_t86(store, client, stop_event)
+            return
         ctx["ids"] = _prioritized_stock_ids(ctx, ctx["ids"], target_date, lookback_days)
         if stop_event.is_set():
             return
@@ -152,7 +162,38 @@ def build_bulk_plan(
             day -= timedelta(days=1)
 
     def list_stocks() -> list[str]:
-        return list(ctx.get("ids", []))
+        ids = list(ctx.get("ids", []))
+        if not quiet:
+            return ids
+        # 安靜模式：只挑「需要補」的股票，最缺的先補，且限制單次額度，
+        # 其餘留給下一輪（每幾小時觸發一次），把負載攤平到時間上。
+        store = ctx.get("store")
+        if store is None:
+            return []
+        needing: list[tuple[float, str]] = []
+        for sid in ids:
+            if _bulk_failed_backoff_until(ctx, sid) is not None:
+                continue  # 剛失敗的先冷卻，別讓背景模式反覆撞限流
+            coverage = store.refresh_data_coverage(
+                sid,
+                DATA_NODE_DAILY_PRICE,
+                target_date=target_date,
+            )
+            gap_plan = plan_data_gap(
+                stock_id=sid,
+                node=DATA_NODE_DAILY_PRICE,
+                coverage=coverage,
+                target_date=target_date,
+                lookback_days=lookback_days,
+                max_patch_business_days=45,
+                listed_date=_listed_date_for(ctx, sid),
+            )
+            if gap_plan.status == STATUS_CURRENT:
+                continue
+            ratio = gap_plan.depth.ratio if gap_plan.depth is not None else 0.0
+            needing.append((ratio, sid))
+        needing.sort()
+        return [sid for _ratio, sid in needing[: max(0, quiet_max_stocks)]]
 
     def sync_one(sid: str) -> None:
         store = ctx["store"]
@@ -284,6 +325,11 @@ def build_bulk_plan(
     def on_finish(_status) -> None:
         store = ctx.get("store")
         client = ctx.get("client")
+        if quiet:
+            # 安靜模式收尾輕量：只失效快取，不重抓、不重算雷達。
+            if store is not None:
+                store.delete_json_cache("local_data_v2")
+            return
         # 1) 收尾再跑一次全市場最新日線 top-up：長時間下載期間來源可能更新。
         #    全市場下載採「最新日優先」；個別歷史不足留給看個股 / 補這檔時再補。
         if client is not None and store is not None and not retry_failed_only:
@@ -308,6 +354,7 @@ def build_bulk_plan(
         skip=skip,
         on_finish=on_finish,
         retry_failed_only=retry_failed_only,
+        mode="quiet" if quiet else "manual",
     )
 
 
@@ -325,6 +372,30 @@ def _listed_date_for(ctx: dict, stock_id: str) -> date | None:
     except Exception:  # noqa: BLE001 - 查不到上市日就退回無 clamp 的原行為
         return None
     return getattr(profile, "listed_date", None) if profile is not None else None
+
+
+def _fetch_missing_recent_t86(store, client, stop_event) -> None:
+    """近 N 個交易日中「本地還沒有」的 T86 才抓；日常多半 0~1 個請求。"""
+    have = store.get_institutional_dates_any()
+    day = date.today()
+    checked = 0
+    wrote = 0
+    while checked < T86_RECENT_FORCE_DAYS and not stop_event.is_set():
+        if is_twse_trading_day(day):
+            checked += 1
+            key = day.isoformat()
+            if key not in have:
+                try:
+                    trades = client.fetch_institutional_trades_for_date(day)
+                except Exception:  # noqa: BLE001 - 安靜模式失敗不吵
+                    trades = []
+                if trades:
+                    store.upsert_institutional_trades(trades)
+                    store.mark_bulk_item(BULK_RUN_KEY, "t86_date", key, "done")
+                    wrote += 1
+        day -= timedelta(days=1)
+    if wrote and hasattr(store, "delete_json_cache"):
+        store.delete_json_cache("local_data_v2")
 
 
 def _prioritized_stock_ids(

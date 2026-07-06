@@ -7413,9 +7413,10 @@ function renderBulk(st) {
   const stopBtn = document.getElementById("bulkStopBtn");
   if (!wrap) return;
   const active = Boolean(st.running);
+  const quiet = st.mode === "quiet";
   const failedCount = Number(st.failed_count || 0);
   const sourcePendingCount = Number(st.source_pending_count || 0);
-  wrap.classList.toggle("hidden", st.status === "idle");
+  wrap.classList.toggle("hidden", st.status === "idle" || (quiet && !active));
   if (bar) {
     const pct = st.total ? Math.round((Number(st.done) / Number(st.total)) * 100) : (st.status === "preparing" ? 5 : 0);
     bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
@@ -7423,6 +7424,7 @@ function renderBulk(st) {
   if (txt) {
     const map = { idle: "尚未開始", preparing: "準備中（抓全市場共用資料）…", running: "下載中", paused: "已暫停", stopped: "已停止", done: "完成", error: "發生錯誤" };
     let s = map[st.status] || st.status || "";
+    if (quiet) s = active ? "背景慢速補歷史（不影響使用，可按停止）" : `背景補歷史：${s}`;
     if (st.retry_failed_only) s += "（只重試失敗）";
     if (st.total) s += `　${st.done}/${st.total}`;
     if (st.current) s += `　目前：${st.current}`;
@@ -7433,7 +7435,7 @@ function renderBulk(st) {
     if (st.message) s += `　${st.message}`;
     txt.textContent = s;
   }
-  if (startBtn) startBtn.disabled = active || st.status === "preparing";
+  if (startBtn) startBtn.disabled = !quiet && (active || st.status === "preparing");
   if (pauseBtn) pauseBtn.disabled = !active || Boolean(st.paused);
   if (resumeBtn) resumeBtn.disabled = !(active && st.paused);
   if (retryBtn) retryBtn.disabled = active || failedCount === 0;

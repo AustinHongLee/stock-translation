@@ -36,6 +36,7 @@ class TwseClient:
     EX_RIGHT_URL = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U"
     MIS_QUOTE_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
     T86_URL = "https://www.twse.com.tw/rwd/zh/fund/T86"
+    THROTTLE_FACTOR_MAX = 32.0  # 連續失敗時 request_interval 的最大倍數（自適應限流）
     _SHARED_CACHE_TTL_SECONDS = 15 * 60
     _shared_payload_cache: dict[str, tuple[float, Any]] = {}
     _shared_payload_cache_lock = threading.Lock()
@@ -54,6 +55,7 @@ class TwseClient:
         self.max_retries = max(0, max_retries)
         self.retry_backoff = max(0.0, retry_backoff)
         self.last_warnings: list[str] = []
+        self._throttle_factor = 1.0
         self._fetch_json = fetch_json or self._default_fetch_json
         self._cache_enabled = fetch_json is None
         self._ssl_context = ssl.create_default_context()
@@ -111,12 +113,11 @@ class TwseClient:
                 prices.extend(self.fetch_daily_prices_for_month(stock_id, month_start))
             except TwseError as exc:
                 failed_months.append((month_start, exc))
-            if index < len(fetch_order) - 1 and self.request_interval > 0:
-                time.sleep(self.request_interval)
+            if index < len(fetch_order) - 1:
+                self._sleep_between_requests()
 
         for index, (month_start, first_error) in enumerate(failed_months):
-            if self.request_interval > 0:
-                time.sleep(max(self.request_interval, self.retry_backoff))
+            self._sleep_between_requests(minimum=self.retry_backoff)
             try:
                 prices.extend(self.fetch_daily_prices_for_month(stock_id, month_start))
             except TwseError as exc:
@@ -124,8 +125,8 @@ class TwseClient:
                     f"Skipped {stock_id} {month_start:%Y-%m} daily prices after retry: "
                     f"{exc}; first error: {first_error}"
                 )
-            if index < len(failed_months) - 1 and self.request_interval > 0:
-                time.sleep(self.request_interval)
+            if index < len(failed_months) - 1:
+                self._sleep_between_requests()
 
         return [
             price
@@ -319,8 +320,8 @@ class TwseClient:
                         source="TWSE_TWT49U",
                     )
                 )
-            if index < len(years) - 1 and self.request_interval > 0:
-                time.sleep(self.request_interval)
+            if index < len(years) - 1:
+                self._sleep_between_requests()
 
         return sorted(records, key=lambda item: (item.year, item.board_date or date.min), reverse=True)
 
@@ -384,8 +385,8 @@ class TwseClient:
                         source="TWSE_TWT49U",
                     )
                 )
-            if index < len(years) - 1 and self.request_interval > 0:
-                time.sleep(self.request_interval)
+            if index < len(years) - 1:
+                self._sleep_between_requests()
 
         return sorted(records, key=lambda item: (item.stock_id, item.year, item.board_date or date.min), reverse=True)
 
@@ -515,8 +516,7 @@ class TwseClient:
                     consecutive_empty = 0
                 else:
                     consecutive_empty += 1
-                if self.request_interval > 0:
-                    time.sleep(self.request_interval)
+                self._sleep_between_requests()
                 if consecutive_empty >= empty_gate:
                     break
             day -= timedelta(days=1)
@@ -684,6 +684,25 @@ class TwseClient:
             self._shared_payload_cache[url] = (now, payload)
         return payload
 
+    def throttle_factor(self) -> float:
+        return self._throttle_factor
+
+    def _register_success(self) -> None:
+        self._throttle_factor = max(1.0, self._throttle_factor / 2.0)
+
+    def _register_failure(self) -> None:
+        self._throttle_factor = min(self.THROTTLE_FACTOR_MAX, self._throttle_factor * 2.0)
+
+    def _sleep_between_requests(self, minimum: float = 0.0) -> None:
+        """請求間隔（自適應限流）：連續失敗 → 間隔倍增；成功 → 逐步恢復。
+
+        被限流時整批「自動變慢」而不是產生一排失敗清單。
+        request_interval=0（測試）時完全不 sleep。
+        """
+        if self.request_interval <= 0:
+            return
+        time.sleep(max(minimum, self.request_interval * self._throttle_factor))
+
     def _default_fetch_json(self, url: str) -> Any:
         request = urllib.request.Request(
             url,
@@ -703,7 +722,9 @@ class TwseClient:
                 ) as response:
                     raw = response.read()
                 try:
-                    return json.loads(raw.decode("utf-8-sig"))
+                    payload = json.loads(raw.decode("utf-8-sig"))
+                    self._register_success()
+                    return payload
                 except json.JSONDecodeError as exc:
                     last_message = f"TWSE returned non-JSON content: {url}"
                     last_error = exc
@@ -714,6 +735,7 @@ class TwseClient:
             if attempt < self.max_retries and self.retry_backoff > 0:
                 time.sleep(self.retry_backoff * (attempt + 1))
 
+        self._register_failure()
         raise TwseError(last_message) from last_error
 
 
