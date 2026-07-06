@@ -7411,12 +7411,15 @@ function renderBulk(st) {
   const resumeBtn = document.getElementById("bulkResumeBtn");
   const retryBtn = document.getElementById("bulkRetryFailedBtn");
   const stopBtn = document.getElementById("bulkStopBtn");
+  const plainTitle = document.getElementById("bulkPlainTitle");
+  const plainNext = document.getElementById("bulkPlainNext");
   if (!wrap) return;
   const active = Boolean(st.running);
   const quiet = st.mode === "quiet";
-  const failedCount = Number(st.failed_count || 0);
-  const sourcePendingCount = Number(st.source_pending_count || 0);
-  const historyPendingCount = Number(st.history_pending_count || 0);
+  const counts = bulkStatusCounts(st);
+  const failedCount = counts.failed;
+  const sourcePendingCount = counts.sourcePending;
+  const historyPendingCount = counts.historyPending;
   wrap.classList.toggle("hidden", st.status === "idle" || (quiet && !active));
   if (bar) {
     const pct = st.total ? Math.round((Number(st.done) / Number(st.total)) * 100) : (st.status === "preparing" ? 5 : 0);
@@ -7437,11 +7440,71 @@ function renderBulk(st) {
     if (st.message) s += `　${st.message}`;
     txt.textContent = s;
   }
+  renderBulkPlainStatus(st, counts, { titleEl: plainTitle, nextEl: plainNext });
+  setBulkCountText("bulkDoneCount", counts.done);
+  setBulkCountText("bulkHistoryPendingCount", historyPendingCount);
+  setBulkCountText("bulkSourcePendingCount", sourcePendingCount);
+  setBulkCountText("bulkFailedCount", failedCount);
   if (startBtn) startBtn.disabled = !quiet && (active || st.status === "preparing");
   if (pauseBtn) pauseBtn.disabled = !active || Boolean(st.paused);
   if (resumeBtn) resumeBtn.disabled = !(active && st.paused);
   if (retryBtn) retryBtn.disabled = active || failedCount === 0;
   if (stopBtn) stopBtn.disabled = !active;
+}
+function bulkStatusCounts(st) {
+  const persisted = st?.persisted || {};
+  const rawCounts = persisted.counts || {};
+  const done = Number(rawCounts.done || 0) + Number(rawCounts.skipped || 0);
+  const sourcePending = Number(st?.source_pending_count ?? rawCounts.source_pending ?? 0);
+  const historyPending = Number(st?.history_pending_count ?? rawCounts.history_pending ?? 0);
+  const failed = Number(st?.failed_count ?? persisted.failed_count ?? rawCounts.failed ?? 0);
+  const pending = Number(rawCounts.pending || 0) + Number(rawCounts.running || 0);
+  return { done, sourcePending, historyPending, failed, pending };
+}
+function renderBulkPlainStatus(st, counts, els) {
+  if (!els.titleEl || !els.nextEl) return;
+  const active = Boolean(st?.running);
+  const quiet = st?.mode === "quiet";
+  const status = st?.status || "idle";
+  let title = "按開始下載，先補最近收盤與法人資料。";
+  let next = "已到最新但歷史較少的股票，會交給背景慢慢補。";
+  if (active && quiet) {
+    title = "背景正在慢慢補歷史，不影響你操作。";
+    next = "想手動補最近資料時，按開始下載會先讓背景任務讓路。";
+  } else if (status === "preparing") {
+    title = "正在整理全市場共用資料。";
+    next = "這一步包含清單、法人與最新收盤，等一下會進入逐檔小缺口。";
+  } else if (active) {
+    title = "正在補最近資料，小缺口會優先處理。";
+    next = "可以先去看個股；歷史很深的缺口不會卡住這次手動下載。";
+  } else if (status === "paused") {
+    title = "已暫停，資料不會被刪掉。";
+    next = counts.failed ? "排除網路或來源問題後，可按重試失敗。" : "按繼續會接著跑；按停止會保留目前進度。";
+  } else if (status === "stopped") {
+    title = "已停止，進度已保留。";
+    next = "下次按開始下載會重新檢查，已最新的會直接跳過。";
+  } else if (status === "error") {
+    title = "整批下載遇到錯誤。";
+    next = st?.message || "可以稍後再試；若一直發生，先截圖錯誤訊息。";
+  } else if (counts.failed > 0) {
+    title = `大致整理完，還有 ${counts.failed} 檔需要重試。`;
+    next = "這通常是來源限流或暫時沒回；等幾分鐘後按重試失敗。";
+  } else if (counts.historyPending > 0) {
+    title = "最近收盤已整理好，舊歷史交給背景慢慢補。";
+    next = `目前有 ${counts.historyPending} 檔屬於歷史待背景；這不是失敗，急著看某檔就按該列補這檔。`;
+  } else if (counts.sourcePending > 0) {
+    title = "有些檔案來源還沒公布最新日。";
+    next = `目前 ${counts.sourcePending} 檔等來源；晚點再按開始下載即可。`;
+  } else if (status === "done" || counts.done > 0) {
+    title = "全市場最近資料已整理完成。";
+    next = "接下來可以看個股、更新雷達，或讓背景慢慢補更早的日線。";
+  }
+  els.titleEl.textContent = title;
+  els.nextEl.textContent = next;
+}
+function setBulkCountText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(Math.max(0, Number(value) || 0));
 }
 (async function bulkInit() {
   try {

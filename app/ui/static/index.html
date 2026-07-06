@@ -385,6 +385,16 @@
                 <button id="bulkRetryFailedBtn" type="button" class="chart-size-btn" onclick="bulkRetryFailed()" disabled>重試失敗</button>
                 <button id="bulkStopBtn" type="button" class="chart-size-btn" onclick="bulkStop()" disabled>停止</button>
               </div>
+              <div id="bulkPlainStatus" class="bulk-plain-status" aria-live="polite">
+                <strong id="bulkPlainTitle">按開始下載，先補最近收盤與法人資料。</strong>
+                <span id="bulkPlainNext">已到最新但歷史較少的股票，會交給背景慢慢補。</span>
+              </div>
+              <div id="bulkOutcomeList" class="bulk-outcomes" aria-label="全市場下載狀態分類">
+                <span><b id="bulkDoneCount">0</b> 已完成/已最新</span>
+                <span><b id="bulkHistoryPendingCount">0</b> 歷史待背景</span>
+                <span><b id="bulkSourcePendingCount">0</b> 等來源</span>
+                <span><b id="bulkFailedCount">0</b> 需重試</span>
+              </div>
               <div id="bulkProgressWrap" class="bulk-progress-wrap hidden">
                 <div class="bulk-bar"><div id="bulkBar" class="bulk-bar-fill"></div></div>
                 <p id="bulkStatusText" class="bulk-status">--</p>

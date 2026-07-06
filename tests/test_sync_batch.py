@@ -46,6 +46,8 @@ class SyncBatchTests(unittest.TestCase):
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
         self.assertIn('id="bulkRetryFailedBtn"', html)
+        self.assertIn('id="bulkPlainStatus"', html)
+        self.assertIn('id="bulkOutcomeList"', html)
         self.assertIn('id="dataSheet"', html)
         self.assertIn('id="bulkCard"', html)
         self.assertLess(html.index('id="dataSheet"'), html.index('id="bulkCard"'))
@@ -53,8 +55,13 @@ class SyncBatchTests(unittest.TestCase):
         self.assertIn('postJson("/api/bulk-download/retry-failed"', js)
         self.assertIn("formatDuration(st.eta_seconds)", js)
         self.assertIn("failedCount === 0", js)
+        self.assertIn("renderBulkPlainStatus", js)
+        self.assertIn("bulkStatusCounts", js)
         self.assertIn("history_pending_count", js)
         self.assertIn("歷史待背景", js)
+        self.assertIn("這不是失敗", js)
+        self.assertIn(".bulk-plain-status", css)
+        self.assertIn(".bulk-outcomes", css)
         self.assertIn(".bulk-controls .chart-size-btn", css)
         self.assertIn("min-height: 38px", css)
 
