@@ -267,6 +267,10 @@ class SQLiteStore:
     def close(self) -> None:
         self.conn.close()
 
+    def commit(self) -> None:
+        """讓延遲提交的批次呼叫端（如本地資料盤點）一次收尾。"""
+        self.conn.commit()
+
     def __enter__(self) -> SQLiteStore:
         return self
 
@@ -820,6 +824,7 @@ class SQLiteStore:
         target_date: date | None = None,
         last_checked_at: datetime | None = None,
         last_success_at: datetime | None = None,
+        commit: bool = True,
     ) -> dict[str, object]:
         now = datetime.now()
         checked_at = last_checked_at or now
@@ -858,7 +863,10 @@ class SQLiteStore:
                 _dt(now),
             ),
         )
-        self.conn.commit()
+        if commit:
+            # 預設維持「每次寫入即提交」；批次盤點（1000+ 檔）改傳 commit=False，
+            # 由呼叫端最後 commit 一次，避免逐檔 fsync 把頁面卡住。
+            self.conn.commit()
         result = self.get_data_coverage(stock_id, node)
         return result or {}
 
@@ -870,6 +878,7 @@ class SQLiteStore:
         target_date: date | None = None,
         status: str | None = None,
         suspect_reason: str = "",
+        commit: bool = True,
     ) -> dict[str, object]:
         coverage = self.compute_data_coverage(
             stock_id,
@@ -890,6 +899,7 @@ class SQLiteStore:
             target_date=_date_or_none(coverage["target_date"]),
             last_checked_at=datetime.now(),
             last_success_at=datetime.now() if coverage["latest_date"] else None,
+            commit=commit,
         )
         for key in (
             "horizon_start_date",

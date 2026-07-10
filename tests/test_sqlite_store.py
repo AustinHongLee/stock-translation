@@ -396,3 +396,72 @@ class SQLiteStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoverageDeferredCommitTests(unittest.TestCase):
+    """refresh/record_data_coverage 的 commit=False 批次模式。"""
+
+    def _make_store(self, tmp: str) -> SQLiteStore:
+        store = SQLiteStore(Path(tmp) / "batch.sqlite3")
+        store.upsert_daily_prices(
+            [
+                DailyPrice(
+                    stock_id="1102",
+                    date=date(2026, 7, 8) + timedelta(days=offset),
+                    volume=1000,
+                    trade_value=35000,
+                    open=35.0,
+                    high=36.0,
+                    low=34.5,
+                    close=35.5,
+                    change=0.1,
+                    transaction_count=10,
+                    source="TWSE_STOCK_DAY",
+                )
+                for offset in (0, 1)
+            ]
+        )
+        return store
+
+    def test_deferred_writes_become_visible_after_store_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self._make_store(tmp)
+            try:
+                result = store.refresh_data_coverage(
+                    "1102",
+                    "daily_price",
+                    target_date=date(2026, 7, 9),
+                    commit=False,
+                )
+                # 回傳值本身已含最新計算結果
+                self.assertEqual(result.get("latest_date"), "2026-07-09")
+                store.commit()
+            finally:
+                store.close()
+            # 重開連線驗證確實落盤
+            reopened = SQLiteStore(Path(tmp) / "batch.sqlite3")
+            try:
+                persisted = reopened.get_data_coverage("1102", "daily_price")
+            finally:
+                reopened.close()
+            self.assertIsNotNone(persisted)
+            self.assertEqual(persisted.get("latest_date"), "2026-07-09")
+
+    def test_default_commit_behaviour_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self._make_store(tmp)
+            try:
+                store.refresh_data_coverage(
+                    "1102",
+                    "daily_price",
+                    target_date=date(2026, 7, 9),
+                )
+            finally:
+                store.close()
+            reopened = SQLiteStore(Path(tmp) / "batch.sqlite3")
+            try:
+                persisted = reopened.get_data_coverage("1102", "daily_price")
+            finally:
+                reopened.close()
+            self.assertIsNotNone(persisted)
+            self.assertEqual(persisted.get("latest_date"), "2026-07-09")

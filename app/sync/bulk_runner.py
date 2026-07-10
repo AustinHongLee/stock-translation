@@ -390,9 +390,11 @@ def build_bulk_plan(
         store = ctx.get("store")
         client = ctx.get("client")
         if quiet:
-            # 安靜模式收尾輕量：只失效快取，不重抓、不重算雷達。
+            # 安靜模式收尾輕量：不重抓、不重算雷達；快取失效後直接預熱，
+            # 使用者進『本地資料』頁面時命中快取，不用當場冷算 1000+ 檔。
             if store is not None:
                 store.delete_json_cache("local_data_v3")
+                _prewarm_local_data_cache(store)
             return
         # 1) 收尾再跑一次全市場最新日線 top-up：長時間下載期間來源可能更新。
         #    全市場下載採「最新日優先」；個別歷史不足留給看個股 / 補這檔時再補。
@@ -410,6 +412,7 @@ def build_bulk_plan(
                 pass
         if store is not None:
             store.delete_json_cache("local_data_v3")
+            _prewarm_local_data_cache(store)
 
     return BulkPlan(
         list_stocks=list_stocks,
@@ -420,6 +423,20 @@ def build_bulk_plan(
         retry_failed_only=retry_failed_only,
         mode="quiet" if quiet else ("history" if include_history_backfill else "manual"),
     )
+
+
+def _prewarm_local_data_cache(store) -> None:
+    """同步收尾時預先重建本地資料頁 payload，換使用者進頁面即命中快取。
+
+    延遲 import 避免 sync 層與 web 層的模組級循環依賴；預熱失敗只代表
+    下次進頁面回到冷算，不影響同步結果，故吞例外。
+    """
+    try:
+        from app.web.api import build_cached_local_data_payload
+
+        build_cached_local_data_payload(store)
+    except Exception:  # noqa: BLE001 - 預熱是加值行為，失敗不能連累同步
+        pass
 
 
 def _listed_date_for(ctx: dict, stock_id: str) -> date | None:

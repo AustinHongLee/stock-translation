@@ -202,12 +202,14 @@ def build_local_data_payload(
             DATA_NODE_DAILY_PRICE,
             target_date=target_date,
             cached=price_coverage_by_stock.get(sid),
+            defer_commit=True,
         )
         if _date_or_none(price_coverage.get("latest_date")) != last:
             price_coverage = store.refresh_data_coverage(
                 sid,
                 DATA_NODE_DAILY_PRICE,
                 target_date=target_date,
+                commit=False,
             )
         institutional_coverage = _coverage_snapshot(
             store,
@@ -215,6 +217,7 @@ def build_local_data_payload(
             DATA_NODE_INSTITUTIONAL,
             target_date=target_date,
             cached=institutional_coverage_by_stock.get(sid),
+            defer_commit=True,
         )
         profile = store.get_profile(sid)
         name = (profile.short_name or profile.name) if profile else ""
@@ -249,6 +252,9 @@ def build_local_data_payload(
             "support": sr.get("support"),
             "resistance": sr.get("resistance"),
         })
+    # 逐檔 coverage 寫入以 commit=False 累積，這裡一次收尾：
+    # 1371 檔逐檔 commit（每次 WAL fsync）實測占冷路徑 ~40%，批次化後降到毫秒級。
+    store.commit()
     items = filter_sort_local_data_items(items, sort_key=SORT_STOCK_ID)
     near = [it for it in items if it["sr_status"] in ("接近波撐", "接近波壓")]
     return {
@@ -648,6 +654,7 @@ def _coverage_snapshot(
     *,
     target_date: date | None,
     cached: dict[str, object] | None = None,
+    defer_commit: bool = False,
 ) -> dict[str, object]:
     if cached is not None:
         needs_horizon = (
@@ -670,6 +677,7 @@ def _coverage_snapshot(
                     stock_id,
                     node,
                     target_date=target_date,
+                    commit=not defer_commit,
                 )
             return fresh
         snapshot = dict(cached)

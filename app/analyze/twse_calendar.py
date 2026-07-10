@@ -116,9 +116,44 @@ def is_twse_trading_day(day: date) -> bool:
     return day.weekday() < 5
 
 
+_PREFIX_START = date(2020, 1, 1)
+_PREFIX_END = date(2030, 12, 31)
+_prefix_counts: list[int] | None = None
+
+
+def _trading_day_prefix_counts() -> list[int]:
+    """[_PREFIX_START.._PREFIX_END] 逐日累計交易日數（含當日）。
+
+    用 is_twse_trading_day 建表，行為與逐日迴圈必然等價；lazy 一次建好
+    （~4000 天、數毫秒），之後 count_twse_trading_days 變 O(1)。
+    本地資料盤點一頁會呼叫計數上萬次，逐日迴圈是實測熱點。
+    """
+    global _prefix_counts
+    counts = _prefix_counts
+    if counts is None:
+        counts = []
+        total = 0
+        current = _PREFIX_START
+        step = timedelta(days=1)
+        while current <= _PREFIX_END:
+            if is_twse_trading_day(current):
+                total += 1
+            counts.append(total)
+            current += step
+        _prefix_counts = counts
+    return counts
+
+
 def count_twse_trading_days(start_date: date, end_date: date) -> int:
     if end_date < start_date:
         return 0
+    if start_date >= _PREFIX_START and end_date <= _PREFIX_END:
+        counts = _trading_day_prefix_counts()
+        end_index = (end_date - _PREFIX_START).days
+        start_index = (start_date - _PREFIX_START).days
+        before = counts[start_index - 1] if start_index > 0 else 0
+        return counts[end_index] - before
+    # 窗口超出前綴和範圍（極早/極晚日期）→ 保留原逐日行為。
     total = 0
     current = start_date
     while current <= end_date:

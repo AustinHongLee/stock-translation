@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date
+from datetime import date, timedelta
 
 from app.analyze.twse_calendar import (
     TWSE_EXTRA_TRADING_DATES,
@@ -72,3 +72,47 @@ class TwseCalendarTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CountTradingDaysPrefixSumTests(unittest.TestCase):
+    """count_twse_trading_days 前綴和快速路徑必須與逐日迴圈完全等價。"""
+
+    @staticmethod
+    def _naive_count(start: date, end: date) -> int:
+        total = 0
+        current = start
+        while current <= end:
+            if is_twse_trading_day(current):
+                total += 1
+            current += timedelta(days=1)
+        return total
+
+    def test_equivalent_across_holiday_windows(self) -> None:
+        windows = [
+            (date(2026, 7, 1), date(2026, 7, 6)),      # 本次診斷的洞窗口
+            (date(2026, 2, 10), date(2026, 2, 25)),    # 春節長假 + 補班日
+            (date(2025, 12, 20), date(2026, 1, 5)),    # 跨年
+            (date(2024, 1, 1), date(2026, 12, 31)),    # 跨三個官方年度
+            (date(2026, 7, 4), date(2026, 7, 5)),      # 純週末 → 0
+        ]
+        for start, end in windows:
+            with self.subTest(start=start, end=end):
+                self.assertEqual(
+                    count_twse_trading_days(start, end),
+                    self._naive_count(start, end),
+                )
+
+    def test_single_day_and_reversed_range(self) -> None:
+        trading = date(2026, 7, 9)
+        weekend = date(2026, 7, 5)
+        self.assertEqual(count_twse_trading_days(trading, trading), 1)
+        self.assertEqual(count_twse_trading_days(weekend, weekend), 0)
+        self.assertEqual(count_twse_trading_days(trading, trading - timedelta(days=1)), 0)
+
+    def test_windows_outside_prefix_range_fall_back(self) -> None:
+        # 早於前綴和起點的窗口走逐日 fallback，仍要等價。
+        start, end = date(2019, 12, 25), date(2020, 1, 10)
+        self.assertEqual(count_twse_trading_days(start, end), self._naive_count(start, end))
+        # 完全在範圍外（過去）
+        start, end = date(2018, 1, 1), date(2018, 1, 31)
+        self.assertEqual(count_twse_trading_days(start, end), self._naive_count(start, end))
