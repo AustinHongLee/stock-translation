@@ -70,6 +70,7 @@ def assess_valuation_suitability(
     market: MarketValuation | None = None,
     latest_close: float | None = None,
     profile: StockProfile | None = None,
+    stock_id: str | None = None,
     as_of_date: date | None = None,
 ) -> ValuationSuitability:
     financials = financials or []
@@ -94,7 +95,7 @@ def assess_valuation_suitability(
     payout_ratio = _payout_ratio(average_cash, annual_eps, eps_ttm)
     oneoff = _oneoff_flag(recent_values, financials)
 
-    is_etf = _is_etf(profile)
+    is_etf = _is_etf(profile, stock_id=stock_id)
     industry = profile.industry_code if profile else None
     cyclical_industry = bool(industry and industry in CYCLICAL_INDUSTRY_CODES)
     financial_industry = bool(industry and industry in FINANCIAL_INDUSTRY_CODES)
@@ -372,12 +373,12 @@ def _oneoff_flag(recent_values: list[float], financials: list[FinancialStatement
     return False
 
 
-def _is_etf(profile: StockProfile | None) -> bool:
-    if profile is None:
-        return False
-    sid = (profile.stock_id or "").strip()
+def _is_etf(profile: StockProfile | None, *, stock_id: str | None = None) -> bool:
+    sid = ((profile.stock_id if profile else stock_id) or "").strip().upper()
     if sid.startswith("00") and len(sid) >= 4:
         return True
+    if profile is None:
+        return False
     return (profile.market or "").upper() in {"ETF", "ETN"}
 
 

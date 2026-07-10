@@ -38,6 +38,7 @@ DEPTH_LATEST_ONLY = "latest_only"
 DEPTH_SHALLOW = "shallow"
 DEPTH_USABLE = "usable"
 DEPTH_DEEP = "deep"
+RECENT_TAIL_HOLE_MIN_REPAIR_DAYS = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +244,43 @@ def plan_data_gap(
             depth=depth,
         )
 
+    tail_hole_count = _int_or_none((coverage or {}).get("tail_hole_count")) or 0
+    tail_gap_start = _as_date((coverage or {}).get("tail_gap_start_date"))
+    tail_gap_end = _as_date((coverage or {}).get("tail_gap_end_date"))
+    if (
+        node == DATA_NODE_DAILY_PRICE
+        and latest is not None
+        and tail_hole_count >= RECENT_TAIL_HOLE_MIN_REPAIR_DAYS
+        and tail_gap_start is not None
+    ):
+        fetch_end = target
+        if latest > fetch_end:
+            fetch_end = latest
+        gap_days = count_business_days(tail_gap_start, fetch_end)
+        force = gap_days > max_patch_business_days
+        gap_label = (
+            f"{tail_gap_start.isoformat()} to {tail_gap_end.isoformat()}"
+            if tail_gap_end is not None
+            else f"after {tail_gap_start.isoformat()}"
+        )
+        return DataGapPlan(
+            stock_id=sid,
+            node=node,
+            status=STATUS_FORCE_REFRESH_REQUIRED if force else STATUS_GAP,
+            local_latest_date=latest,
+            target_date=target,
+            fetch_start_date=tail_gap_start,
+            fetch_end_date=fetch_end,
+            gap_business_days=gap_days,
+            can_patch=not force,
+            force_refresh_required=force,
+            reason=(
+                f"{node} has {tail_hole_count} missing recent trading day(s) "
+                f"inside the K-line tail ({gap_label}); repair is required."
+            ),
+            depth=depth,
+        )
+
     if latest is not None and latest >= target:
         return DataGapPlan(
             stock_id=sid,
@@ -333,11 +371,18 @@ def resolve_post_patch_status(
     *,
     latest_date: date | str | None,
     rows_written: int,
+    coverage: dict[str, Any] | None = None,
     source_pending_grace_business_days: int = 1,
 ) -> PostPatchStatus:
     latest = _as_date(latest_date)
     if plan.target_date is None:
         return PostPatchStatus(STATUS_SOURCE_PENDING, "No target date was available.")
+    tail_hole_count = _int_or_none((coverage or {}).get("tail_hole_count")) or 0
+    if plan.node == DATA_NODE_DAILY_PRICE and tail_hole_count >= RECENT_TAIL_HOLE_MIN_REPAIR_DAYS:
+        return PostPatchStatus(
+            STATUS_SUSPECT,
+            f"Recent K-line still has {tail_hole_count} missing trading day(s) after patching.",
+        )
     if latest is not None and latest >= plan.target_date:
         if plan.status == STATUS_CURRENT:
             return PostPatchStatus(STATUS_CURRENT, "Coverage was already current.")

@@ -6,7 +6,11 @@ from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from app.analyze.twse_calendar import count_twse_trading_days
+from app.analyze.twse_calendar import (
+    count_twse_trading_days,
+    next_twse_trading_day,
+    previous_twse_trading_day,
+)
 from app.models import (
     DailyPrice,
     DividendRecord,
@@ -17,6 +21,8 @@ from app.models import (
     StockProfile,
 )
 from app.portfolio.models import PortfolioTransaction
+
+RECENT_TAIL_HOLE_LOOKBACK_DAYS = 45
 
 
 SCHEMA_SQL = """
@@ -885,7 +891,13 @@ class SQLiteStore:
             last_checked_at=datetime.now(),
             last_success_at=datetime.now() if coverage["latest_date"] else None,
         )
-        for key in ("horizon_start_date", "horizon_row_count"):
+        for key in (
+            "horizon_start_date",
+            "horizon_row_count",
+            "tail_hole_count",
+            "tail_gap_start_date",
+            "tail_gap_end_date",
+        ):
             if key in coverage:
                 recorded[key] = coverage[key]
         return recorded
@@ -914,6 +926,11 @@ class SQLiteStore:
         hole_count = 0
         if earliest is not None and latest is not None:
             hole_count = max(0, _business_day_count(earliest, latest) - row_count)
+        tail_gap_start: date | None = None
+        tail_gap_end: date | None = None
+        tail_hole_count = 0
+        if node == "daily_price" and latest is not None:
+            tail_gap_start, tail_gap_end, tail_hole_count = self._daily_recent_tail_holes(stock_id, latest)
         horizon_start: date | None = None
         horizon_row_count: int | None = None
         if node == "daily_price" and target_date is not None:
@@ -945,6 +962,9 @@ class SQLiteStore:
             "latest_date": _d(latest),
             "row_count": row_count,
             "hole_count": hole_count,
+            "tail_hole_count": tail_hole_count,
+            "tail_gap_start_date": _d(tail_gap_start),
+            "tail_gap_end_date": _d(tail_gap_end),
             "horizon_start_date": _d(horizon_start),
             "horizon_row_count": horizon_row_count,
             "status": resolved_status,
@@ -954,6 +974,60 @@ class SQLiteStore:
             "last_success_at": now if latest is not None else None,
             "updated_at": now,
         }
+
+    def _daily_recent_tail_holes(self, stock_id: str, latest: date) -> tuple[date | None, date | None, int]:
+        window_start = latest - timedelta(days=RECENT_TAIL_HOLE_LOOKBACK_DAYS)
+        previous_row = self.conn.execute(
+            """
+            SELECT MAX(date) AS previous_date
+            FROM daily_prices
+            WHERE stock_id = ? AND date < ?
+            """,
+            (stock_id, _d(window_start)),
+        ).fetchone()
+        dates = [
+            _date_or_none(row["date"])
+            for row in self.conn.execute(
+                """
+                SELECT date
+                FROM daily_prices
+                WHERE stock_id = ? AND date >= ? AND date <= ?
+                ORDER BY date
+                """,
+                (stock_id, _d(window_start), _d(latest)),
+            ).fetchall()
+        ]
+        known_dates = [day for day in dates if day is not None]
+        previous = _date_or_none(previous_row["previous_date"]) if previous_row else None
+        if previous is not None:
+            known_dates.insert(0, previous)
+        if len(known_dates) < 2:
+            return None, None, 0
+
+        first_missing: date | None = None
+        last_missing: date | None = None
+        total_missing = 0
+        for left, right in zip(known_dates, known_dates[1:]):
+            if right <= left:
+                continue
+            gap_start = next_twse_trading_day(left + timedelta(days=1))
+            gap_end = previous_twse_trading_day(right - timedelta(days=1))
+            if gap_end < gap_start:
+                continue
+            clipped_start = max(gap_start, window_start)
+            clipped_start = next_twse_trading_day(clipped_start)
+            clipped_end = min(gap_end, latest - timedelta(days=1))
+            if clipped_end < clipped_start:
+                continue
+            missing = count_twse_trading_days(clipped_start, clipped_end)
+            if missing <= 0:
+                continue
+            first_missing = first_missing or clipped_start
+            last_missing = clipped_end
+            total_missing += missing
+        if total_missing <= 0:
+            return None, None, 0
+        return first_missing, last_missing, total_missing
 
     def add_to_watchlist(self, stock_id: str, *, note: str = "") -> None:
         self.conn.execute(
@@ -1180,27 +1254,47 @@ class SQLiteStore:
             "updated_at": row["updated_at"],
         }
 
-    def get_bulk_progress_summary(self, run_key: str, item_type: str = "stock") -> dict[str, object]:
+    def get_bulk_progress_summary(
+        self,
+        run_key: str,
+        item_type: str = "stock",
+        *,
+        sample_limit: int = 12,
+    ) -> dict[str, object]:
         rows = self.conn.execute(
             """
             SELECT item_key, status, error, updated_at
             FROM bulk_progress
             WHERE run_key = ? AND item_type = ?
-            ORDER BY item_key
+            ORDER BY updated_at DESC, item_key
             """,
             (run_key, item_type),
         ).fetchall()
         counts: dict[str, int] = {}
         failed: list[dict[str, str]] = []
+        source_pending: list[dict[str, str]] = []
+        samples: dict[str, list[dict[str, str]]] = {}
         latest_updated_at = None
+        sample_limit = max(0, int(sample_limit))
         for row in rows:
             status = str(row["status"])
             counts[status] = counts.get(status, 0) + 1
             updated_at = row["updated_at"]
             if latest_updated_at is None or updated_at > latest_updated_at:
                 latest_updated_at = updated_at
+            item = {
+                "stock_id": row["item_key"],
+                "status": status,
+                "error": row["error"] or "",
+                "updated_at": row["updated_at"],
+            }
+            bucket = samples.setdefault(status, [])
+            if len(bucket) < sample_limit:
+                bucket.append(item)
             if status == "failed":
-                failed.append({"stock_id": row["item_key"], "error": row["error"]})
+                failed.append(item)
+            elif status == "source_pending":
+                source_pending.append(item)
         completed = (
             counts.get("done", 0)
             + counts.get("skipped", 0)
@@ -1214,7 +1308,10 @@ class SQLiteStore:
             "running": counts.get("running", 0),
             "failed_count": len(failed),
             "failed": failed,
+            "source_pending": source_pending,
             "counts": counts,
+            "samples": samples,
+            "sample_limit": sample_limit,
             "updated_at": latest_updated_at,
         }
 

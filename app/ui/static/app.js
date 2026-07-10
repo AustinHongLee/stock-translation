@@ -14,6 +14,8 @@ const state = {
   screenerFilter: "value",
   localDataSort: "stock_id",
   localDataFilter: "all",
+  bulkQueueCategory: "failed",
+  bulkStatus: null,
   levelsSyncing: false,
   syncing: false,
   localFixingStocks: new Set(),
@@ -1323,7 +1325,9 @@ async function refreshValueScreener() {
     const payload = await postJson("/api/value-screener/refresh", {});
     state.screener = payload;
     renderScreener(payload);
-    showMessage(`雷達中心已更新：${formatInteger(payload.summary?.available_rows || 0)} 檔股利資料可用`);
+    showMessage(
+      `${trafficControlNotice(payload.refresh)}雷達中心已更新：${formatInteger(payload.summary?.available_rows || 0)} 檔股利資料可用`
+    );
     window.setTimeout(hideMessage, 1800);
   } catch (error) {
     elements.screenerStatus.textContent = `更新失敗：${error.message}`;
@@ -1629,6 +1633,14 @@ async function handleScreenerAction(event) {
     return;
   }
 
+  const localFilterJump = event.target.closest("[data-local-filter-jump]");
+  if (localFilterJump) {
+    state.localDataFilter = localFilterJump.dataset.localFilterJump || "all";
+    updateLocalDataFilterButtons();
+    renderLocalDataTable(state.localData);
+    return;
+  }
+
   const fixButton = event.target.closest("[data-local-fix-stock]");
   if (fixButton) {
     await fixOneStockFromLocalData(fixButton.dataset.localFixStock, fixButton);
@@ -1723,7 +1735,13 @@ function syncNeedsAttention(payload) {
 
 function syncOutcomeMessage(payload, fallback) {
   const sync = payload?.sync || {};
-  return sync.user_message || sync.message || fallback;
+  return `${trafficControlNotice(sync)}${sync.user_message || sync.message || fallback}`;
+}
+
+function trafficControlNotice(payload) {
+  const control = payload?.traffic_control || {};
+  if (!control.preempted_quiet_sync) return "";
+  return control.message ? `${control.message} ` : "背景補資料已暫停並讓路。 ";
 }
 
 function renderSyncLoading(stockId, options = {}) {
@@ -7377,9 +7395,17 @@ function srDateTag(asOf) {
 }
 
 // ---- 全市場資料下載：控制 + 輪詢 ----
-async function bulkStart() {
-  try { renderBulk(await postJson("/api/bulk-download/start", {})); startBulkPolling(); }
+async function bulkStart(options = {}) {
+  try {
+    renderBulk(await postJson("/api/bulk-download/start", {
+      include_history_backfill: Boolean(options.includeHistoryBackfill),
+    }));
+    startBulkPolling();
+  }
   catch (e) { showMessage(`無法開始下載：${e.message}`, true); }
+}
+async function bulkStartHistoryBackfill() {
+  await bulkStart({ includeHistoryBackfill: true });
 }
 async function bulkPause() {
   try { renderBulk(await postJson("/api/bulk-download/pause", {})); } catch (e) { showMessage(e.message, true); }
@@ -7388,7 +7414,11 @@ async function bulkResume() {
   try { renderBulk(await postJson("/api/bulk-download/resume", {})); startBulkPolling(); } catch (e) { showMessage(e.message, true); }
 }
 async function bulkRetryFailed() {
-  try { renderBulk(await postJson("/api/bulk-download/retry-failed", {})); startBulkPolling(); }
+  try {
+    const st = await postJson("/api/bulk-download/retry-failed", {});
+    renderBulk(st);
+    if (st.running) startBulkPolling();
+  }
   catch (e) { showMessage(e.message, true); }
 }
 async function bulkStop() {
@@ -7406,6 +7436,7 @@ function startBulkPolling() {
 }
 function renderBulk(st) {
   if (!st) return;
+  state.bulkStatus = st;
   const wrap = document.getElementById("bulkProgressWrap");
   const bar = document.getElementById("bulkBar");
   const txt = document.getElementById("bulkStatusText");
@@ -7414,12 +7445,15 @@ function renderBulk(st) {
   const resumeBtn = document.getElementById("bulkResumeBtn");
   const retryBtn = document.getElementById("bulkRetryFailedBtn");
   const stopBtn = document.getElementById("bulkStopBtn");
+  const historyBtn = document.getElementById("bulkHistoryBackfillBtn");
   const plainTitle = document.getElementById("bulkPlainTitle");
   const plainNext = document.getElementById("bulkPlainNext");
   if (!wrap) return;
   const active = Boolean(st.running);
   const quiet = st.mode === "quiet";
   const counts = bulkStatusCounts(st);
+  const queueCategory = normalizeBulkQueueCategory(st, counts);
+  state.bulkQueueCategory = queueCategory;
   const failedCount = counts.failed;
   const sourcePendingCount = counts.sourcePending;
   const historyPendingCount = counts.historyPending;
@@ -7432,6 +7466,7 @@ function renderBulk(st) {
     const map = { idle: "尚未開始", preparing: "準備中（抓全市場共用資料）…", running: "下載中", paused: "已暫停", stopped: "已停止", done: "完成", error: "發生錯誤" };
     let s = map[st.status] || st.status || "";
     if (quiet) s = active ? "背景慢速補歷史（不影響使用，可按停止）" : `背景補歷史：${s}`;
+    if (st.mode === "history") s = active ? "加速補歷史中（可暫停/停止）" : `補歷史：${s}`;
     if (st.retry_failed_only) s += "（只重試失敗）";
     if (st.total) s += `　${st.done}/${st.total}`;
     if (st.current) s += `　目前：${st.current}`;
@@ -7440,40 +7475,195 @@ function renderBulk(st) {
     if (sourcePendingCount) s += `　待來源 ${sourcePendingCount}`;
     if (historyPendingCount) s += `　歷史待背景 ${historyPendingCount}`;
     if (failedCount) s += `　失敗 ${failedCount}`;
+    if (st.failed_retry?.cooling_down_count) s += `　冷卻 ${st.failed_retry.cooling_down_count}`;
+    if (st.source_retry?.cooling_down_count) s += `　等來源冷卻 ${st.source_retry.cooling_down_count}`;
     if (st.message) s += `　${st.message}`;
     txt.textContent = s;
   }
   renderBulkPlainStatus(st, counts, { titleEl: plainTitle, nextEl: plainNext });
-  setBulkCountText("bulkDoneCount", counts.done);
-  setBulkCountText("bulkHistoryPendingCount", historyPendingCount);
-  setBulkCountText("bulkSourcePendingCount", sourcePendingCount);
-  setBulkCountText("bulkFailedCount", failedCount);
+  renderBulkOutcomes(st, counts, queueCategory);
+  renderBulkQueueDetail(st, queueCategory);
   if (startBtn) startBtn.disabled = !quiet && (active || st.status === "preparing");
+  if (historyBtn) historyBtn.disabled = active || st.status === "preparing" || counts.historyPending <= 0;
   if (pauseBtn) pauseBtn.disabled = !active || Boolean(st.paused);
   if (resumeBtn) resumeBtn.disabled = !(active && st.paused);
-  if (retryBtn) retryBtn.disabled = active || failedCount === 0;
+  if (retryBtn) retryBtn.disabled = active || failedCount === 0 || st.can_retry_failed === false;
   if (stopBtn) stopBtn.disabled = !active;
+}
+function renderBulkOutcomes(st, counts, queueCategory) {
+  setBulkCountText("bulkDoneCount", counts.done);
+  setBulkCountText("bulkHistoryPendingCount", counts.historyPending);
+  setBulkCountText("bulkSourcePendingCount", counts.sourcePending);
+  setBulkCountText("bulkFailedCount", counts.failed);
+  document.querySelectorAll("[data-bulk-queue]").forEach((button) => {
+    const key = button.dataset.bulkQueue || "";
+    const count = bulkQueueCount(key, counts);
+    button.classList.toggle("is-active", key === queueCategory);
+    button.disabled = count <= 0;
+  });
+}
+function selectBulkQueueCategory(key) {
+  state.bulkQueueCategory = key;
+  if (state.bulkStatus) renderBulk(state.bulkStatus);
+}
+function normalizeBulkQueueCategory(st, counts) {
+  const preferred = state.bulkQueueCategory || "failed";
+  if (bulkQueueCount(preferred, counts) > 0) return preferred;
+  return ["failed", "source_pending", "history_pending", "done"].find((key) => bulkQueueCount(key, counts) > 0) || preferred;
+}
+function bulkQueueCount(key, counts) {
+  if (key === "done") return counts.done;
+  if (key === "history_pending") return counts.historyPending;
+  if (key === "source_pending") return counts.sourcePending;
+  if (key === "failed") return counts.failed;
+  return 0;
+}
+function renderBulkQueueDetail(st, queueCategory) {
+  const el = document.getElementById("bulkQueueDetail");
+  if (!el) return;
+  const details = st?.queue_details || {};
+  const queue = details[queueCategory];
+  if (!queue || Number(queue.count || 0) <= 0) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const items = Array.isArray(queue.items) ? queue.items : [];
+  const label = queue.label || bulkQueueLabel(queueCategory);
+  const next = queue.next_action || bulkQueueNextAction(queueCategory);
+  const rows = items.length
+    ? `<div class="bulk-queue-list">${items.map((item) => bulkQueueItemHTML(item, queueCategory)).join("")}</div>`
+    : `<p class="bulk-queue-empty">這類目前沒有可顯示的樣本；重新整理狀態後會再更新。</p>`;
+  const more = queue.truncated
+    ? `<p class="bulk-queue-more">只顯示最近 ${items.length} 檔；其餘會照同一規則排隊處理。</p>`
+    : "";
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="bulk-queue-head">
+      <div>
+        <div class="bulk-queue-title">${escapeHtml(label)}：${formatInteger(queue.count || 0)} 檔</div>
+        <div class="bulk-queue-next">${escapeHtml(next)}</div>
+      </div>
+    </div>
+    ${rows}
+    ${more}
+  `;
+}
+function bulkQueueItemHTML(item, queueCategory) {
+  const stockId = String(item?.stock_id || "").trim();
+  const reason = bulkQueueReason(item, queueCategory);
+  const status = bulkQueueItemStatus(item, queueCategory);
+  const updated = item?.updated_at ? formatDateTime(item.updated_at) : "";
+  const stockButton = stockId
+    ? `<button class="table-action" type="button" data-screener-stock="${escapeHtml(stockId)}">${escapeHtml(stockId)}</button>`
+    : `<span class="bulk-queue-stock">--</span>`;
+  return `
+    <div class="bulk-queue-row">
+      <div class="bulk-queue-stock">${stockButton}</div>
+      <div class="bulk-queue-reason">${escapeHtml(reason)}</div>
+      <div class="bulk-queue-meta">
+        ${status}
+        ${updated ? `<span>${escapeHtml(updated)}</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+function bulkQueueReason(item, queueCategory) {
+  const reason = String(item?.reason || "").trim();
+  if (reason) return reason.length > 96 ? `${reason.slice(0, 96)}...` : reason;
+  if (queueCategory === "history_pending") return "最新日已到，等待背景補較早 K 線。";
+  if (queueCategory === "source_pending") return "來源尚未公布或當日沒有交易。";
+  if (queueCategory === "failed") return "來源不穩或限流，等冷卻後重試。";
+  return item?.status === "skipped" ? "重新檢查後已最新，直接跳過。" : "已完成。";
+}
+function bulkQueueItemStatus(item, queueCategory) {
+  if (queueCategory === "source_pending") {
+    if (item?.retry_state === "cooling") {
+      return `<span class="bulk-retry-cooling">等來源 ${formatDuration(item.retry_after_seconds || 0)}</span>`;
+    }
+    return `<span class="bulk-retry-ready">可重新檢查</span>`;
+  }
+  if (queueCategory !== "failed") return `<span>${escapeHtml(bulkQueueLabel(queueCategory))}</span>`;
+  if (item?.retry_state === "cooling") {
+    return `<span class="bulk-retry-cooling">冷卻 ${formatDuration(item.retry_after_seconds || 0)}</span>`;
+  }
+  return `<span class="bulk-retry-ready">可重試</span>`;
+}
+function bulkQueueLabel(key) {
+  if (key === "done") return "已完成/已最新";
+  if (key === "history_pending") return "歷史待背景";
+  if (key === "source_pending") return "等來源";
+  if (key === "failed") return "需重試";
+  return "隊列";
+}
+function bulkQueueNextAction(key) {
+  if (key === "history_pending") return "背景慢補會低速處理；急著看某檔可開個股或補這檔。";
+  if (key === "source_pending") return "稍後再跑會重新檢查，不會永久當完成。";
+  if (key === "failed") return "冷卻完成後可按重試失敗。";
+  return "不用處理。";
 }
 function bulkStatusCounts(st) {
   const persisted = st?.persisted || {};
   const rawCounts = persisted.counts || {};
+  const queue = st?.repair_queue || {};
   const done = Number(rawCounts.done || 0) + Number(rawCounts.skipped || 0);
-  const sourcePending = Number(st?.source_pending_count ?? rawCounts.source_pending ?? 0);
-  const historyPending = Number(st?.history_pending_count ?? rawCounts.history_pending ?? 0);
-  const failed = Number(st?.failed_count ?? persisted.failed_count ?? rawCounts.failed ?? 0);
+  const sourcePending = Number(st?.source_pending_count ?? queue.source_pending ?? rawCounts.source_pending ?? 0);
+  const historyPending = Number(st?.history_pending_count ?? queue.history_pending ?? rawCounts.history_pending ?? 0);
+  const failed = Number(st?.failed_count ?? queue.failed ?? persisted.failed_count ?? rawCounts.failed ?? 0);
   const pending = Number(rawCounts.pending || 0) + Number(rawCounts.running || 0);
   return { done, sourcePending, historyPending, failed, pending };
+}
+function quietSyncHint(st) {
+  const quiet = st?.quiet_sync || {};
+  const queue = st?.repair_queue || {};
+  const max = Number(quiet.max_stocks_per_run ?? queue.quiet_max_stocks_per_run ?? 0);
+  const nextSeconds = Number(quiet.next_run_in_seconds ?? queue.quiet_next_run_in_seconds ?? 0);
+  const perRun = max > 0 ? `每輪最多補 ${max} 檔` : "會低速排隊補";
+  if (quiet.due || nextSeconds <= 0) return `背景慢補已排入，${perRun}；手動操作會優先。`;
+  return `背景下一輪約 ${formatDuration(nextSeconds)} 後，${perRun}；手動操作會優先。`;
+}
+function failedRetryHint(st) {
+  const retry = st?.failed_retry || {};
+  const cooling = Number(retry.cooling_down_count || 0);
+  const ready = Number(retry.ready_count || 0);
+  const wait = Number(retry.retry_after_seconds || 0);
+  if (ready > 0 && cooling > 0) {
+    return `${ready} 檔可重試，${cooling} 檔正在冷卻；冷卻中的約 ${formatDuration(wait)} 後再試。`;
+  }
+  if (cooling > 0 && wait > 0) {
+    return `${cooling} 檔正在冷卻，約 ${formatDuration(wait)} 後再重試比較穩。`;
+  }
+  return "可按重試失敗；系統會先重新檢查，已補好的檔案會自動跳過。";
+}
+function sourcePendingHint(st) {
+  const retry = st?.source_retry || {};
+  const ready = Number(retry.ready_count || 0);
+  const cooling = Number(retry.cooling_down_count || 0);
+  const wait = Number(retry.retry_after_seconds || 0);
+  if (ready > 0 && cooling > 0) {
+    return `${ready} 檔下次會重新檢查，${cooling} 檔仍在等來源冷卻；冷卻中的約 ${formatDuration(wait)} 後再試。`;
+  }
+  if (cooling > 0 && wait > 0) {
+    return `${cooling} 檔正在等來源冷卻，約 ${formatDuration(wait)} 後再重新檢查。`;
+  }
+  return "下次開始下載或背景慢補會重新檢查，不會永久當完成。";
 }
 function renderBulkPlainStatus(st, counts, els) {
   if (!els.titleEl || !els.nextEl) return;
   const active = Boolean(st?.running);
   const quiet = st?.mode === "quiet";
   const status = st?.status || "idle";
+  const cooldownHint = counts.failed > 0 ? failedRetryHint(st) : "";
+  const backgroundHint = quietSyncHint(st);
+  const sourceHint = counts.sourcePending > 0 ? sourcePendingHint(st) : "";
   let title = "按開始下載，先補最近收盤與法人資料。";
   let next = "已到最新但歷史較少的股票，會交給背景慢慢補。";
   if (active && quiet) {
     title = "背景正在慢慢補歷史，不影響你操作。";
-    next = "想手動補最近資料時，按開始下載會先讓背景任務讓路。";
+    next = `${backgroundHint} 想手動補最近資料時，按開始下載會先讓背景任務讓路。`;
+  } else if (active && st?.mode === "history") {
+    title = "正在加速補歷史。";
+    next = "這會連續補近一年 K 線，仍保留冷卻、暫停與停止；遇到來源不穩會留下可重試清單。";
   } else if (status === "preparing") {
     title = "正在整理全市場共用資料。";
     next = "這一步包含清單、法人與最新收盤，等一下會進入逐檔小缺口。";
@@ -7482,7 +7672,7 @@ function renderBulkPlainStatus(st, counts, els) {
     next = "可以先去看個股；歷史很深的缺口不會卡住這次手動下載。";
   } else if (status === "paused") {
     title = "已暫停，資料不會被刪掉。";
-    next = counts.failed ? "排除網路或來源問題後，可按重試失敗。" : "按繼續會接著跑；按停止會保留目前進度。";
+    next = counts.failed ? cooldownHint : "按繼續會接著跑；按停止會保留目前進度。";
   } else if (status === "stopped") {
     title = "已停止，進度已保留。";
     next = "下次按開始下載會重新檢查，已最新的會直接跳過。";
@@ -7491,13 +7681,13 @@ function renderBulkPlainStatus(st, counts, els) {
     next = st?.message || "可以稍後再試；若一直發生，先截圖錯誤訊息。";
   } else if (counts.failed > 0) {
     title = `大致整理完，還有 ${counts.failed} 檔需要重試。`;
-    next = "這通常是來源限流或暫時沒回；等幾分鐘後按重試失敗。";
+    next = `這通常是來源限流或暫時沒回。${cooldownHint}`;
   } else if (counts.historyPending > 0) {
     title = "最近收盤已整理好，舊歷史交給背景慢慢補。";
-    next = `目前有 ${counts.historyPending} 檔屬於歷史待背景；這不是失敗，急著看某檔就按該列補這檔。`;
+    next = `目前有 ${counts.historyPending} 檔屬於歷史待背景；這不是失敗。可按「補歷史」連續處理，或讓背景慢慢補。${backgroundHint}`;
   } else if (counts.sourcePending > 0) {
     title = "有些檔案來源還沒公布最新日。";
-    next = `目前 ${counts.sourcePending} 檔等來源；晚點再按開始下載即可。`;
+    next = `目前 ${counts.sourcePending} 檔等來源；${sourceHint}`;
   } else if (status === "done" || counts.done > 0) {
     title = "全市場最近資料已整理完成。";
     next = "接下來可以看個股、更新雷達，或讓背景慢慢補更早的日線。";
@@ -7768,6 +7958,7 @@ function filterAndSortLocalDataItems(items, options = {}) {
   const levelRank = { "接近波壓": 0, "接近波撐": 1, "正常": 2, "資料不足": 3, "": 4 };
   const keep = (item) => {
     if (filterMode === "stale") return Number(item.stale_days || 0) > 7;
+    if (filterMode === "history_short") return Boolean(item?.data_health?.needs_backfill);
     if (filterMode === "near_resistance") return item.sr_status === "接近波壓";
     if (filterMode === "near_support") return item.sr_status === "接近波撐";
     return true;
@@ -7815,6 +8006,7 @@ function renderLocalDataTable(payload) {
   if (!tbody) return;
   renderSnapshotBanner(payload);
   renderInstitutionalBanner(payload);
+  renderLocalDataHealthBanner(payload);
   updateLocalDataFilterButtons();
   const allItems = (payload && payload.items) || [];
   const items = filterAndSortLocalDataItems(allItems, {
@@ -7828,7 +8020,7 @@ function renderLocalDataTable(payload) {
       ? `檢查日 ${payload.generated_at}，${targetText}`
       : `檢查日 ${payload.generated_at}`;
     elements.localDataSummary.textContent = allItems.length
-      ? `本地共有 ${countText} 有日線資料（${dateText}）。過期會以紅字標示。`
+      ? `本地共有 ${countText} 有日線資料（${dateText}）。${localDataHealthSummaryText(payload)}`
       : "本地還沒有任何已下載的日線資料；到雷達中心按『開始下載』，或開個股按『同步』。";
   }
   tbody.innerHTML = items.length ? items.map((it) => {
@@ -7869,7 +8061,33 @@ function localDataCoverageLabel(item) {
   let html = `<span class="ld-coverage">${price}</span>`;
   const hint = localFixHint(item);
   if (hint) html += `<div class="ld-hint">${escapeHtml(hint)}</div>`;
+  const source = localPriceSourceLabel(item);
+  if (source) html += `<div class="ld-source">${escapeHtml(source)}</div>`;
   return html;
+}
+
+function localDataHealthSummaryText(payload) {
+  const health = payload?.health_summary || {};
+  const total = Number(health.total || 0);
+  if (!total) return "尚未建立資料健檢。";
+  const shallow = Number(health.shallow_history_count || 0);
+  const latestOnly = Number(health.latest_only_count || 0);
+  const ok = Number(health.ok_count || 0);
+  if (shallow > 0) {
+    return `資料健檢：${ok} 檔歷史足夠，${shallow} 檔最新日已到但 K 線歷史不足（其中 ${latestOnly} 檔只有最新幾筆）。`;
+  }
+  return `資料健檢：${ok} 檔最新且歷史足夠。`;
+}
+
+function localPriceSourceLabel(item) {
+  const source = item?.price_source || {};
+  const health = item?.data_health || {};
+  if (!source.level) return "";
+  if (source.level === "latest_all_only") return "來源：全市場最新價，缺逐檔歷史 K";
+  if (health.needs_backfill) return `來源：${source.label || source.dominant_source || "日線"}，歷史仍不足`;
+  if (source.level === "mixed") return "來源：逐檔日線＋最新補點";
+  if (source.level === "historical") return "來源：逐檔日線";
+  return source.label ? `來源：${source.label}` : "";
 }
 
 function localInstitutionalInfoLabel(item) {
@@ -7955,6 +8173,36 @@ function renderSnapshotBanner(payload) {
     <span class="ld-banner-actions">
       <button class="table-action ld-banner-action" type="button" data-refresh-snapshot="1">更新雷達快照</button>
       <button class="ld-banner-dismiss" type="button" data-dismiss-snapshot="1">知道了</button>
+    </span>
+  `;
+}
+
+function renderLocalDataHealthBanner(payload) {
+  const tbody = elements.localDataRows;
+  if (!tbody) return;
+  const anchor = tbody.closest("table") || tbody;
+  const host = anchor.parentElement;
+  if (!host) return;
+  let banner = document.querySelector("#localDataHealthBanner");
+  const health = payload?.health_summary || {};
+  const shallow = Number(health.shallow_history_count || 0);
+  if (!shallow) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "localDataHealthBanner";
+    banner.className = "ld-banner ld-health-banner";
+    host.insertBefore(banner, anchor);
+  }
+  const latestOnly = Number(health.latest_only_count || 0);
+  const latestAllOnly = Number(health.latest_all_only_count || 0);
+  banner.hidden = false;
+  banner.innerHTML = `
+    <span class="ld-banner-text"><b>資料健檢：</b>${escapeHtml(String(shallow))} 檔最新日已到，但 K 線歷史不足；${escapeHtml(String(latestOnly))} 檔只有最新幾筆，${escapeHtml(String(latestAllOnly))} 檔主要來自全市場最新價。</span>
+    <span class="ld-banner-actions">
+      <button class="table-action ld-banner-action" type="button" data-local-filter-jump="history_short">只看歷史不足</button>
     </span>
   `;
 }

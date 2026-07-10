@@ -5,6 +5,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
+from app.analyze.twse_calendar import is_twse_trading_day
 from app.models import (
     DailyPrice,
     DividendRecord,
@@ -172,14 +173,31 @@ class RecordingClient(FakeClient):
         ]
 
 
-class NoPriceFetchClient(FakeClient):
+class TailHoleRepairClient(RecordingClient):
     def fetch_daily_prices(
         self,
         stock_id: str,
         start_date: date,
         end_date: date,
     ) -> list[DailyPrice]:
-        raise AssertionError("daily prices should not be fetched")
+        self.price_ranges.append((stock_id, start_date, end_date))
+        rows: list[DailyPrice] = []
+        current = start_date
+        while current <= end_date:
+            if is_twse_trading_day(current):
+                rows.append(
+                    DailyPrice(
+                        stock_id=stock_id,
+                        date=current,
+                        open=101.0,
+                        high=102.0,
+                        low=100.0,
+                        close=101.5,
+                        volume=456,
+                    )
+                )
+            current += timedelta(days=1)
+        return rows
 
 
 class MissingTargetTailClient(FakeClient):
@@ -514,9 +532,10 @@ class StockSyncServiceTests(unittest.TestCase):
         self.assertTrue(result.gap_plan["force_refresh_required"])  # type: ignore[index]
         self.assertEqual(result.post_status["status"], "patched")  # type: ignore[index]
 
-    def test_sync_stock_history_skips_current_profileless_market_product_short_history(self) -> None:
+    def test_sync_stock_history_backfills_profileless_market_product_short_history(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"
+            client = RecordingClient()
             with SQLiteStore(db_path) as store:
                 store.upsert_daily_prices(
                     [
@@ -529,7 +548,7 @@ class StockSyncServiceTests(unittest.TestCase):
                         )
                     ]
                 )
-                service = StockSyncService(client=NoPriceFetchClient(), store=store)  # type: ignore[arg-type]
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
                 result = service.sync_stock_history(
                     "00405A",
                     lookback_days=365,
@@ -537,9 +556,45 @@ class StockSyncServiceTests(unittest.TestCase):
                     target_date=date(2026, 7, 3),
                 )
 
-        self.assertEqual(result.gap_plan["status"], "current")  # type: ignore[index]
-        self.assertFalse(result.gap_plan["force_refresh_required"])  # type: ignore[index]
-        self.assertEqual(result.post_status["status"], "current")  # type: ignore[index]
+        self.assertEqual(client.price_ranges, [("00405A", date(2025, 7, 3), date(2026, 7, 3))])
+        self.assertEqual(result.gap_plan["status"], "force_refresh_required")  # type: ignore[index]
+        self.assertTrue(result.gap_plan["force_refresh_required"])  # type: ignore[index]
+        self.assertEqual(result.post_status["status"], "patched")  # type: ignore[index]
+
+    def test_sync_stock_history_repairs_recent_tail_hole_even_when_latest_is_current(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            client = TailHoleRepairClient()
+            target = date(2026, 7, 8)
+            missing_start = date(2026, 6, 23)
+            missing_end = date(2026, 7, 6)
+            rows: list[DailyPrice] = []
+            current = date(2025, 7, 7)
+            while current <= target:
+                if is_twse_trading_day(current) and not (missing_start <= current <= missing_end):
+                    rows.append(DailyPrice("2330", current, 100, 101, 99, 100, 10))
+                current += timedelta(days=1)
+
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(rows)
+                service = StockSyncService(client=client, store=store)  # type: ignore[arg-type]
+                result = service.sync_stock_history(
+                    "2330",
+                    lookback_days=365,
+                    end_date=date(2026, 7, 9),
+                    target_date=target,
+                )
+                repaired = store.compute_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=target,
+                )
+
+        self.assertEqual(client.price_ranges, [("2330", missing_start, target)])
+        self.assertEqual(result.gap_plan["status"], "gap")  # type: ignore[index]
+        self.assertEqual(result.gap_plan["fetch_start_date"], missing_start.isoformat())  # type: ignore[index]
+        self.assertEqual(result.post_status["status"], "patched")  # type: ignore[index]
+        self.assertEqual(repaired["tail_hole_count"], 0)
 
     def test_sync_institutional_uses_gap_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

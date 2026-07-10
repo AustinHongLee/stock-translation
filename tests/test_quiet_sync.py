@@ -15,7 +15,10 @@ from app.sync.twse import TwseClient
 from app.web.server import (
     QUIET_SYNC_STATE_KEY,
     _bulk_blocks_twse_fetch,
+    _failed_retry_status,
+    _preempt_quiet_for_user_twse_fetch,
     _preempt_quiet_run,
+    _quiet_sync_status,
     _quiet_sync_due,
 )
 
@@ -99,21 +102,21 @@ class QuietPlanTests(unittest.TestCase):
         t86_done = {m[2] for m in fake_store.bulk_marks if m[1] == "t86_date" and m[3] == "done"}
         self.assertEqual(t86_done, {"2026-02-11"})
 
-    def test_quiet_list_targets_shallowest_first_with_cap(self) -> None:
+    def test_quiet_list_uses_freshness_priority_before_cap(self) -> None:
         fake_client = MultiProfileQuietClient(request_interval=0)
         fake_client.latest_all_prices = []
         fake_store = FakeBulkStore(Path("fake.sqlite3"))
-        # 2330：假最新（只有 10 筆但頂到 target）→ 需要補，ratio 低。
+        # 2330：假最新（只有 10 筆但頂到 target）→ 需要補歷史。
         fake_store.daily["2330"] = _history_rows("2330", EXPECTED_TARGET, count=10)
         # 1101：整年都在 → current，不入列。
         fake_store.daily["1101"] = _history_rows("1101", EXPECTED_TARGET, count=180)
-        # 9999：完全沒資料 → 最缺，排第一。
+        # 9999：完全沒資料 → initial backfill，排在已最新但歷史淺之後。
 
         plan = _quiet_plan(fake_client, fake_store)
-        self.assertEqual(plan.list_stocks(), ["9999", "2330"])
+        self.assertEqual(plan.list_stocks(), ["2330", "9999"])
 
         plan_capped = _quiet_plan(fake_client, fake_store, quiet_max_stocks=1)
-        self.assertEqual(plan_capped.list_stocks(), ["9999"])
+        self.assertEqual(plan_capped.list_stocks(), ["2330"])
 
     def test_quiet_on_finish_is_light(self) -> None:
         fake_client = MultiProfileQuietClient(request_interval=0)
@@ -197,6 +200,24 @@ class ServerQuietHelpersTests(unittest.TestCase):
         _preempt_quiet_run(idle)
         self.assertFalse(idle.stopped)
 
+    def test_user_twse_fetch_preempts_quiet_without_blocking(self) -> None:
+        quiet = _FakeManager({"running": True, "mode": "quiet"})
+        payload = _preempt_quiet_for_user_twse_fetch("/api/sync", quiet)
+
+        self.assertTrue(payload["preempted_quiet_sync"])
+        self.assertTrue(quiet.stopped)
+        self.assertTrue(quiet.joined)
+
+        manual = _FakeManager({"running": True, "mode": "manual"})
+        payload = _preempt_quiet_for_user_twse_fetch("/api/sync", manual)
+        self.assertFalse(payload["preempted_quiet_sync"])
+        self.assertFalse(manual.stopped)
+
+        unrelated = _FakeManager({"running": True, "mode": "quiet"})
+        payload = _preempt_quiet_for_user_twse_fetch("/api/watchlist", unrelated)
+        self.assertFalse(payload["preempted_quiet_sync"])
+        self.assertFalse(unrelated.stopped)
+
     def test_quiet_sync_due_respects_min_interval(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "stock.sqlite3"
@@ -206,6 +227,53 @@ class ServerQuietHelpersTests(unittest.TestCase):
                 self.assertFalse(_quiet_sync_due(store))
                 later = datetime.now() + timedelta(hours=5)
                 self.assertTrue(_quiet_sync_due(store, now=later))
+
+    def test_quiet_status_and_failed_retry_cooldown_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                initial = _quiet_sync_status(store)
+                self.assertTrue(initial["due"])
+                self.assertEqual(initial["next_run_in_seconds"], 0)
+
+                now = datetime.now()
+                store.set_json_cache(QUIET_SYNC_STATE_KEY, {"last": now.isoformat(timespec="seconds")})
+                quiet = _quiet_sync_status(store, now=now)
+                self.assertFalse(quiet["due"])
+                self.assertGreater(int(quiet["next_run_in_seconds"]), 0)
+                self.assertGreater(int(quiet["max_stocks_per_run"]), 0)
+
+                store.ensure_bulk_items("full_market", "stock", ["2330"])
+                store.mark_bulk_item("full_market", "stock", "2330", "failed", error="TWSE busy")
+                persisted = store.get_bulk_progress_summary("full_market")
+
+            retry = _failed_retry_status(persisted, now=datetime.now())
+            self.assertEqual(retry["cooling_down_count"], 1)
+            self.assertEqual(retry["ready_count"], 0)
+            self.assertGreater(int(retry["retry_after_seconds"]), 0)
+
+    def test_failed_retry_status_reports_ready_items_after_cooldown(self) -> None:
+        now = datetime.now()
+        persisted = {
+            "failed": [
+                {
+                    "stock_id": "2330",
+                    "error": "recent",
+                    "updated_at": now.isoformat(timespec="seconds"),
+                },
+                {
+                    "stock_id": "2317",
+                    "error": "old",
+                    "updated_at": (now - timedelta(hours=1)).isoformat(timespec="seconds"),
+                },
+            ]
+        }
+
+        retry = _failed_retry_status(persisted, now=now)
+
+        self.assertEqual(retry["total_failed"], 2)
+        self.assertEqual(retry["ready_count"], 1)
+        self.assertEqual(retry["cooling_down_count"], 1)
 
     def test_quiet_request_interval_is_slower_than_manual_default(self) -> None:
         self.assertGreater(QUIET_REQUEST_INTERVAL, 0.2)

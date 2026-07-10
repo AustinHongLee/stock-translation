@@ -172,6 +172,8 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(statuses["2330"], "done")
             self.assertEqual(failed_item["status"], "failed")  # type: ignore[index]
             self.assertEqual(failed_item["error"], "no network")  # type: ignore[index]
+            self.assertEqual(summary["samples"]["failed"][0]["stock_id"], "2303")  # type: ignore[index]
+            self.assertEqual(summary["samples"]["failed"][0]["error"], "no network")  # type: ignore[index]
             self.assertIsNotNone(cached)
             self.assertEqual(cached[0]["count"], 2)  # type: ignore[index]
             with SQLiteStore(db_path) as store:
@@ -193,6 +195,9 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(summary["failed_count"], 0)
             self.assertEqual(summary["counts"]["history_pending"], 1)  # type: ignore[index]
             self.assertEqual(summary["counts"]["source_pending"], 1)  # type: ignore[index]
+            self.assertEqual(summary["source_pending"][0]["stock_id"], "2454")  # type: ignore[index]
+            self.assertEqual(summary["samples"]["history_pending"][0]["stock_id"], "2303")  # type: ignore[index]
+            self.assertEqual(summary["samples"]["source_pending"][0]["stock_id"], "2454")  # type: ignore[index]
 
     def test_indicator_prefs_and_chart_annotations_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -314,6 +319,37 @@ class SQLiteStoreTests(unittest.TestCase):
             self.assertEqual(computed["horizon_start_date"], "2025-06-22")
             self.assertEqual(computed["horizon_row_count"], 1)
             self.assertEqual(refreshed["horizon_row_count"], 1)
+
+    def test_daily_coverage_reports_recent_tail_holes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("2330", date(2026, 6, 22), 100, 101, 99, 100, 10),
+                        DailyPrice("2330", date(2026, 7, 7), 110, 111, 109, 110, 12),
+                        DailyPrice("2330", date(2026, 7, 8), 112, 113, 111, 112, 14),
+                    ]
+                )
+
+                computed = store.compute_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=date(2026, 7, 8),
+                )
+                refreshed = store.refresh_data_coverage(
+                    "2330",
+                    "daily_price",
+                    target_date=date(2026, 7, 8),
+                )
+
+            self.assertEqual(computed["latest_date"], "2026-07-08")
+            self.assertEqual(computed["tail_hole_count"], 10)
+            self.assertEqual(computed["tail_gap_start_date"], "2026-06-23")
+            self.assertEqual(computed["tail_gap_end_date"], "2026-07-06")
+            self.assertEqual(refreshed["tail_hole_count"], 10)
+            self.assertEqual(refreshed["tail_gap_start_date"], "2026-06-23")
+            self.assertEqual(refreshed["tail_gap_end_date"], "2026-07-06")
 
     def test_portfolio_transactions_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

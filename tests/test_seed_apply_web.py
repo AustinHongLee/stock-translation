@@ -78,6 +78,52 @@ class SeedApplyWebTests(unittest.TestCase):
         self.assertEqual([(row["stock_id"], row["close"]) for row in rows], [("2317", 50.0), ("2330", 100.0)])
         self.assertEqual([row["stock_id"] for row in watchlist], ["2330"])
 
+    def test_data_hub_check_and_apply_endpoints_are_best_effort(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "data" / "stock_translator.sqlite3"
+            db_path.parent.mkdir(parents=True)
+            with SQLiteStore(db_path):
+                pass
+
+            web_server._DATA_HUB_CHECK_CACHE.update({"checked_at": 0.0, "payload": None, "current_version": 0})
+            with (
+                patch(
+                    "app.web.server.check_for_data_hub",
+                    return_value={
+                        "available": True,
+                        "current_version": 0,
+                        "version": 20260708,
+                        "url": "https://download.example/StockTranslator-official-data-20260708.zip",
+                        "message": "找到較新的官方資料樞紐。",
+                    },
+                ),
+                patch(
+                    "app.web.server._apply_data_hub_now",
+                    return_value={
+                        "applied": True,
+                        "version": 20260708,
+                        "rows": 5,
+                    },
+                ),
+            ):
+                httpd = StockTranslatorServer(("127.0.0.1", 0), db_path)
+                thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+                thread.start()
+                base_url = f"http://127.0.0.1:{httpd.server_port}"
+                try:
+                    checked = _request_json(f"{base_url}/api/data/hub/check?force=1")
+                    applied = _request_json(f"{base_url}/api/data/hub/apply", method="POST")
+                finally:
+                    httpd.shutdown()
+                    httpd.server_close()
+                    thread.join(timeout=2)
+
+        self.assertTrue(checked["available"])
+        self.assertEqual(checked["version"], 20260708)
+        self.assertTrue(applied["ok"])
+        self.assertIn("官方資料樞紐已套用", str(applied["message"]))
+
 
 def _request_json(url: str, *, method: str = "GET") -> dict[str, object]:
     data = b"{}" if method != "GET" else None

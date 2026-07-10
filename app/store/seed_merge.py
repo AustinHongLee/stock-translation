@@ -12,6 +12,7 @@ from app.update.checker import parse_version
 
 
 SEED_DB_NAME = "seed.sqlite3"
+OFFICIAL_DATA_DB_NAME = "data/stock_translator.sqlite3"
 SEED_MANIFEST_NAME = "manifest.json"
 SEED_APPLIED_CACHE_KEY = "seed_applied_version"
 LOCAL_DATA_CACHE_KEY = "local_data_v3"
@@ -90,11 +91,11 @@ def maybe_merge_seed(
                 "applied_version": current_applied,
             }
 
-        seed_db = seed_directory / SEED_DB_NAME
+        seed_db, seed_db_key = _seed_db_candidate(seed_directory)
         if not seed_db.is_file():
             return {"applied": False, "reason": "missing_seed_db", "version": seed_version}
 
-        expected_sha = str(manifest.get("sha256") or "").strip().lower()
+        expected_sha = _expected_seed_sha(manifest, seed_db_key)
         actual_sha = file_sha256(seed_db)
         if not expected_sha or actual_sha != expected_sha:
             return {
@@ -138,6 +139,25 @@ def _app_version_allows(current: str, minimum: str) -> bool:
     if current_version is None or minimum_version is None:
         return False
     return current_version >= minimum_version
+
+
+def _seed_db_candidate(seed_directory: Path) -> tuple[Path, str]:
+    seed_db = seed_directory / SEED_DB_NAME
+    if seed_db.is_file():
+        return seed_db, SEED_DB_NAME
+    return seed_directory / OFFICIAL_DATA_DB_NAME, OFFICIAL_DATA_DB_NAME
+
+
+def _expected_seed_sha(manifest: dict[str, Any], seed_db_key: str) -> str:
+    if seed_db_key == SEED_DB_NAME:
+        return str(manifest.get("sha256") or "").strip().lower()
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return ""
+    entry = files.get(seed_db_key)
+    if not isinstance(entry, dict):
+        return ""
+    return str(entry.get("sha256") or "").strip().lower()
 
 
 def _backup_current_db(current_db: Path, backups_dir: Path, version: int) -> Path | None:

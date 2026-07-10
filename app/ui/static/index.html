@@ -380,6 +380,7 @@
               <p class="bulk-hint">這裡會先用全市場資料快速補到最近收盤，小缺口優先處理；個股歷史不足但已到最新的股票會交給背景慢速同步，或進「看個股」／按「補這檔」再補完整日線。三大法人與共用資料也會一起更新；可暫停／停止，關掉也會記住進度，下次接續。</p>
               <div class="bulk-controls">
                 <button id="bulkStartBtn" type="button" class="primary-button" onclick="bulkStart()">開始下載</button>
+                <button id="bulkHistoryBackfillBtn" type="button" class="chart-size-btn" onclick="bulkStartHistoryBackfill()">補歷史</button>
                 <button id="bulkPauseBtn" type="button" class="chart-size-btn" onclick="bulkPause()" disabled>暫停</button>
                 <button id="bulkResumeBtn" type="button" class="chart-size-btn" onclick="bulkResume()" disabled>繼續</button>
                 <button id="bulkRetryFailedBtn" type="button" class="chart-size-btn" onclick="bulkRetryFailed()" disabled>重試失敗</button>
@@ -390,11 +391,12 @@
                 <span id="bulkPlainNext">已到最新但歷史較少的股票，會交給背景慢慢補。</span>
               </div>
               <div id="bulkOutcomeList" class="bulk-outcomes" aria-label="全市場下載狀態分類">
-                <span><b id="bulkDoneCount">0</b> 已完成/已最新</span>
-                <span><b id="bulkHistoryPendingCount">0</b> 歷史待背景</span>
-                <span><b id="bulkSourcePendingCount">0</b> 等來源</span>
-                <span><b id="bulkFailedCount">0</b> 需重試</span>
+                <button type="button" class="bulk-outcome" data-bulk-queue="done" onclick="selectBulkQueueCategory('done')"><b id="bulkDoneCount">0</b> 已完成/已最新</button>
+                <button type="button" class="bulk-outcome" data-bulk-queue="history_pending" onclick="selectBulkQueueCategory('history_pending')"><b id="bulkHistoryPendingCount">0</b> 歷史待背景</button>
+                <button type="button" class="bulk-outcome" data-bulk-queue="source_pending" onclick="selectBulkQueueCategory('source_pending')"><b id="bulkSourcePendingCount">0</b> 等來源</button>
+                <button type="button" class="bulk-outcome" data-bulk-queue="failed" onclick="selectBulkQueueCategory('failed')"><b id="bulkFailedCount">0</b> 需重試</button>
               </div>
+              <div id="bulkQueueDetail" class="bulk-queue-detail" hidden></div>
               <div id="bulkProgressWrap" class="bulk-progress-wrap hidden">
                 <div class="bulk-bar"><div id="bulkBar" class="bulk-bar-fill"></div></div>
                 <p id="bulkStatusText" class="bulk-status">--</p>
@@ -414,6 +416,7 @@
                 <div class="local-data-filters" aria-label="本地資料快速篩選">
                   <button type="button" class="is-active" data-local-filter="all">全部</button>
                   <button type="button" data-local-filter="stale">只看過期</button>
+                  <button type="button" data-local-filter="history_short">歷史不足</button>
                   <button type="button" data-local-filter="near_resistance">接近波壓</button>
                   <button type="button" data-local-filter="near_support">接近波撐</button>
                 </div>

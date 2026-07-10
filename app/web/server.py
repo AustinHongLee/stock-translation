@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import webbrowser
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +32,7 @@ from app.runtime_paths import (
 from app.store.legacy_import import copy_legacy_snapshot, import_legacy_data, legacy_import_status
 from app.store.seed_merge import applied_seed_version, maybe_merge_seed, seed_manifest_version
 from app.update.checker import check_for_update
+from app.update.data_hub import check_for_data_hub, prepare_data_hub
 from app.update.installer import prepare_update, start_prepared_update
 from app.version import APP_VERSION
 from app.portfolio import PortfolioCalculationError, calculate_portfolio
@@ -40,7 +41,14 @@ from app.screener.value import DEFAULT_SCREENER_PATH, refresh_value_screener
 from app.store.sqlite_store import SQLiteStore
 from app.sync.service import StockSyncService, SyncResult
 from app.sync.bulk import BULK_MANAGER
-from app.sync.bulk_runner import BULK_RUN_KEY, QUIET_REQUEST_INTERVAL, build_bulk_plan
+from app.sync.bulk_runner import (
+    BULK_FAILED_RETRY_BACKOFF_SECONDS,
+    BULK_RUN_KEY,
+    BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS,
+    QUIET_BACKFILL_MAX_STOCKS,
+    QUIET_REQUEST_INTERVAL,
+    build_bulk_plan,
+)
 from app.sync.twse import TwseClient
 from app.glossary.service import glossary_payload
 from app.quote.providers import TwseMisQuoteProvider
@@ -81,10 +89,14 @@ TWSE_FETCH_BLOCKED_DURING_BULK = {
     "/api/institutional/sync",
     "/api/value-screener/refresh",
 }
+USER_TWSE_FETCH_PATHS = TWSE_FETCH_BLOCKED_DURING_BULK
 UPDATE_CHECK_CACHE_SECONDS = 300
 _UPDATE_CHECK_CACHE: dict[str, object] = {"checked_at": 0.0, "payload": None}
+DATA_HUB_CHECK_CACHE_SECONDS = 1800
+_DATA_HUB_CHECK_CACHE: dict[str, object] = {"checked_at": 0.0, "payload": None, "current_version": 0}
 # 背景安靜同步：app 開著時每隔一段時間自動「補最新 + 慢速補歷史」。
 QUIET_SYNC_STATE_KEY = "quiet_sync_state"
+DATA_HUB_STATE_KEY = "data_hub_state"
 QUIET_SYNC_MIN_INTERVAL_HOURS = 4.0
 QUIET_SYNC_LOOP_SECONDS = 1800.0
 
@@ -129,6 +141,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 params = parse_qs(parsed.query)
                 force = (params.get("force") or ["0"])[0] in {"1", "true", "yes"}
                 self._send_json(_latest_update_info(force=force))
+            elif parsed.path == "/api/data/hub/check":
+                params = parse_qs(parsed.query)
+                force = (params.get("force") or ["0"])[0] in {"1", "true", "yes"}
+                with SQLiteStore(self.server.db_path) as store:
+                    current_version = applied_seed_version(store)
+                self._send_json(_latest_data_hub_info(current_version, force=force))
             elif parsed.path == "/api/data/legacy-import":
                 self._send_json(_legacy_import_payload())
             elif parsed.path == "/api/indicator-prefs":
@@ -267,6 +285,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if _bulk_blocks_twse_fetch(parsed.path):
                 self._send_error(HTTPStatus.CONFLICT, TWSE_FETCH_DURING_BULK_MESSAGE)
                 return
+            traffic_control = _preempt_quiet_for_user_twse_fetch(parsed.path, BULK_MANAGER)
             if parsed.path.startswith("/api/stocks/") and parsed.path.endswith("/annotations"):
                 stock_id = unquote(parsed.path.removeprefix("/api/stocks/").removesuffix("/annotations")).strip()
                 body = self._read_json_body()
@@ -305,6 +324,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                             "freshness": freshness,
                             "gap": (freshness.get("daily_price") or {}).get("gap"),
                             "coverage": (freshness.get("daily_price") or {}).get("coverage"),
+                            "traffic_control": traffic_control,
                         }
                         self._send_json(payload)
                         return
@@ -335,6 +355,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "post_status": result.post_status,
                         "price_warning_count": result.price_warning_count,
                         "first_price_warning": result.first_price_warning,
+                        "traffic_control": traffic_control,
                     }
                     store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
                     self._send_json(payload)
@@ -375,6 +396,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                                         "freshness": freshness,
                                         "gap": (freshness.get("daily_price") or {}).get("gap"),
                                         "coverage": (freshness.get("daily_price") or {}).get("coverage"),
+                                        "traffic_control": traffic_control,
                                     }
                                 )
                                 continue
@@ -407,6 +429,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                                     "post_status": result.post_status,
                                     "price_warning_count": result.price_warning_count,
                                     "first_price_warning": result.first_price_warning,
+                                    "traffic_control": traffic_control,
                                 }
                             )
 
@@ -458,18 +481,30 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "gap": result.gap_plan,
                         "coverage": result.coverage,
                         "freshness": freshness,
+                        "traffic_control": traffic_control,
                     }
                     self._send_json(payload)
             elif parsed.path == "/api/bulk-download/start":
                 body = self._read_json_body()
                 lookback_days = int(body.get("lookback_days", 365))
+                include_history_backfill = bool(body.get("include_history_backfill"))
                 _preempt_quiet_run(BULK_MANAGER)
+                hub_result = _apply_data_hub_now(self.server.db_path, force=False) if getattr(sys, "frozen", False) else None
                 try:
-                    BULK_MANAGER.start(build_bulk_plan(self.server.db_path, lookback_days=lookback_days))
+                    BULK_MANAGER.start(
+                        build_bulk_plan(
+                            self.server.db_path,
+                            lookback_days=lookback_days,
+                            include_history_backfill=include_history_backfill,
+                        )
+                    )
                 except RuntimeError as exc:
                     self._send_error(HTTPStatus.CONFLICT, str(exc))
                     return
-                self._send_json(_bulk_status(self.server.db_path))
+                status = _bulk_status(self.server.db_path)
+                if hub_result is not None:
+                    status["data_hub"] = hub_result
+                self._send_json(status)
             elif parsed.path == "/api/bulk-download/retry-failed":
                 body = self._read_json_body()
                 lookback_days = int(body.get("lookback_days", 365))
@@ -478,6 +513,18 @@ class RequestHandler(BaseHTTPRequestHandler):
                     if int(summary.get("failed_count", 0)) <= 0:
                         self._send_error(HTTPStatus.BAD_REQUEST, "目前沒有失敗清單可重試")
                         return
+                retry_status = _failed_retry_status(summary)
+                if int(retry_status.get("ready_count") or 0) <= 0:
+                    status = _bulk_status(self.server.db_path)
+                    wait = int(retry_status.get("retry_after_seconds") or 0)
+                    status["retry_blocked_by_cooldown"] = True
+                    status["message"] = (
+                        f"失敗清單正在冷卻，約 {wait // 60} 分鐘後再重試比較穩。"
+                        if wait >= 60
+                        else "失敗清單正在冷卻，稍後再重試比較穩。"
+                    )
+                    self._send_json(status)
+                    return
                 _preempt_quiet_run(BULK_MANAGER)
                 try:
                     BULK_MANAGER.start(
@@ -511,6 +558,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "rows": result.rows,
                     "finished_at": result.generated_at.isoformat(timespec="seconds"),
                     "warnings": result.warnings,
+                    "traffic_control": traffic_control,
                 }
                 self._send_json(payload)
             elif parsed.path == "/api/update/download":
@@ -578,6 +626,17 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "ok": bool(result.get("applied")),
                         **result,
                         "message": _seed_merge_message(result, manual=True),
+                        "app_info": _app_info_payload(self.server.db_path),
+                    }
+                )
+            elif parsed.path == "/api/data/hub/apply":
+                body = self._read_json_body()
+                result = _apply_data_hub_now(self.server.db_path, force=bool(body.get("force")))
+                self._send_json(
+                    {
+                        "ok": bool(result.get("applied")),
+                        **result,
+                        "message": _data_hub_merge_message(result, manual=True),
                         "app_info": _app_info_payload(self.server.db_path),
                     }
                 )
@@ -899,6 +958,21 @@ def _preempt_quiet_run(manager) -> None:
         manager.join(15)
 
 
+def _preempt_quiet_for_user_twse_fetch(path: str, manager) -> dict[str, object]:
+    """User-triggered TWSE calls get priority over quiet background backfill."""
+    if path not in USER_TWSE_FETCH_PATHS:
+        return {"preempted_quiet_sync": False}
+    status = manager.status()
+    preempt = bool(status.get("running") and status.get("mode") == "quiet")
+    if preempt:
+        manager.stop()
+        manager.join(15)
+    return {
+        "preempted_quiet_sync": preempt,
+        "message": "背景補資料已暫停並讓路給這次手動操作。" if preempt else "",
+    }
+
+
 def _quiet_sync_due(store, *, now: datetime | None = None) -> bool:
     """距離上次背景同步超過間隔才 due；沒有紀錄視為 due。"""
     cached = store.get_json_cache(QUIET_SYNC_STATE_KEY)
@@ -921,6 +995,11 @@ def _run_quiet_sync_once(db_path: Path) -> bool:
             QUIET_SYNC_STATE_KEY,
             {"last": datetime.now().isoformat(timespec="seconds")},
         )
+    if getattr(sys, "frozen", False):
+        try:
+            _apply_data_hub_now(db_path, force=False)
+        except Exception:
+            pass
     try:
         BULK_MANAGER.start(
             build_bulk_plan(db_path, request_interval=QUIET_REQUEST_INTERVAL, quiet=True)
@@ -954,6 +1033,10 @@ def _start_seed_merge_if_needed(db_path: Path) -> None:
         message = _seed_merge_message(result, manual=False)
         if message:
             print(message)
+        hub_result = _apply_data_hub_now(db_path, force=False)
+        hub_message = _data_hub_merge_message(hub_result, manual=False)
+        if hub_message:
+            print(hub_message)
 
     threading.Thread(target=_worker, name="seed-merge", daemon=True).start()
 
@@ -968,6 +1051,53 @@ def _apply_seed_now(db_path: Path, *, force: bool) -> dict[str, object]:
             backups_dir=data_dir() / "backups",
             force=force,
         )
+
+
+def _apply_data_hub_now(db_path: Path, *, force: bool) -> dict[str, object]:
+    try:
+        with SQLiteStore(db_path) as store:
+            current_version = applied_seed_version(store)
+        hub_info = _latest_data_hub_info(
+            current_version,
+            force=force,
+            include_current=force,
+        )
+        if not hub_info.get("available"):
+            with SQLiteStore(db_path) as store:
+                store.set_json_cache(DATA_HUB_STATE_KEY, _data_hub_state_payload({"applied": False, "reason": "not_available", "hub": hub_info}))
+            return {
+                "applied": False,
+                "reason": "not_available",
+                "hub": hub_info,
+            }
+        prepared = prepare_data_hub(hub_info)
+        with SQLiteStore(db_path) as store:
+            result = maybe_merge_seed(
+                store,
+                seed_dir=prepared.hub_dir,
+                current_db=db_path,
+                app_version=APP_VERSION,
+                backups_dir=data_dir() / "backups",
+                force=force,
+            )
+            store.set_json_cache(
+                DATA_HUB_STATE_KEY,
+                _data_hub_state_payload({**result, "hub": hub_info}),
+            )
+        return {
+            **result,
+            "hub": hub_info,
+            "hub_dir": str(prepared.hub_dir),
+            "downloaded_zip": str(prepared.zip_path),
+        }
+    except Exception as exc:  # noqa: BLE001 - hub is best-effort and must never block local use
+        result = {"applied": False, "reason": "hub_error", "error": str(exc)}
+        try:
+            with SQLiteStore(db_path) as store:
+                store.set_json_cache(DATA_HUB_STATE_KEY, _data_hub_state_payload(result))
+        except Exception:
+            pass
+        return result
 
 
 def _seed_merge_message(result: dict[str, object], *, manual: bool) -> str:
@@ -993,6 +1123,44 @@ def _seed_merge_message(result: dict[str, object], *, manual: bool) -> str:
     return detail
 
 
+def _data_hub_merge_message(result: dict[str, object], *, manual: bool) -> str:
+    if result.get("applied"):
+        rows = int(result.get("rows") or 0)
+        version = result.get("version") or ((result.get("hub") or {}) if isinstance(result.get("hub"), dict) else {}).get("version") or "--"
+        return f"官方資料樞紐已套用：版本 {version}，新增 {rows} 筆公開資料；你的自選股、持倉與設定不會被覆蓋。"
+    reason = str(result.get("reason") or "")
+    hub = result.get("hub") if isinstance(result.get("hub"), dict) else {}
+    if not manual and reason in {"not_available"}:
+        return ""
+    labels = {
+        "not_available": str(hub.get("message") or "目前沒有較新的官方資料樞紐。"),
+        "missing_manifest": "下載的官方資料樞紐缺少 manifest，已跳過。",
+        "invalid_manifest_version": "官方資料樞紐版本資訊不完整，已跳過。",
+        "app_too_old": "官方資料樞紐需要更新的程式版本，已跳過。",
+        "already_applied": "這份官方資料樞紐已經套用過。",
+        "missing_seed_db": "官方資料樞紐缺少資料庫。",
+        "sha256_mismatch": "官方資料樞紐驗證失敗，已跳過。",
+        "hub_error": "檢查或套用官方資料樞紐時發生錯誤，未改動你的資料。",
+        "error": "套用官方資料樞紐時發生錯誤，未改動你的資料。",
+    }
+    detail = labels.get(reason, f"官方資料樞紐未套用：{reason or '未知原因'}。")
+    if result.get("error"):
+        detail = f"{detail} ({result.get('error')})"
+    return detail
+
+
+def _data_hub_state_payload(result: dict[str, object]) -> dict[str, object]:
+    hub = result.get("hub") if isinstance(result.get("hub"), dict) else {}
+    return {
+        "applied": bool(result.get("applied")),
+        "reason": str(result.get("reason") or ""),
+        "version": int(result.get("version") or hub.get("version") or 0),
+        "rows": int(result.get("rows") or 0),
+        "message": _data_hub_merge_message(result, manual=True),
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 def _configure_output() -> None:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -1005,14 +1173,19 @@ def _quote_provider() -> TwseMisQuoteProvider:
 
 def _app_info_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
     seed_version = 0
+    hub_state: object = None
     with SQLiteStore(db_path) as store:
         seed_version = applied_seed_version(store)
+        cached_hub = store.get_json_cache(DATA_HUB_STATE_KEY)
+        if cached_hub is not None:
+            hub_state = cached_hub[0]
     return {
         "version": APP_VERSION,
         "update_source": "GitHub Releases",
-        "update_privacy": "只連 GitHub 取得版本號與下載連結，不上傳任何本地資料。",
+        "update_privacy": "只連 GitHub 取得版本號、下載連結與官方資料樞紐，不上傳任何本地資料。",
         "data_snapshot_version": seed_version,
         "bundled_data_snapshot_version": seed_manifest_version(seed_dir()),
+        "data_hub": hub_state if isinstance(hub_state, dict) else None,
         "frozen": bool(getattr(sys, "frozen", False)),
     }
 
@@ -1029,6 +1202,36 @@ def _latest_update_info(*, force: bool = False) -> dict[str, object]:
     payload["cache_seconds"] = UPDATE_CHECK_CACHE_SECONDS
     _UPDATE_CHECK_CACHE["payload"] = dict(payload)
     _UPDATE_CHECK_CACHE["checked_at"] = now
+    return payload
+
+
+def _latest_data_hub_info(
+    current_snapshot_version: int,
+    *,
+    force: bool = False,
+    include_current: bool = False,
+) -> dict[str, object]:
+    now = time.monotonic()
+    cached = _DATA_HUB_CHECK_CACHE.get("payload")
+    checked_at = float(_DATA_HUB_CHECK_CACHE.get("checked_at") or 0.0)
+    cached_current = int(_DATA_HUB_CHECK_CACHE.get("current_version") or 0)
+    if (
+        not force
+        and isinstance(cached, dict)
+        and cached_current == int(current_snapshot_version or 0)
+        and now - checked_at < DATA_HUB_CHECK_CACHE_SECONDS
+    ):
+        return dict(cached)
+
+    payload = check_for_data_hub(
+        int(current_snapshot_version or 0),
+        include_current=include_current,
+    )
+    payload["checked_at"] = datetime.now().isoformat(timespec="seconds")
+    payload["cache_seconds"] = DATA_HUB_CHECK_CACHE_SECONDS
+    _DATA_HUB_CHECK_CACHE["payload"] = dict(payload)
+    _DATA_HUB_CHECK_CACHE["checked_at"] = now
+    _DATA_HUB_CHECK_CACHE["current_version"] = int(current_snapshot_version or 0)
     return payload
 
 
@@ -1133,15 +1336,33 @@ def _date_or_none(value: object) -> date | None:
 
 def _bulk_status(db_path: Path) -> dict[str, object]:
     status = BULK_MANAGER.status()
+    now = datetime.now()
     with SQLiteStore(db_path) as store:
         persisted = store.get_bulk_progress_summary(BULK_RUN_KEY)
+        quiet_sync = _quiet_sync_status(store, now=now)
     status["persisted"] = persisted
     persisted_counts = persisted.get("counts") if isinstance(persisted.get("counts"), dict) else {}
     source_pending_count = int(persisted_counts.get("source_pending", 0)) if persisted_counts else 0
     history_pending_count = int(persisted_counts.get("history_pending", 0)) if persisted_counts else 0
+    failed_retry = _failed_retry_status(persisted, now=now)
+    source_retry = _source_pending_retry_status(persisted, now=now)
     status["source_pending_count"] = source_pending_count
     status["history_pending_count"] = history_pending_count
-    status["can_retry_failed"] = bool(persisted.get("failed_count")) and not bool(status.get("running"))
+    status["quiet_sync"] = quiet_sync
+    status["failed_retry"] = failed_retry
+    status["source_retry"] = source_retry
+    status["repair_queue"] = _repair_queue_status(
+        persisted,
+        source_pending_count=source_pending_count,
+        history_pending_count=history_pending_count,
+        failed_retry=failed_retry,
+        source_retry=source_retry,
+        quiet_sync=quiet_sync,
+    )
+    status["queue_details"] = _bulk_queue_details(persisted, now=now)
+    status["can_retry_failed"] = (
+        int(failed_retry.get("ready_count") or 0) > 0 and not bool(status.get("running"))
+    )
 
     if not status.get("running") and status.get("status") == "idle" and persisted.get("total"):
         total = int(persisted.get("total") or 0)
@@ -1167,6 +1388,211 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
         status["failed_count"] = persisted.get("failed_count", 0)
 
     return status
+
+
+def _quiet_sync_status(store: SQLiteStore, *, now: datetime | None = None) -> dict[str, object]:
+    now = now or datetime.now()
+    cached = store.get_json_cache(QUIET_SYNC_STATE_KEY)
+    last_run_at = ""
+    if cached is not None:
+        payload, updated_at = cached
+        last = payload.get("last") if isinstance(payload, dict) else ""
+        last_run_at = str(last or updated_at.isoformat(timespec="seconds"))
+        base = updated_at
+        next_run_at = base + timedelta(hours=QUIET_SYNC_MIN_INTERVAL_HOURS)
+        next_in = max(0, int((next_run_at - now).total_seconds()))
+        due = next_in <= 0
+    else:
+        next_run_at = now
+        next_in = 0
+        due = True
+    return {
+        "interval_hours": QUIET_SYNC_MIN_INTERVAL_HOURS,
+        "loop_seconds": QUIET_SYNC_LOOP_SECONDS,
+        "request_interval_seconds": QUIET_REQUEST_INTERVAL,
+        "max_stocks_per_run": QUIET_BACKFILL_MAX_STOCKS,
+        "last_run_at": last_run_at,
+        "next_run_at": next_run_at.isoformat(timespec="seconds"),
+        "next_run_in_seconds": next_in,
+        "due": due,
+    }
+
+
+def _failed_retry_status(persisted: dict[str, object], *, now: datetime | None = None) -> dict[str, object]:
+    now = now or datetime.now()
+    failed = persisted.get("failed")
+    if not isinstance(failed, list):
+        failed = []
+    return _bulk_retry_status(failed, BULK_FAILED_RETRY_BACKOFF_SECONDS, now=now)
+
+
+def _source_pending_retry_status(
+    persisted: dict[str, object],
+    *,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    now = now or datetime.now()
+    items = persisted.get("source_pending")
+    if not isinstance(items, list):
+        items = []
+    return _bulk_retry_status(items, BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS, now=now)
+
+
+def _bulk_retry_status(
+    items: list[object],
+    backoff_seconds: int,
+    *,
+    now: datetime,
+) -> dict[str, object]:
+    cooling_down = 0
+    next_retry_at: datetime | None = None
+    typed_items = [item for item in items if isinstance(item, dict)]
+    for item in typed_items:
+        updated_at = item.get("updated_at")
+        if not updated_at:
+            continue
+        try:
+            retry_at = datetime.fromisoformat(str(updated_at)) + timedelta(seconds=backoff_seconds)
+        except ValueError:
+            continue
+        if retry_at > now:
+            cooling_down += 1
+            if next_retry_at is None or retry_at < next_retry_at:
+                next_retry_at = retry_at
+    retry_after = max(0, int((next_retry_at - now).total_seconds())) if next_retry_at else 0
+    ready = max(0, len(typed_items) - cooling_down)
+    return {
+        "backoff_seconds": backoff_seconds,
+        "total": len(typed_items),
+        "total_failed": len(typed_items),
+        "ready_count": ready,
+        "cooling_down_count": cooling_down,
+        "next_retry_at": next_retry_at.isoformat(timespec="seconds") if next_retry_at else "",
+        "retry_after_seconds": retry_after,
+    }
+
+
+def _repair_queue_status(
+    persisted: dict[str, object],
+    *,
+    source_pending_count: int,
+    history_pending_count: int,
+    failed_retry: dict[str, object],
+    source_retry: dict[str, object],
+    quiet_sync: dict[str, object],
+) -> dict[str, object]:
+    counts = persisted.get("counts") if isinstance(persisted.get("counts"), dict) else {}
+    return {
+        "total": int(persisted.get("total") or 0),
+        "done": int(persisted.get("done") or 0),
+        "pending": int(persisted.get("pending") or 0),
+        "running": int(persisted.get("running") or 0),
+        "history_pending": history_pending_count,
+        "source_pending": source_pending_count,
+        "source_ready": int(source_retry.get("ready_count") or 0),
+        "source_cooling_down": int(source_retry.get("cooling_down_count") or 0),
+        "failed": int(persisted.get("failed_count") or 0),
+        "failed_ready": int(failed_retry.get("ready_count") or 0),
+        "failed_cooling_down": int(failed_retry.get("cooling_down_count") or 0),
+        "quiet_next_run_at": str(quiet_sync.get("next_run_at") or ""),
+        "quiet_next_run_in_seconds": int(quiet_sync.get("next_run_in_seconds") or 0),
+        "quiet_max_stocks_per_run": int(quiet_sync.get("max_stocks_per_run") or 0),
+        "counts": counts,
+    }
+
+
+def _bulk_queue_details(persisted: dict[str, object], *, now: datetime | None = None) -> dict[str, object]:
+    now = now or datetime.now()
+    counts = persisted.get("counts") if isinstance(persisted.get("counts"), dict) else {}
+    samples = persisted.get("samples") if isinstance(persisted.get("samples"), dict) else {}
+    sample_limit = int(persisted.get("sample_limit") or 0)
+
+    def raw_items(*statuses: str) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for status in statuses:
+            group = samples.get(status, [])
+            if isinstance(group, list):
+                result.extend(item for item in group if isinstance(item, dict))
+        return result[:sample_limit] if sample_limit > 0 else result
+
+    def public_items(
+        items: list[dict[str, object]],
+        *,
+        retry_backoff_seconds: int | None = None,
+    ) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for item in items:
+            public = {
+                "stock_id": str(item.get("stock_id") or ""),
+                "status": str(item.get("status") or ""),
+                "reason": str(item.get("error") or ""),
+                "updated_at": str(item.get("updated_at") or ""),
+            }
+            if retry_backoff_seconds is not None:
+                public.update(_bulk_item_retry_state(item, now=now, backoff_seconds=retry_backoff_seconds))
+            result.append(public)
+        return result
+
+    done_count = int(counts.get("done", 0) or 0) + int(counts.get("skipped", 0) or 0)
+    history_count = int(counts.get("history_pending", 0) or 0)
+    source_count = int(counts.get("source_pending", 0) or 0)
+    failed_count = int(persisted.get("failed_count") or 0)
+    return {
+        "done": {
+            "label": "已完成/已最新",
+            "count": done_count,
+            "items": public_items(raw_items("done", "skipped")),
+            "truncated": done_count > sample_limit if sample_limit else False,
+            "next_action": "不用重抓；下次開始下載會重新檢查，仍是最新就跳過。",
+        },
+        "history_pending": {
+            "label": "歷史待背景",
+            "count": history_count,
+            "items": public_items(raw_items("history_pending")),
+            "truncated": history_count > sample_limit if sample_limit else False,
+            "next_action": "最近收盤已到；背景慢補或單檔「補這檔」會補較早 K 線。",
+        },
+        "source_pending": {
+            "label": "等來源",
+            "count": source_count,
+            "items": public_items(
+                raw_items("source_pending"),
+                retry_backoff_seconds=BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS,
+            ),
+            "truncated": source_count > sample_limit if sample_limit else False,
+            "next_action": "多半是來源尚未公布或當日無交易；冷卻完成後，全市場或背景會重新檢查。",
+        },
+        "failed": {
+            "label": "需重試",
+            "count": failed_count,
+            "items": public_items(
+                raw_items("failed"),
+                retry_backoff_seconds=BULK_FAILED_RETRY_BACKOFF_SECONDS,
+            ),
+            "truncated": failed_count > sample_limit if sample_limit else False,
+            "next_action": "冷卻完成後可按「重試失敗」；系統會先重驗，已補好的會跳過。",
+        },
+    }
+
+
+def _bulk_item_retry_state(
+    item: dict[str, object],
+    *,
+    now: datetime,
+    backoff_seconds: int,
+) -> dict[str, object]:
+    updated_at = item.get("updated_at")
+    if not updated_at:
+        return {"retry_state": "ready", "retry_after_seconds": 0}
+    try:
+        retry_at = datetime.fromisoformat(str(updated_at)) + timedelta(seconds=backoff_seconds)
+    except ValueError:
+        return {"retry_state": "ready", "retry_after_seconds": 0}
+    retry_after = max(0, int((retry_at - now).total_seconds()))
+    return {
+        "retry_state": "cooling" if retry_after > 0 else "ready",
+        "retry_after_seconds": retry_after,
+    }
 
 
 def _bulk_blocks_twse_fetch(path: str, status: dict[str, object] | None = None) -> bool:

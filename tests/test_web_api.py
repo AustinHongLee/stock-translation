@@ -18,6 +18,7 @@ from app.models import (
     StockProfile,
 )
 from app.analyze.data_gap import DATA_NODE_DAILY_PRICE, DATA_NODE_INSTITUTIONAL
+from app.analyze.twse_calendar import is_twse_trading_day
 from app.analyze.suitability import ValuationSuitability
 from app.news.classifier import contains_forbidden
 from app.store.sqlite_store import SQLiteStore
@@ -254,6 +255,41 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(payload["daily_price"]["gap"]["status"], "force_refresh_required")  # type: ignore[index]
         self.assertTrue(payload["daily_price"]["gap"]["depth"]["needs_backfill"])  # type: ignore[index]
 
+    def test_sync_freshness_flags_fresh_but_recent_tail_has_hole(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {"items": [{"stock_id": "2330", "price_date": "2026-07-08"}]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            rows: list[DailyPrice] = []
+            current = date(2025, 7, 7)
+            while current <= date(2026, 7, 8):
+                if is_twse_trading_day(current) and not (date(2026, 6, 23) <= current <= date(2026, 7, 6)):
+                    rows.append(DailyPrice("2330", current, 100, 105, 99, 104, 10))
+                current += timedelta(days=1)
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(rows)
+
+                payload = build_sync_freshness_payload(
+                    store,
+                    "2330",
+                    screener_path=screener_path,
+                    today=date(2026, 7, 8),
+                )
+
+        self.assertEqual(payload["status"], "data_hole")
+        self.assertFalse(payload["can_skip_sync"])
+        self.assertFalse(payload["is_current"])
+        self.assertEqual(payload["daily_price"]["gap"]["status"], "gap")  # type: ignore[index]
+        self.assertEqual(payload["daily_price"]["coverage"]["tail_hole_count"], 10)  # type: ignore[index]
+        self.assertIn("K 線尾端中間缺 10 個交易日", payload["message"])
+
     def test_local_data_payload_exposes_report_date_and_target_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -377,7 +413,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(item["history_depth"]["level"], "shallow")  # type: ignore[index]
         self.assertEqual(item["price_gap"]["status"], "force_refresh_required")  # type: ignore[index]
 
-    def test_local_data_profileless_market_product_uses_local_earliest_as_depth_start(self) -> None:
+    def test_local_data_profileless_market_product_short_history_requires_backfill(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             db_path = root / "stock.sqlite3"
@@ -395,7 +431,7 @@ class WebApiPayloadTests(unittest.TestCase):
             with SQLiteStore(db_path) as store:
                 store.upsert_daily_prices(
                     [
-                        DailyPrice("00400A", day, 10, 11, 9, 10, 10)
+                        DailyPrice("00400A", day, 10, 11, 9, 10, 10, source="TWSE_STOCK_DAY")
                         for day in (
                             date(2026, 6, 29),
                             date(2026, 6, 30),
@@ -414,11 +450,15 @@ class WebApiPayloadTests(unittest.TestCase):
 
         item = payload["items"][0]  # type: ignore[index]
         self.assertEqual(item["stock_id"], "00400A")  # type: ignore[index]
-        self.assertEqual(item["price_gap"]["status"], "current")  # type: ignore[index]
-        self.assertEqual(item["history_depth"]["level"], "deep")  # type: ignore[index]
-        self.assertEqual(item["history_depth"]["horizon_start"], "2026-06-29")  # type: ignore[index]
+        self.assertEqual(item["price_gap"]["status"], "force_refresh_required")  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["level"], "latest_only")  # type: ignore[index]
+        self.assertEqual(item["history_depth"]["horizon_start"], "2025-07-03")  # type: ignore[index]
+        self.assertEqual(item["price_source"]["level"], "historical")  # type: ignore[index]
+        self.assertEqual(item["data_health"]["level"], "shallow_history")  # type: ignore[index]
+        self.assertTrue(item["data_health"]["needs_backfill"])  # type: ignore[index]
+        self.assertEqual(payload["health_summary"]["shallow_history_count"], 1)  # type: ignore[index]
 
-    def test_profileless_market_product_short_window_is_not_marked_stale_on_stock_page(self) -> None:
+    def test_profileless_market_product_short_window_requires_history_backfill(self) -> None:
         class July6Date(date):
             @classmethod
             def today(cls) -> "July6Date":
@@ -462,8 +502,112 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(stock_payload["price_window"]["stale_days"], 0)  # type: ignore[index]
         self.assertFalse(stock_payload["price_window"]["is_stale"])  # type: ignore[index]
         self.assertTrue(stock_payload["price_window"]["is_short_history"])  # type: ignore[index]
-        self.assertTrue(freshness["can_skip_sync"])
-        self.assertEqual(freshness["status"], "current")
+        self.assertFalse(freshness["can_skip_sync"])
+        self.assertEqual(freshness["status"], "shallow_history")
+        self.assertEqual(freshness["daily_price"]["gap"]["status"], "force_refresh_required")  # type: ignore[index]
+
+    def test_profileless_etf_stock_page_uses_etf_identity(self) -> None:
+        class July6Date(date):
+            @classmethod
+            def today(cls) -> "July6Date":
+                return cls(2026, 7, 6)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            screener_path = Path(tmpdir) / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {"items": [{"stock_id": "00939", "price_date": "2026-07-03"}]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("00939", day, 21, 22, 20, 21.28, 1000)
+                        for day in (
+                            date(2026, 6, 29),
+                            date(2026, 6, 30),
+                            date(2026, 7, 2),
+                            date(2026, 7, 3),
+                        )
+                    ]
+                )
+
+                with patch("app.web.api.date", July6Date):
+                    payload = build_stock_payload(store, "00939", days=365)
+                freshness = build_sync_freshness_payload(
+                    store,
+                    "00939",
+                    screener_path=screener_path,
+                    today=date(2026, 7, 6),
+                )
+
+        profile = payload["profile"]  # type: ignore[index]
+        suitability = payload["valuation"]["suitability"]  # type: ignore[index]
+        brief_text = json.dumps(payload["brief"], ensure_ascii=False)
+
+        self.assertEqual(profile["stock_id"], "00939")  # type: ignore[index]
+        self.assertEqual(profile["short_name"], "ETF/市場商品")  # type: ignore[index]
+        self.assertIn("ETF/市場商品", profile["name"])  # type: ignore[index]
+        self.assertEqual(suitability["company_type"], "etf")  # type: ignore[index]
+        self.assertEqual(suitability["state"], "not_applicable")  # type: ignore[index]
+        self.assertIn("etf", suitability["reasons"])  # type: ignore[index]
+        self.assertIn("ETF", brief_text)
+        self.assertIn("折溢價", brief_text)
+        self.assertNotIn("一般股", brief_text)
+        self.assertNotIn("這家公司 的產業資料待補", brief_text)
+        self.assertEqual(contains_forbidden(brief_text), [])
+        self.assertFalse(freshness["can_skip_sync"])
+        self.assertEqual(freshness["status"], "shallow_history")
+
+    def test_local_data_marks_latest_all_only_source_as_needing_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "stock.sqlite3"
+            screener_path = root / "value_screener.json"
+            screener_path.write_text(
+                json.dumps(
+                    {"items": [{"stock_id": "00939", "price_date": "2026-07-03"}]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice(
+                            "00939",
+                            day,
+                            21,
+                            22,
+                            20,
+                            21.28,
+                            1000,
+                            source="TWSE_STOCK_DAY_ALL",
+                        )
+                        for day in (
+                            date(2026, 6, 29),
+                            date(2026, 6, 30),
+                            date(2026, 7, 2),
+                            date(2026, 7, 3),
+                        )
+                    ]
+                )
+
+                payload = build_local_data_payload(
+                    store,
+                    today=date(2026, 7, 6),
+                    screener_path=screener_path,
+                )
+
+        item = payload["items"][0]  # type: ignore[index]
+        self.assertEqual(item["price_source"]["level"], "latest_all_only")  # type: ignore[index]
+        self.assertEqual(item["data_health"]["level"], "latest_only")  # type: ignore[index]
+        self.assertTrue(item["data_health"]["needs_backfill"])  # type: ignore[index]
+        self.assertEqual(payload["health_summary"]["latest_only_count"], 1)  # type: ignore[index]
+        self.assertEqual(payload["health_summary"]["latest_all_only_count"], 1)  # type: ignore[index]
 
     def test_local_data_uses_market_level_institutional_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

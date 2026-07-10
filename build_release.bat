@@ -21,6 +21,9 @@ if errorlevel 1 goto fail
 python tools\build_official_data_pack.py
 if errorlevel 1 goto fail
 
+python tools\package_data_hub.py
+if errorlevel 1 goto fail
+
 python -m PyInstaller --noconfirm --clean stock_translator.spec
 if errorlevel 1 goto fail
 

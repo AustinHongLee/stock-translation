@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from app.analyze.forecast_lab import build_forecast_lab
 from app.analyze.data_gap import (
     DATA_NODE_DAILY_PRICE,
     DATA_NODE_INSTITUTIONAL,
+    RECENT_TAIL_HOLE_MIN_REPAIR_DAYS,
     STATUS_CURRENT,
     STATUS_FORCE_REFRESH_REQUIRED,
     count_business_days,
@@ -227,6 +229,7 @@ def build_local_data_payload(
             listed_date=listed_date,
         )
         sr = compute_support_resistance(prices)
+        source_summary = _price_source_summary(prices)
         items.append({
             "stock_id": sid,
             "name": name,
@@ -238,6 +241,8 @@ def build_local_data_payload(
             "data_target": target.to_json() if target else None,
             "price_gap": price_gap.to_json(),
             "history_depth": _history_depth_json(price_gap),
+            "price_source": source_summary,
+            "data_health": _local_data_health_json(price_gap, source_summary),
             "institutional_gap": market_institutional,
             "institutional_last_date": institutional_coverage.get("latest_date"),
             "sr_status": sr.get("status"),
@@ -251,6 +256,7 @@ def build_local_data_payload(
         "data_target_date": default_target.target_date.isoformat(),
         "data_target": default_target.to_json(),
         "market_institutional": market_institutional,
+        "health_summary": _local_data_health_summary(items),
         "count": len(items),
         "items": items,
         "near": near,
@@ -276,19 +282,111 @@ def _history_depth_json(price_gap) -> dict[str, object] | None:
     return payload
 
 
+def _price_source_summary(prices: list[DailyPrice]) -> dict[str, object]:
+    counts = Counter(price.source or "unknown" for price in prices)
+    total = sum(counts.values())
+    dominant_source = counts.most_common(1)[0][0] if counts else ""
+    latest_source = prices[-1].source if prices else ""
+    stock_day_rows = counts.get("TWSE_STOCK_DAY", 0)
+    stock_day_all_rows = counts.get("TWSE_STOCK_DAY_ALL", 0)
+    if total and stock_day_rows == 0 and stock_day_all_rows > 0:
+        level = "latest_all_only"
+        label = "只見全市場最新價"
+    elif stock_day_rows > 0 and stock_day_all_rows > 0:
+        level = "mixed"
+        label = "逐檔日線＋最新補點"
+    elif stock_day_rows > 0:
+        level = "historical"
+        label = "逐檔日線"
+    elif total:
+        level = "other"
+        label = dominant_source
+    else:
+        level = "empty"
+        label = "無日線來源"
+    return {
+        "sample_rows": total,
+        "latest_source": latest_source,
+        "dominant_source": dominant_source,
+        "stock_day_rows": stock_day_rows,
+        "stock_day_all_rows": stock_day_all_rows,
+        "level": level,
+        "label": label,
+    }
+
+
+def _local_data_health_json(price_gap, source_summary: dict[str, object]) -> dict[str, object]:
+    depth = getattr(price_gap, "depth", None)
+    depth_level = depth.level if depth is not None else ""
+    status = getattr(price_gap, "status", "")
+    needs_backfill = bool(depth is not None and depth.needs_backfill)
+    source_level = str(source_summary.get("level") or "")
+    if status == STATUS_CURRENT and not needs_backfill:
+        level = "ok"
+        label = "最新且歷史足夠"
+    elif source_level == "latest_all_only":
+        level = "latest_only"
+        label = "最新價有了，K 線歷史不足"
+    elif needs_backfill:
+        level = "shallow_history"
+        label = "最新日有了，仍需補 K 線歷史"
+    else:
+        level = "needs_update"
+        label = "資料需補正"
+    return {
+        "level": level,
+        "label": label,
+        "needs_backfill": needs_backfill,
+        "depth_level": depth_level,
+        "source_level": source_level,
+    }
+
+
+def _local_data_health_summary(items: list[dict[str, object]]) -> dict[str, object]:
+    counts = Counter(str((item.get("data_health") or {}).get("level") or "unknown") for item in items)
+    source_counts = Counter(str((item.get("price_source") or {}).get("level") or "unknown") for item in items)
+    shallow = counts.get("latest_only", 0) + counts.get("shallow_history", 0)
+    return {
+        "total": len(items),
+        "ok_count": counts.get("ok", 0),
+        "latest_only_count": counts.get("latest_only", 0),
+        "shallow_history_count": shallow,
+        "needs_update_count": counts.get("needs_update", 0),
+        "latest_all_only_count": source_counts.get("latest_all_only", 0),
+        "historical_source_count": source_counts.get("historical", 0) + source_counts.get("mixed", 0),
+        "counts": dict(counts),
+        "source_counts": dict(source_counts),
+    }
+
+
 def _listed_date_for_gap(profile, stock_id: str, coverage: dict[str, object]) -> date | None:
     if profile is not None and profile.listed_date is not None:
         return profile.listed_date
-    if _is_profileless_market_product(stock_id):
-        # ETF/ETN/特殊商品常會出現在 STOCK_DAY_ALL，但不在一般股票 profile 清單。
-        # 沒有上市日時用本機最早日當深度起點，避免把新商品誤判成缺一整年。
-        return _date_or_none(coverage.get("earliest_date"))
+    # Profileless ETF/ETN can still have full STOCK_DAY history. Do not use the
+    # local earliest row as a fake listing date, or STOCK_DAY_ALL top-up rows
+    # will make a four-candle chart look "current" forever.
     return None
 
 
 def _is_profileless_market_product(stock_id: str) -> bool:
     sid = str(stock_id or "").strip().upper()
     return sid.startswith("00") or any(not ch.isdigit() for ch in sid)
+
+
+def _display_profile_for_stock(
+    stock_id: str,
+    profile: StockProfile | None,
+) -> StockProfile | None:
+    if profile is not None:
+        return profile
+    if not _is_profileless_market_product(stock_id):
+        return None
+    return StockProfile(
+        stock_id=stock_id,
+        name="ETF/市場商品（本地尚無完整商品基本資料）",
+        short_name="ETF/市場商品",
+        market="TWSE",
+    )
 
 
 def build_cached_local_data_payload(
@@ -300,7 +398,8 @@ def build_cached_local_data_payload(
     if cached is not None:
         payload, updated_at = cached
         age = (datetime.now() - updated_at).total_seconds()
-        if age <= max_age_seconds and isinstance(payload, dict):
+        cache_has_health_fields = isinstance(payload, dict) and "health_summary" in payload
+        if age <= max_age_seconds and cache_has_health_fields:
             result = dict(payload)
             result["cache"] = {
                 "hit": True,
@@ -364,6 +463,14 @@ def build_sync_freshness_payload(
     local_date = _date_or_none(daily_coverage.get("latest_date"))
     is_current = daily_gap.status == STATUS_CURRENT
     can_decide = target_date is not None
+    tail_hole_count = _int_or_zero(daily_coverage.get("tail_hole_count"))
+    tail_gap_start = str(daily_coverage.get("tail_gap_start_date") or "")
+    tail_gap_end = str(daily_coverage.get("tail_gap_end_date") or "")
+    recent_tail_hole = (
+        tail_hole_count >= RECENT_TAIL_HOLE_MIN_REPAIR_DAYS
+        and daily_gap.status != STATUS_CURRENT
+        and bool(tail_gap_start)
+    )
     fresh_but_shallow = (
         daily_gap.status == STATUS_FORCE_REFRESH_REQUIRED
         and daily_gap.depth is not None
@@ -384,6 +491,13 @@ def build_sync_freshness_payload(
             f"{stock_id} 最新收盤已到 {target_date.isoformat()}，"
             f"但近一年日線只有 {daily_gap.depth.row_count} 筆（應約 {daily_gap.depth.expected_days} 筆），"
             "建議同步一次補齊歷史。"
+        )
+    elif recent_tail_hole:
+        status = "data_hole"
+        gap_range = f"{tail_gap_start} ~ {tail_gap_end}" if tail_gap_end else tail_gap_start
+        message = (
+            f"{stock_id} 最後資料日看起來已到 {local_date.isoformat() if local_date else '最新'}，"
+            f"但 K 線尾端中間缺 {tail_hole_count} 個交易日（{gap_range}），建議同步補洞。"
         )
     elif target.snapshot_stale:
         status = "stale_snapshot"
@@ -1041,6 +1155,7 @@ def build_stock_payload(
     end_date = date.today()
     start_date = end_date - timedelta(days=days)
     profile = store.get_profile(stock_id)
+    display_profile = _display_profile_for_stock(stock_id, profile)
     prices = store.get_daily_prices(
         stock_id,
         start_date=start_date,
@@ -1098,6 +1213,7 @@ def build_stock_payload(
         market=market_valuation,
         latest_close=latest_close,
         profile=profile,
+        stock_id=stock_id,
         as_of_date=end_date,
     )
     relative_valuation = calculate_relative_valuation(
@@ -1139,7 +1255,7 @@ def build_stock_payload(
     )
 
     payload: dict[str, object] = {
-        "profile": profile_to_json(profile) if profile else None,
+        "profile": profile_to_json(display_profile) if display_profile else None,
         "prices": [price_to_json(item) for item in prices],
         "ma_prices": [price_to_json(item) for item in ma_prices],
         "features": feature_payload,
@@ -1155,7 +1271,7 @@ def build_stock_payload(
             latest_close=latest_close,
         )["quote"],
         "report": build_rule_based_health_report(
-            profile=profile,
+            profile=display_profile,
             prices=prices,
             financial_statement=latest_financial,
             suitability=suitability,
@@ -1173,7 +1289,7 @@ def build_stock_payload(
         "historical_frequency": build_historical_frequency_report(prices),
         "valuation": valuation_payload,
         "structure": structure_payload,
-        "brief": stock_brief_to_json(profile, suitability),
+        "brief": stock_brief_to_json(display_profile, suitability),
         "chips": chips_summary,
         "chips_series": [institutional_to_json(t) for t in chips_trades],
         "assessment": assessment_payload,
@@ -1478,11 +1594,24 @@ def stock_brief_to_json(
 ) -> dict[str, object]:
     name = profile.short_name if profile else "這家公司"
     industry = industry_label(profile.industry_code if profile else None)
-    company_sentence = (
-        f"{name} 屬於 {industry}。"
-        if industry
-        else f"{name} 的產業資料待補。"
-    )
+    if suitability.company_type == "etf":
+        etf_name = (
+            name
+            if name and name not in {"ETF/市場商品", "市場商品"}
+            else "這檔 ETF/市場商品"
+        )
+        if etf_name == "這檔 ETF/市場商品":
+            company_sentence = "這檔 ETF/市場商品目前先用交易、法人、配息與折溢價資料分開看。"
+        else:
+            company_sentence = (
+                f"{etf_name} 是 ETF/市場商品；目前先用交易、法人、配息與折溢價資料分開看。"
+            )
+    else:
+        company_sentence = (
+            f"{name} 屬於 {industry}。"
+            if industry
+            else f"{name} 的產業資料待補。"
+        )
     risk_tags = _risk_tags(suitability)
     valuation_sentence = _brief_valuation_sentence(suitability)
     beginner_sentence = _brief_beginner_sentence(suitability)
@@ -1497,6 +1626,8 @@ def stock_brief_to_json(
 
 
 def _brief_valuation_sentence(suitability: ValuationSuitability) -> str:
+    if suitability.company_type == "etf":
+        return "ETF 不用單一公司股利法估價，先看追蹤標的、費用、折溢價與配息來源。"
     if suitability.recommended_primary == "none":
         return "目前先不估價；先確認營收、獲利與風險是否站穩。"
     if suitability.company_type == "construction":
@@ -2125,6 +2256,13 @@ def format_money_text(value: float | None) -> str:
     if value is None:
         return "--"
     return f"{value:,.0f} 元"
+
+
+def _int_or_zero(value: object) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
 
 
 def _date_or_none(value: str | None) -> date | None:

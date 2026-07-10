@@ -40,6 +40,7 @@ BULK_STATUS_HISTORY_PENDING = "history_pending"
 QUIET_REQUEST_INTERVAL = 2.5
 QUIET_BACKFILL_MAX_STOCKS = 30
 BULK_FAILED_RETRY_BACKOFF_SECONDS = 30 * 60
+BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS = 60 * 60
 
 
 def build_bulk_plan(
@@ -49,6 +50,7 @@ def build_bulk_plan(
     request_interval: float = 0.2,
     retry_failed_only: bool = False,
     quiet: bool = False,
+    include_history_backfill: bool = False,
     quiet_max_stocks: int = QUIET_BACKFILL_MAX_STOCKS,
 ) -> BulkPlan:
     ctx: dict = {}
@@ -69,14 +71,24 @@ def build_bulk_plan(
         _top_up_latest_all_prices(store, client)
 
         if retry_failed_only:
-            ctx["ids"] = store.get_bulk_item_keys_by_status(BULK_RUN_KEY, "stock", "failed")
+            failed_ids = store.get_bulk_item_keys_by_status(BULK_RUN_KEY, "stock", "failed")
+            ctx["ids"] = [
+                sid for sid in failed_ids if _bulk_failed_backoff_until(ctx, sid) is None
+            ]
             ctx["ids"] = _prioritized_stock_ids(ctx, ctx["ids"], target_date, lookback_days)
             return
 
         # 1) 上市清單（必要；失敗就讓整批報錯）
         profiles = client.fetch_listed_profiles()
         store.upsert_profiles(profiles)
-        ctx["ids"] = [p.stock_id for p in profiles]
+        profile_ids = [p.stock_id for p in profiles]
+        profile_id_set = set(profile_ids)
+        price_only_market_products = sorted(
+            sid
+            for sid in getattr(store, "get_price_stock_ids", lambda: set())()
+            if sid not in profile_id_set and _is_profileless_market_product_id(sid)
+        )
+        ctx["ids"] = [*profile_ids, *price_only_market_products]
         # 上市日期供深度評估與抓取窗口 clamp（新上市股不空抓一年）。
         ctx["listed_dates"] = {
             p.stock_id: p.listed_date for p in profiles if p.listed_date is not None
@@ -172,10 +184,12 @@ def build_bulk_plan(
         store = ctx.get("store")
         if store is None:
             return []
-        needing: list[tuple[float, str]] = []
+        needing: list[tuple[tuple[int, int, int, str], str]] = []
         for sid in ids:
             if _bulk_failed_backoff_until(ctx, sid) is not None:
                 continue  # 剛失敗的先冷卻，別讓背景模式反覆撞限流
+            if _bulk_source_pending_backoff_until(ctx, sid) is not None:
+                continue  # 等來源的項目也低速重試，避免一直打同一個未公布日
             coverage = store.refresh_data_coverage(
                 sid,
                 DATA_NODE_DAILY_PRICE,
@@ -192,10 +206,9 @@ def build_bulk_plan(
             )
             if gap_plan.status == STATUS_CURRENT:
                 continue
-            ratio = gap_plan.depth.ratio if gap_plan.depth is not None else 0.0
-            needing.append((ratio, sid))
+            needing.append((_quiet_stock_priority_key(gap_plan, sid), sid))
         needing.sort()
-        return [sid for _ratio, sid in needing[: max(0, quiet_max_stocks)]]
+        return [sid for _priority, sid in needing[: max(0, quiet_max_stocks)]]
 
     def sync_one(sid: str) -> None:
         store = ctx["store"]
@@ -203,6 +216,7 @@ def build_bulk_plan(
         store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "running")
         price_warnings: list[str] = []
         post_status = None
+        final_gap_plan = None
         try:
             coverage_before = store.refresh_data_coverage(
                 sid,
@@ -218,7 +232,12 @@ def build_bulk_plan(
                 max_patch_business_days=45,
                 listed_date=_listed_date_for(ctx, sid),
             )
-            if _should_defer_history_backfill(gap_plan, quiet=quiet, retry_failed_only=retry_failed_only):
+            if _should_defer_history_backfill(
+                gap_plan,
+                quiet=quiet,
+                retry_failed_only=retry_failed_only,
+                include_history_backfill=include_history_backfill,
+            ):
                 store.mark_bulk_item(
                     BULK_RUN_KEY,
                     "stock",
@@ -253,6 +272,16 @@ def build_bulk_plan(
                 gap_plan,
                 latest_date=coverage_after_raw.get("latest_date"),
                 rows_written=price_rows,
+                coverage=coverage_after_raw,
+            )
+            final_gap_plan = plan_data_gap(
+                stock_id=sid,
+                node=DATA_NODE_DAILY_PRICE,
+                coverage=coverage_after_raw,
+                target_date=target_date,
+                lookback_days=lookback_days,
+                max_patch_business_days=45,
+                listed_date=_listed_date_for(ctx, sid),
             )
             store.refresh_data_coverage(
                 sid,
@@ -269,8 +298,16 @@ def build_bulk_plan(
         # 若無條件標 done，半套／過期資料會被當成完成，且之後永遠被略過。
         # 因此一律用『本地實際最後一筆日期』驗收；未達標就標 failed（會被重試與下次下載重抓）。
         latest = store.get_daily_prices(sid, limit=1)
-        if latest and latest[-1].date >= target_date:
+        if final_gap_plan is not None and final_gap_plan.status == STATUS_CURRENT:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+        elif final_gap_plan is not None and latest and latest[-1].date >= target_date:
+            store.mark_bulk_item(
+                BULK_RUN_KEY,
+                "stock",
+                sid,
+                "failed",
+                error=f"日線尾端仍有缺洞；{final_gap_plan.reason}",
+            )
         elif price_warnings:
             have = latest[-1].date.isoformat() if latest else "無資料"
             error = _bulk_unstable_source_error(sid, have, target_date, price_warnings)
@@ -309,6 +346,8 @@ def build_bulk_plan(
             return False
         if _bulk_failed_backoff_until(ctx, sid) is not None:
             return True
+        if _bulk_source_pending_backoff_until(ctx, sid) is not None:
+            return True
         # 重點修正：不再用 bulk_progress 的 "done" 短路。
         # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
         # 同時不可只看最新日期：STOCK_DAY_ALL top-up 可能只補到最新幾筆，
@@ -328,7 +367,12 @@ def build_bulk_plan(
             max_patch_business_days=45,
             listed_date=_listed_date_for(ctx, sid),
         )
-        if _should_defer_history_backfill(gap_plan, quiet=quiet, retry_failed_only=retry_failed_only):
+        if _should_defer_history_backfill(
+            gap_plan,
+            quiet=quiet,
+            retry_failed_only=retry_failed_only,
+            include_history_backfill=include_history_backfill,
+        ):
             store.mark_bulk_item(
                 BULK_RUN_KEY,
                 "stock",
@@ -374,7 +418,7 @@ def build_bulk_plan(
         skip=skip,
         on_finish=on_finish,
         retry_failed_only=retry_failed_only,
-        mode="quiet" if quiet else "manual",
+        mode="quiet" if quiet else ("history" if include_history_backfill else "manual"),
     )
 
 
@@ -392,6 +436,11 @@ def _listed_date_for(ctx: dict, stock_id: str) -> date | None:
     except Exception:  # noqa: BLE001 - 查不到上市日就退回無 clamp 的原行為
         return None
     return getattr(profile, "listed_date", None) if profile is not None else None
+
+
+def _is_profileless_market_product_id(stock_id: str) -> bool:
+    sid = str(stock_id or "").strip().upper()
+    return sid.startswith("00") or any(not ch.isdigit() for ch in sid)
 
 
 def _fetch_missing_recent_t86(store, client, stop_event) -> None:
@@ -470,13 +519,25 @@ def _bulk_stock_priority_key(plan, stock_id: str) -> tuple[int, int, str]:
     return (5, int(plan.gap_business_days or 0), stock_id)
 
 
+def _quiet_stock_priority_key(plan, stock_id: str) -> tuple[int, int, int, str]:
+    """背景慢補也先補 freshness 小缺口；同類型再挑歷史最淺的。"""
+    bucket, gap_days, sid = _bulk_stock_priority_key(plan, stock_id)
+    depth = getattr(plan, "depth", None)
+    depth_ratio = getattr(depth, "ratio", None)
+    depth_score = int(float(depth_ratio if depth_ratio is not None else 1.0) * 10000)
+    return (bucket, gap_days, depth_score, sid)
+
+
 def _should_defer_history_backfill(
     plan,
     *,
     quiet: bool,
     retry_failed_only: bool,
+    include_history_backfill: bool = False,
 ) -> bool:
     """手動全市場只補最新/缺口；已最新但歷史淺，交給背景或單檔補。"""
+    if include_history_backfill:
+        return False
     if quiet or retry_failed_only:
         return False
     if plan.status != STATUS_FORCE_REFRESH_REQUIRED:
@@ -501,6 +562,30 @@ def _history_pending_message(plan) -> str:
 
 
 def _bulk_failed_backoff_until(ctx: dict, stock_id: str) -> datetime | None:
+    return _bulk_status_backoff_until(
+        ctx,
+        stock_id,
+        status="failed",
+        backoff_seconds=BULK_FAILED_RETRY_BACKOFF_SECONDS,
+    )
+
+
+def _bulk_source_pending_backoff_until(ctx: dict, stock_id: str) -> datetime | None:
+    return _bulk_status_backoff_until(
+        ctx,
+        stock_id,
+        status=BULK_STATUS_SOURCE_PENDING,
+        backoff_seconds=BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS,
+    )
+
+
+def _bulk_status_backoff_until(
+    ctx: dict,
+    stock_id: str,
+    *,
+    status: str,
+    backoff_seconds: int,
+) -> datetime | None:
     store = ctx.get("store")
     getter = getattr(store, "get_bulk_item", None)
     if getter is None:
@@ -509,15 +594,13 @@ def _bulk_failed_backoff_until(ctx: dict, stock_id: str) -> datetime | None:
         item = getter(BULK_RUN_KEY, "stock", stock_id)
     except Exception:  # noqa: BLE001
         return None
-    if not item or item.get("status") != "failed":
+    if not item or item.get("status") != status:
         return None
     updated_at = item.get("updated_at")
     if not updated_at:
         return None
     try:
-        retry_at = datetime.fromisoformat(str(updated_at)) + timedelta(
-            seconds=BULK_FAILED_RETRY_BACKOFF_SECONDS
-        )
+        retry_at = datetime.fromisoformat(str(updated_at)) + timedelta(seconds=backoff_seconds)
     except ValueError:
         return None
     return retry_at if retry_at > datetime.now() else None

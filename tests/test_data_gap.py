@@ -123,6 +123,32 @@ class DataGapTests(unittest.TestCase):
             STATUS_SUSPECT,
         )
 
+    def test_post_patch_status_keeps_recent_tail_hole_suspect(self) -> None:
+        plan = plan_data_gap(
+            stock_id="2330",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={
+                "latest_date": "2026-07-07",
+                "row_count": 250,
+                "horizon_row_count": 250,
+                "tail_hole_count": 10,
+                "tail_gap_start_date": "2026-06-23",
+                "tail_gap_end_date": "2026-07-06",
+            },
+            target_date=date(2026, 7, 7),
+            lookback_days=365,
+        )
+
+        status = resolve_post_patch_status(
+            plan,
+            latest_date=date(2026, 7, 7),
+            rows_written=0,
+            coverage={"tail_hole_count": 10},
+        )
+
+        self.assertEqual(status.status, STATUS_SUSPECT)
+        self.assertIn("missing trading day", status.reason)
+
     def test_business_day_count_skips_weekends_and_twse_holidays(self) -> None:
         self.assertEqual(count_business_days(date(2026, 6, 19), date(2026, 6, 22)), 1)
         self.assertEqual(previous_business_day(date(2026, 6, 21)), date(2026, 6, 18))
@@ -259,6 +285,31 @@ class DataGapTests(unittest.TestCase):
         self.assertEqual(plan.status, STATUS_FORCE_REFRESH_REQUIRED)
         self.assertEqual(plan.depth.level, DEPTH_SHALLOW)
         self.assertEqual(plan.depth.row_count, 1)
+
+    def test_recent_tail_hole_is_not_current_even_when_latest_reaches_target(self) -> None:
+        # 例如圖上從 6/22 直接跳 7/7：latest 看起來到位，但 K 線尾端缺交易日。
+        plan = plan_data_gap(
+            stock_id="2330",
+            node=DATA_NODE_DAILY_PRICE,
+            coverage={
+                "latest_date": "2026-07-07",
+                "earliest_date": "2025-07-07",
+                "row_count": 250,
+                "horizon_row_count": 250,
+                "tail_hole_count": 10,
+                "tail_gap_start_date": "2026-06-23",
+                "tail_gap_end_date": "2026-07-06",
+            },
+            target_date=date(2026, 7, 7),
+            lookback_days=365,
+        )
+
+        self.assertEqual(plan.status, STATUS_GAP)
+        self.assertFalse(plan.force_refresh_required)
+        self.assertTrue(plan.can_patch)
+        self.assertEqual(plan.fetch_start_date, date(2026, 6, 23))
+        self.assertEqual(plan.fetch_end_date, date(2026, 7, 7))
+        self.assertIn("missing recent trading day", plan.reason)
 
     def test_new_listing_with_full_history_since_listing_is_current(self) -> None:
         # 上市 2 個交易日、2 筆都在 → 期望深度以上市日推導 → current。

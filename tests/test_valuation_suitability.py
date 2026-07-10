@@ -155,6 +155,19 @@ class ValuationSuitabilityTest(unittest.TestCase):
         self.assertIn("etf", result.reasons)
         self.assertIn("yield", result.recommended_avoid)
 
+    def test_profileless_etf_stock_id_is_not_applicable(self):
+        result = assess_valuation_suitability(
+            dividends=[],
+            financials=[],
+            latest_close=21.28,
+            profile=None,
+            stock_id="00939",
+            as_of_date=AS_OF,
+        )
+        self.assertEqual(result.state, "not_applicable")
+        self.assertEqual(result.company_type, "etf")
+        self.assertIn("etf", result.reasons)
+
     def test_short_history_is_low_confidence(self):
         # 3-4 年資料、殖利率 4%、獲利穩定為正 → 低信心(short_history)。
         dividends = [_div(y, 4.0) for y in (2023, 2024, 2025)]

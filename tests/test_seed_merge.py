@@ -140,6 +140,48 @@ class SeedMergeTests(unittest.TestCase):
         self.assertFalse(result["applied"])
         self.assertEqual(result["reason"], "missing_manifest")
 
+    def test_merge_accepts_official_data_layout(self) -> None:
+        official_dir = self.tmp / "official_data"
+        official_db = official_dir / "data" / "stock_translator.sqlite3"
+        official_db.parent.mkdir(parents=True)
+        with SQLiteStore(official_db) as store:
+            _insert_daily(store.conn, "2317", "2026-06-30", 50.0)
+            store.conn.execute("INSERT INTO watchlist (stock_id, added_at) VALUES (?, ?)", ("9999", "2026-07-01"))
+            store.conn.commit()
+        (official_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "data_snapshot_version": 20260708,
+                    "generated_at": "2026-07-08T00:00:00Z",
+                    "app_min_version": "2.0.0",
+                    "files": {
+                        "data/stock_translator.sqlite3": {
+                            "sha256": file_sha256(official_db),
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with SQLiteStore(self.current) as store:
+            result = maybe_merge_seed(
+                store,
+                seed_dir=official_dir,
+                current_db=self.current,
+                app_version="2.0.10",
+                backups_dir=self.backups,
+            )
+            rows = store.conn.execute(
+                "SELECT stock_id, close FROM daily_prices ORDER BY stock_id"
+            ).fetchall()
+            watchlist = store.conn.execute("SELECT stock_id FROM watchlist ORDER BY stock_id").fetchall()
+
+        self.assertTrue(result["applied"])
+        self.assertEqual(result["version"], 20260708)
+        self.assertEqual([(row["stock_id"], row["close"]) for row in rows], [("2317", 50.0), ("2330", 100.0)])
+        self.assertEqual([row["stock_id"] for row in watchlist], ["2330"])
+
     def test_old_backups_are_pruned_to_three(self) -> None:
         with SQLiteStore(self.current) as store:
             for version in range(20260701, 20260706):

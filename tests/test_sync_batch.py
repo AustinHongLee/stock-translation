@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from app.store.sqlite_store import SQLiteStore
 from app.web.sync_batch import normalize_sync_targets
-from app.web.server import _bulk_blocks_twse_fetch
+from app.web.server import _bulk_blocks_twse_fetch, _bulk_status
 
 
 STATIC_DIR = Path("app/ui/static")
+SERVER_PY = Path("app/web/server.py")
 
 
 class SyncBatchTests(unittest.TestCase):
@@ -44,19 +48,44 @@ class SyncBatchTests(unittest.TestCase):
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
         css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+        server_py = SERVER_PY.read_text(encoding="utf-8")
 
         self.assertIn('id="bulkRetryFailedBtn"', html)
+        self.assertIn('id="bulkHistoryBackfillBtn"', html)
         self.assertIn('id="bulkPlainStatus"', html)
         self.assertIn('id="bulkOutcomeList"', html)
+        self.assertIn('id="bulkQueueDetail"', html)
+        self.assertIn('data-bulk-queue="failed"', html)
         self.assertIn('id="dataSheet"', html)
         self.assertIn('id="bulkCard"', html)
         self.assertLess(html.index('id="dataSheet"'), html.index('id="bulkCard"'))
         self.assertIn("bulkRetryFailed", js)
+        self.assertIn("bulkStartHistoryBackfill", js)
+        self.assertIn("include_history_backfill", js)
+        self.assertIn("include_history_backfill", server_py)
+        self.assertIn("include_history_backfill=include_history_backfill", server_py)
+        self.assertIn("加速補歷史", js)
         self.assertIn('postJson("/api/bulk-download/retry-failed"', js)
         self.assertIn("formatDuration(st.eta_seconds)", js)
         self.assertIn("failedCount === 0", js)
         self.assertIn("renderBulkPlainStatus", js)
         self.assertIn("bulkStatusCounts", js)
+        self.assertIn("quietSyncHint", js)
+        self.assertIn("failedRetryHint", js)
+        self.assertIn("failed_retry", js)
+        self.assertIn("repair_queue", js)
+        self.assertIn("queue_details", js)
+        self.assertIn("selectBulkQueueCategory", js)
+        self.assertIn("renderBulkQueueDetail", js)
+        self.assertIn("data-screener-stock", js)
+        self.assertIn("source_retry", js)
+        self.assertIn("sourcePendingHint", js)
+        self.assertIn("可重新檢查", js)
+        self.assertIn("can_retry_failed === false", js)
+        self.assertIn("ready_count", js)
+        self.assertIn("冷卻中的約", js)
+        self.assertIn("每輪最多補", js)
+        self.assertIn("正在冷卻", js)
         self.assertIn("history_pending_count", js)
         self.assertIn("歷史待背景", js)
         self.assertIn("這不是失敗", js)
@@ -100,6 +129,70 @@ class SyncBatchTests(unittest.TestCase):
             self.assertFalse(_bulk_blocks_twse_fetch(path, done))
 
         self.assertFalse(_bulk_blocks_twse_fetch("/api/bulk-download/stop", running))
+
+    def test_bulk_status_disables_retry_failed_while_all_failed_items_are_cooling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.ensure_bulk_items("full_market", "stock", ["2330"])
+                store.mark_bulk_item("full_market", "stock", "2330", "failed", error="TWSE busy")
+
+            cooling = _bulk_status(db_path)
+            self.assertFalse(cooling["can_retry_failed"])
+            self.assertEqual(cooling["failed_retry"]["ready_count"], 0)  # type: ignore[index]
+            self.assertEqual(cooling["queue_details"]["failed"]["items"][0]["stock_id"], "2330")  # type: ignore[index]
+            self.assertEqual(cooling["queue_details"]["failed"]["items"][0]["retry_state"], "cooling")  # type: ignore[index]
+
+            with SQLiteStore(db_path) as store:
+                old = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
+                store.conn.execute(
+                    """
+                    UPDATE bulk_progress
+                    SET updated_at = ?
+                    WHERE run_key = ? AND item_type = ? AND item_key = ?
+                    """,
+                    (old, "full_market", "stock", "2330"),
+                )
+                store.conn.commit()
+
+            ready = _bulk_status(db_path)
+            self.assertTrue(ready["can_retry_failed"])
+            self.assertEqual(ready["failed_retry"]["ready_count"], 1)  # type: ignore[index]
+            self.assertEqual(ready["queue_details"]["failed"]["items"][0]["retry_state"], "ready")  # type: ignore[index]
+
+    def test_bulk_status_reports_source_pending_retry_cooldown(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.ensure_bulk_items("full_market", "stock", ["2454"])
+                store.mark_bulk_item("full_market", "stock", "2454", "source_pending", error="not published")
+
+            cooling = _bulk_status(db_path)
+            self.assertEqual(cooling["source_retry"]["ready_count"], 0)  # type: ignore[index]
+            self.assertEqual(cooling["source_retry"]["cooling_down_count"], 1)  # type: ignore[index]
+            self.assertEqual(cooling["queue_details"]["source_pending"]["items"][0]["retry_state"], "cooling")  # type: ignore[index]
+
+            with SQLiteStore(db_path) as store:
+                old = (datetime.now() - timedelta(hours=2)).isoformat(timespec="seconds")
+                store.conn.execute(
+                    """
+                    UPDATE bulk_progress
+                    SET updated_at = ?
+                    WHERE run_key = ? AND item_type = ? AND item_key = ?
+                    """,
+                    (old, "full_market", "stock", "2454"),
+                )
+                store.conn.commit()
+
+            ready = _bulk_status(db_path)
+            self.assertEqual(ready["source_retry"]["ready_count"], 1)  # type: ignore[index]
+            self.assertEqual(ready["queue_details"]["source_pending"]["items"][0]["retry_state"], "ready")  # type: ignore[index]
+
+    def test_user_sync_mentions_quiet_preemption_notice(self) -> None:
+        js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("trafficControlNotice", js)
+        self.assertIn("preempted_quiet_sync", js)
+        self.assertIn("背景補資料已暫停並讓路", js)
 
 
 if __name__ == "__main__":

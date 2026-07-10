@@ -130,6 +130,7 @@ class StockSyncService:
                 gap_plan,
                 latest_date=coverage_after_raw.get("latest_date"),
                 rows_written=price_rows,
+                coverage=coverage_after_raw,
             )
             coverage_after = self.store.refresh_data_coverage(
                 stock_id,
@@ -304,6 +305,7 @@ class StockSyncService:
                 gap_plan,
                 latest_date=coverage_after_raw.get("latest_date"),
                 rows_written=rows_written,
+                coverage=coverage_after_raw,
             )
             coverage_after = self.store.refresh_data_coverage(
                 stock_id,
@@ -360,21 +362,9 @@ def _listed_date_for_gap(store: SQLiteStore, stock_id: str, coverage: dict[str, 
     listed_date = _stored_listed_date(store, stock_id)
     if listed_date is not None:
         return listed_date
-    if _is_profileless_market_product(stock_id):
-        return _date_or_none(coverage.get("earliest_date"))
-    return None
-
-
-def _is_profileless_market_product(stock_id: str) -> bool:
-    sid = str(stock_id or "").strip().upper()
-    return sid.startswith("00") or any(not ch.isdigit() for ch in sid)
-
-
-def _date_or_none(value: object) -> date | None:
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str) and value:
-        return date.fromisoformat(value)
+    # Profileless market products (ETF/ETN and suffix products) may still have
+    # historical STOCK_DAY data. If we use local earliest_date as a fake listing
+    # date, latest-only STOCK_DAY_ALL rows skip the real K-line backfill.
     return None
 
 
