@@ -99,9 +99,26 @@ class TwseClient:
         stock_id: str,
         start_date: date,
         end_date: date,
+        *,
+        on_month: Callable[[list[DailyPrice]], None] | None = None,
     ) -> list[DailyPrice]:
+        """逐月抓日線。
+
+        on_month：每個月份成功抓回時立即回呼（已過濾到 [start_date, end_date]）。
+        呼叫端可用它「逐月漸進寫入」——中斷（斷網／關程式／例外）時已抓月份
+        不會白抓；不給則行為與舊版完全相同（整批回傳）。
+        """
         if end_date < start_date:
             raise ValueError("end_date must be on or after start_date")
+
+        def _emit(month_prices: list[DailyPrice]) -> None:
+            if on_month is None or not month_prices:
+                return
+            in_range = [
+                price for price in month_prices if start_date <= price.date <= end_date
+            ]
+            if in_range:
+                on_month(in_range)
 
         prices: list[DailyPrice] = []
         self.last_warnings = []
@@ -110,7 +127,9 @@ class TwseClient:
         failed_months: list[tuple[date, TwseError]] = []
         for index, month_start in enumerate(fetch_order):
             try:
-                prices.extend(self.fetch_daily_prices_for_month(stock_id, month_start))
+                month_prices = self.fetch_daily_prices_for_month(stock_id, month_start)
+                prices.extend(month_prices)
+                _emit(month_prices)
             except TwseError as exc:
                 failed_months.append((month_start, exc))
             if index < len(fetch_order) - 1:
@@ -119,7 +138,9 @@ class TwseClient:
         for index, (month_start, first_error) in enumerate(failed_months):
             self._sleep_between_requests(minimum=self.retry_backoff)
             try:
-                prices.extend(self.fetch_daily_prices_for_month(stock_id, month_start))
+                month_prices = self.fetch_daily_prices_for_month(stock_id, month_start)
+                prices.extend(month_prices)
+                _emit(month_prices)
             except TwseError as exc:
                 self.last_warnings.append(
                     f"Skipped {stock_id} {month_start:%Y-%m} daily prices after retry: "

@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import inspect
 from datetime import date, datetime, timedelta
 
 from app.analyze.dividends import (
@@ -36,11 +37,16 @@ T86_RECENT_FORCE_DAYS = 7
 BULK_RUN_KEY = "full_market"
 BULK_STATUS_SOURCE_PENDING = "source_pending"
 BULK_STATUS_HISTORY_PENDING = "history_pending"
+# 來源查無歷史（受益證券/ETN 等：TWSE STOCK_DAY 個股歷史端點不提供，
+# 或該檔長期無成交）。不是失敗、重試也補不回，只能靠全市場快照逐日累積；
+# 給長冷卻讓它偶爾重驗（萬一來源之後支援了能自癒），期間不打 TWSE。
+BULK_STATUS_UNSUPPORTED_HISTORY = "unsupported_history"
 # 背景安靜模式：慢速、低額度，把回補攤平到時間上以避開限流；使用者主動下載可隨時搶佔。
 QUIET_REQUEST_INTERVAL = 2.5
 QUIET_BACKFILL_MAX_STOCKS = 30
 BULK_FAILED_RETRY_BACKOFF_SECONDS = 30 * 60
 BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS = 60 * 60
+BULK_UNSUPPORTED_HISTORY_RETRY_BACKOFF_SECONDS = 7 * 24 * 60 * 60
 
 
 def build_bulk_plan(
@@ -190,6 +196,8 @@ def build_bulk_plan(
                 continue  # 剛失敗的先冷卻，別讓背景模式反覆撞限流
             if _bulk_source_pending_backoff_until(ctx, sid) is not None:
                 continue  # 等來源的項目也低速重試，避免一直打同一個未公布日
+            if _bulk_unsupported_history_backoff_until(ctx, sid) is not None:
+                continue  # 來源查無歷史：背景也不用反覆嘗試
             coverage = store.refresh_data_coverage(
                 sid,
                 DATA_NODE_DAILY_PRICE,
@@ -253,15 +261,29 @@ def build_bulk_plan(
                 fetch_start = gap_plan.fetch_start_date or start
                 fetch_end = gap_plan.fetch_end_date or target_date
 
-            prices = client.fetch_daily_prices(sid, fetch_start, fetch_end)
+            progressive_rows = 0
+
+            def _persist_month(batch: list[DailyPrice]) -> None:
+                # 逐月漸進寫入：每抓完一個月就落庫。中斷（斷網／關程式／
+                # 連續失敗自動暫停）時已抓月份保留，下次由 coverage 重算續補。
+                nonlocal progressive_rows
+                if batch:
+                    progressive_rows += store.upsert_daily_prices(batch)
+
+            fetch_kwargs = (
+                {"on_month": _persist_month}
+                if _supports_on_month(client)
+                else {}
+            )
+            prices = client.fetch_daily_prices(sid, fetch_start, fetch_end, **fetch_kwargs)
             price_warnings = _dedupe_texts(list(getattr(client, "last_warnings", [])))
             tail_end = same_month_tail_date(fetch_end, today)
             if tail_end > fetch_end and _latest_price_date(prices) < target_date:
-                tail_prices = client.fetch_daily_prices(sid, fetch_start, tail_end)
+                tail_prices = client.fetch_daily_prices(sid, fetch_start, tail_end, **fetch_kwargs)
                 price_warnings = _dedupe_texts([*price_warnings, *list(getattr(client, "last_warnings", []))])
                 prices = _merge_daily_prices(prices, tail_prices)
-            price_rows = 0
-            if prices:
+            price_rows = progressive_rows
+            if not fetch_kwargs and prices:
                 price_rows = store.upsert_daily_prices(prices)
             coverage_after_raw = store.refresh_data_coverage(
                 sid,
@@ -300,6 +322,25 @@ def build_bulk_plan(
         latest = store.get_daily_prices(sid, limit=1)
         if final_gap_plan is not None and final_gap_plan.status == STATUS_CURRENT:
             store.mark_bulk_item(BULK_RUN_KEY, "stock", sid, "done")
+        elif (
+            not prices
+            and not price_warnings
+            and not _is_short_source_pending(gap_plan, post_status)
+            and _source_has_no_daily_history(store, sid)
+        ):
+            # 整個抓取窗口每月都「成功回應但零列」且本地沒有任何非 top-up 來源
+            # 的日線 → 來源不提供此檔歷史（受益證券/ETN 類）。不算失敗。
+            have = latest[-1].date.isoformat() if latest else "無資料"
+            store.mark_bulk_item(
+                BULK_RUN_KEY,
+                "stock",
+                sid,
+                BULK_STATUS_UNSUPPORTED_HISTORY,
+                error=(
+                    f"TWSE 個股歷史端點查無 {sid} 的日線（受益證券/ETN 類商品或長期無成交）；"
+                    f"最新收盤會由全市場快照逐日累積（目前到 {have}），不需重試。"
+                ),
+            )
         elif final_gap_plan is not None and latest and latest[-1].date >= target_date:
             store.mark_bulk_item(
                 BULK_RUN_KEY,
@@ -347,6 +388,9 @@ def build_bulk_plan(
         if _bulk_failed_backoff_until(ctx, sid) is not None:
             return True
         if _bulk_source_pending_backoff_until(ctx, sid) is not None:
+            return True
+        if _bulk_unsupported_history_backoff_until(ctx, sid) is not None:
+            # 來源查無歷史：長冷卻內不重抓（重抓 13 個月空月份＝白打 API）。
             return True
         # 重點修正：不再用 bulk_progress 的 "done" 短路。
         # 舊版只要曾標 done 就永遠跳過 → 過期股票即使重按全市場下載也補不回來。
@@ -414,6 +458,19 @@ def build_bulk_plan(
             store.delete_json_cache("local_data_v3")
             _prewarm_local_data_cache(store)
 
+    def extra_status() -> dict:
+        client = ctx.get("client")
+        if client is None:
+            return {}
+        try:
+            factor = float(client.throttle_factor())
+        except Exception:  # noqa: BLE001 - 附加狀態失敗不影響下載
+            return {}
+        return {
+            "throttle_factor": round(factor, 2),
+            "throttled": factor > 1.0,
+        }
+
     return BulkPlan(
         list_stocks=list_stocks,
         sync_one=sync_one,
@@ -422,6 +479,7 @@ def build_bulk_plan(
         on_finish=on_finish,
         retry_failed_only=retry_failed_only,
         mode="quiet" if quiet else ("history" if include_history_backfill else "manual"),
+        extra_status=extra_status,
     )
 
 
@@ -497,6 +555,8 @@ def _prioritized_stock_ids(
     def key_for(sid: str) -> tuple[int, int, str]:
         if _bulk_failed_backoff_until(ctx, sid) is not None:
             return (6, 0, sid)
+        if _bulk_unsupported_history_backoff_until(ctx, sid) is not None:
+            return (7, 1, sid)
         try:
             coverage = store.refresh_data_coverage(
                 sid,
@@ -594,6 +654,38 @@ def _bulk_source_pending_backoff_until(ctx: dict, stock_id: str) -> datetime | N
         status=BULK_STATUS_SOURCE_PENDING,
         backoff_seconds=BULK_SOURCE_PENDING_RETRY_BACKOFF_SECONDS,
     )
+
+
+def _bulk_unsupported_history_backoff_until(ctx: dict, stock_id: str) -> datetime | None:
+    return _bulk_status_backoff_until(
+        ctx,
+        stock_id,
+        status=BULK_STATUS_UNSUPPORTED_HISTORY,
+        backoff_seconds=BULK_UNSUPPORTED_HISTORY_RETRY_BACKOFF_SECONDS,
+    )
+
+
+def _source_has_no_daily_history(store, stock_id: str) -> bool:
+    """本地完全沒有任何非 STOCK_DAY_ALL 來源的日線 → 來源從未提供過此檔歷史。
+
+    有過（曾經抓到／seed 匯入）就不能算 unsupported——這次整窗回空是來源異常，
+    要照舊走 failed 重試。store 不支援查詢時保守回 False（維持舊行為）。
+    """
+    checker = getattr(store, "has_non_topup_daily_price", None)
+    if checker is None:
+        return False
+    try:
+        return not bool(checker(stock_id))
+    except Exception:  # noqa: BLE001 - 查詢失敗就保守當「有歷史」
+        return False
+
+
+def _supports_on_month(client) -> bool:
+    """檢查 client.fetch_daily_prices 是否支援 on_month 逐月回呼（漸進寫入）。"""
+    try:
+        return "on_month" in inspect.signature(client.fetch_daily_prices).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 def _bulk_status_backoff_until(

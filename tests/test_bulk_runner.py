@@ -7,7 +7,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.models import DailyPrice, DividendRecord, InstitutionalTrade, StockProfile
-from app.sync.bulk_runner import BULK_RUN_KEY, BULK_STATUS_HISTORY_PENDING, build_bulk_plan
+from app.sync.bulk_runner import (
+    BULK_RUN_KEY,
+    BULK_STATUS_HISTORY_PENDING,
+    BULK_STATUS_UNSUPPORTED_HISTORY,
+    build_bulk_plan,
+)
 
 
 class FixedDate(date):
@@ -158,6 +163,45 @@ class MissingTargetTailBulkClient(FakeBulkClient):
         return [DailyPrice(stock_id, date(2026, 6, 30), 11.1, 11.25, 11.05, 11.2, 2001)]
 
 
+class ProgressiveMonthsBulkClient(FakeBulkClient):
+    """支援 on_month 的 client：回兩個月資料，逐月回呼；可設定第二月拋錯。"""
+
+    def __init__(self, *, request_interval: float = 0.0, fail_second_month: bool = False) -> None:
+        super().__init__(request_interval=request_interval)
+        self.fail_second_month = fail_second_month
+        self.month_batches: list[list[DailyPrice]] = []
+
+    def fetch_daily_prices(
+        self,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+        *,
+        on_month=None,
+    ) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        newest = [DailyPrice(stock_id, date(2026, 2, 11), 10, 11, 9, 10, 1000)]
+        older = [DailyPrice(stock_id, date(2026, 1, 15), 10, 11, 9, 10, 1000)]
+        out: list[DailyPrice] = []
+        for batch in (newest, older):
+            if batch is older and self.fail_second_month:
+                raise RuntimeError("simulated disconnect during backfill")
+            out.extend(batch)
+            self.month_batches.append(batch)
+            if on_month is not None:
+                on_month(batch)
+        return sorted(out, key=lambda item: item.date)
+
+
+class UnsupportedHistoryBulkClient(FakeBulkClient):
+    """受益證券/ETN 情境：STOCK_DAY 整窗回空、無 warning。"""
+
+    def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
+        self.price_ranges.append((stock_id, start_date, end_date))
+        self.last_warnings = []
+        return []
+
+
 class EmptyNoWarningBulkClient(FakeBulkClient):
     def fetch_daily_prices(self, stock_id: str, start_date: date, end_date: date) -> list[DailyPrice]:
         self.price_ranges.append((stock_id, start_date, end_date))
@@ -264,6 +308,12 @@ class FakeBulkStore:
 
     def get_price_stock_ids(self) -> set[str]:
         return set(self.daily)
+
+    def has_non_topup_daily_price(self, stock_id: str) -> bool:
+        return any(
+            (price.source or "") != "TWSE_STOCK_DAY_ALL"
+            for price in self.daily.get(stock_id, [])
+        )
 
     def refresh_data_coverage(
         self,
@@ -817,3 +867,178 @@ class BulkRunnerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnsupportedHistoryTests(unittest.TestCase):
+    """受益證券/ETN：來源查無歷史 → 標 unsupported_history、不進 failed、長冷卻。"""
+
+    def _etn_store(self) -> FakeBulkStore:
+        store = FakeBulkStore(Path("fake.sqlite3"))
+        # 本地資料全部來自 STOCK_DAY_ALL top-up（最新已到 target、歷史極淺）。
+        store.daily["020039"] = [
+            DailyPrice("020039", EXPECTED_TARGET - timedelta(days=1), 10, 11, 9, 10, 1000, source="TWSE_STOCK_DAY_ALL"),
+            DailyPrice("020039", EXPECTED_TARGET, 10, 11, 9, 10, 1000, source="TWSE_STOCK_DAY_ALL"),
+        ]
+        return store
+
+    def test_empty_fetch_with_topup_only_history_marks_unsupported_history(self) -> None:
+        fake_client = UnsupportedHistoryBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = self._etn_store()
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0, include_history_backfill=True)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("020039")
+
+        statuses = _statuses_for(fake_store, "020039")
+        self.assertEqual(statuses[-1], BULK_STATUS_UNSUPPORTED_HISTORY)
+        self.assertNotIn("failed", statuses)
+        detail = fake_store.bulk_details[(BULK_RUN_KEY, "stock", "020039")]
+        self.assertIn("受益證券/ETN", str(detail["error"]))
+
+    def test_empty_fetch_with_real_history_still_fails(self) -> None:
+        """本地曾有 STOCK_DAY 歷史 → 整窗回空是來源異常，照舊 failed 可重試。"""
+        fake_client = EmptyNoWarningBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        target = date(2026, 6, 30)
+        fake_store.daily["2330"] = _history_rows("2330", target, count=180)
+        fake_store.coverage_overrides["2330"] = {
+            "horizon_row_count": 180,
+            "tail_hole_count": 5,
+            "tail_gap_start_date": "2026-06-23",
+            "tail_gap_end_date": "2026-06-29",
+        }
+
+        with (
+            patch("app.sync.bulk_runner.date", July1Date),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("2330")
+
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "failed")
+
+    def test_unsupported_history_cooldown_skips_then_expires(self) -> None:
+        fake_client = UnsupportedHistoryBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = self._etn_store()
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0, include_history_backfill=True)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            fake_store.mark_bulk_item(
+                BULK_RUN_KEY, "stock", "020039", BULK_STATUS_UNSUPPORTED_HISTORY, error="來源無歷史"
+            )
+            # 冷卻中（剛標記）：skip 不重抓
+            self.assertTrue(plan.skip("020039"))
+            self.assertEqual(fake_client.price_ranges, [])
+            # 冷卻過期（8 天前標記）：重新檢查
+            fake_store.bulk_details[(BULK_RUN_KEY, "stock", "020039")]["updated_at"] = (
+                datetime.now() - timedelta(days=8)
+            ).isoformat(timespec="seconds")
+            self.assertFalse(plan.skip("020039"))
+
+    def test_short_gap_without_history_still_prefers_source_pending(self) -> None:
+        """缺 1~2 天且來源回空：即使本地全是 top-up，也先當「等來源」不誤標無歷史。"""
+        fake_client = UnsupportedHistoryBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        fake_store.daily["2330"] = [
+            DailyPrice("2330", date(2026, 6, 29), 10, 11, 9, 10, 1000, source="TWSE_STOCK_DAY_ALL")
+            for _ in range(1)
+        ]
+        fake_store.coverage_overrides["2330"] = {"horizon_row_count": 200}
+
+        with (
+            patch("app.sync.bulk_runner.date", July1Date),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("2330")
+
+        statuses = _statuses_for(fake_store, "2330")
+        self.assertEqual(statuses[-1], "source_pending")
+        self.assertNotIn(BULK_STATUS_UNSUPPORTED_HISTORY, statuses)
+
+
+class ProgressiveWriteTests(unittest.TestCase):
+    """逐月漸進寫入：支援 on_month 的 client 逐月落庫；中斷時已抓月份保留。"""
+
+    def test_progressive_client_persists_month_by_month(self) -> None:
+        fake_client = ProgressiveMonthsBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+        # 寫入後 coverage 視為夠深，讓驗收聚焦「逐月寫入」而不是歷史深度。
+        fake_store.coverage_overrides["2330"] = {"horizon_row_count": 200}
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            plan.sync_one("2330")
+
+        # 兩個月都寫進 store（經由 on_month 回呼，而不是最後一次性）
+        self.assertEqual(len(fake_client.month_batches), 2)
+        dates = sorted(price.date for price in fake_store.daily["2330"])
+        self.assertIn(date(2026, 1, 15), dates)
+        self.assertIn(date(2026, 2, 11), dates)
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "done")
+
+    def test_interrupted_backfill_keeps_already_fetched_months(self) -> None:
+        fake_client = ProgressiveMonthsBulkClient(request_interval=0, fail_second_month=True)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            with self.assertRaisesRegex(RuntimeError, "simulated disconnect"):
+                plan.sync_one("2330")
+
+        # 第一個月（最新月）已寫入，不因中斷而白抓
+        dates = [price.date for price in fake_store.daily.get("2330", [])]
+        self.assertIn(date(2026, 2, 11), dates)
+        self.assertEqual(_statuses_for(fake_store, "2330")[-1], "failed")
+
+
+class ExtraStatusTests(unittest.TestCase):
+    """限流可見化：plan.extra_status 回報 TWSE 自適應限流倍數。"""
+
+    def test_extra_status_reports_throttle_factor(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.throttle_factor = lambda: 4.0  # type: ignore[attr-defined]
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            self.assertEqual(plan.extra_status(), {})  # prelude 前沒有 client
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            payload = plan.extra_status()
+
+        self.assertEqual(payload["throttle_factor"], 4.0)
+        self.assertTrue(payload["throttled"])

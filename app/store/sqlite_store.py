@@ -589,6 +589,22 @@ class SQLiteStore:
         ).fetchall()
         return [_profile_from_row(row) for row in rows]
 
+    def has_non_topup_daily_price(self, stock_id: str) -> bool:
+        """是否存在任何「非 STOCK_DAY_ALL top-up 來源」的日線列。
+
+        False = 本地資料全來自全市場快照逐日累積 → 個股歷史端點從未提供過
+        此檔（受益證券/ETN 類）。NULL/空字串 source 視為歷史來源（保守）。
+        """
+        row = self.conn.execute(
+            """
+            SELECT 1 FROM daily_prices
+            WHERE stock_id = ? AND COALESCE(source, '') != 'TWSE_STOCK_DAY_ALL'
+            LIMIT 1
+            """,
+            (stock_id.strip(),),
+        ).fetchone()
+        return row is not None
+
     def get_daily_prices(
         self,
         stock_id: str,
@@ -1310,6 +1326,7 @@ class SQLiteStore:
             + counts.get("skipped", 0)
             + counts.get("source_pending", 0)
             + counts.get("history_pending", 0)
+            + counts.get("unsupported_history", 0)
         )
         return {
             "total": len(rows),

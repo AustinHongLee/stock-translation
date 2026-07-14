@@ -205,6 +205,40 @@ class TwseClientTests(unittest.TestCase):
         self.assertEqual(client.last_warnings, [])
         self.assertEqual(attempts["202508"], 2)
 
+    def test_fetch_daily_prices_on_month_streams_each_month(self) -> None:
+        """on_month 逐月回呼：每月成功即回呼、過濾到查詢範圍、retry 成功月也回呼。"""
+        attempts: dict[str, int] = {}
+
+        def fake_fetch_json(url: str) -> object:
+            key = "202508" if "date=20250801" in url else "202509"
+            attempts[key] = attempts.get(key, 0) + 1
+            if key == "202508" and attempts[key] == 1:
+                raise TwseError("temporary TWSE failure")
+            roc_rows = (
+                [["114/08/01", "1,000", "40,000", "40.00", "41.00", "39.50", "40.50", "+0.50", "100", ""]]
+                if key == "202508"
+                else [
+                    # 9/1 在範圍內、9/29 之後不在（end_date=9/15）→ 回呼要過濾掉
+                    ["114/09/01", "1,000", "40,000", "40.00", "41.00", "39.50", "40.50", "+0.50", "100", ""],
+                    ["114/09/29", "1,000", "40,000", "40.00", "41.00", "39.50", "40.50", "+0.50", "100", ""],
+                ]
+            )
+            return {"stat": "OK", "data": roc_rows}
+
+        batches: list[list] = []
+        client = TwseClient(fetch_json=fake_fetch_json, request_interval=0)
+        prices = client.fetch_daily_prices(
+            "2303", date(2025, 8, 1), date(2025, 9, 15), on_month=batches.append
+        )
+
+        # 兩個月各一批（9 月先、8 月 retry 成功後補）
+        self.assertEqual(len(batches), 2)
+        self.assertEqual([item.date for item in batches[0]], [date(2025, 9, 1)])
+        self.assertEqual([item.date for item in batches[1]], [date(2025, 8, 1)])
+        # 回傳值行為不變
+        self.assertEqual([item.date for item in prices], [date(2025, 8, 1), date(2025, 9, 1)])
+        self.assertEqual(client.last_warnings, [])
+
     def test_fetch_daily_prices_prioritizes_newer_months(self) -> None:
         seen_dates: list[str] = []
 

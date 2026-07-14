@@ -1344,10 +1344,14 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
     persisted_counts = persisted.get("counts") if isinstance(persisted.get("counts"), dict) else {}
     source_pending_count = int(persisted_counts.get("source_pending", 0)) if persisted_counts else 0
     history_pending_count = int(persisted_counts.get("history_pending", 0)) if persisted_counts else 0
+    unsupported_history_count = (
+        int(persisted_counts.get("unsupported_history", 0)) if persisted_counts else 0
+    )
     failed_retry = _failed_retry_status(persisted, now=now)
     source_retry = _source_pending_retry_status(persisted, now=now)
     status["source_pending_count"] = source_pending_count
     status["history_pending_count"] = history_pending_count
+    status["unsupported_history_count"] = unsupported_history_count
     status["quiet_sync"] = quiet_sync
     status["failed_retry"] = failed_retry
     status["source_retry"] = source_retry
@@ -1377,6 +1381,7 @@ def _bulk_status(db_path: Path) -> dict[str, object]:
                 "failed_count": failed_count,
                 "source_pending_count": source_pending_count,
                 "history_pending_count": history_pending_count,
+                "unsupported_history_count": unsupported_history_count,
                 "message": "讀到上次下載進度；按開始下載會接續，或只重試失敗清單。",
                 "running": False,
                 "paused": False,
@@ -1489,6 +1494,9 @@ def _repair_queue_status(
         "running": int(persisted.get("running") or 0),
         "history_pending": history_pending_count,
         "source_pending": source_pending_count,
+        "unsupported_history": int(
+            (counts or {}).get("unsupported_history", 0) or 0
+        ),
         "source_ready": int(source_retry.get("ready_count") or 0),
         "source_cooling_down": int(source_retry.get("cooling_down_count") or 0),
         "failed": int(persisted.get("failed_count") or 0),
@@ -1536,6 +1544,7 @@ def _bulk_queue_details(persisted: dict[str, object], *, now: datetime | None = 
     done_count = int(counts.get("done", 0) or 0) + int(counts.get("skipped", 0) or 0)
     history_count = int(counts.get("history_pending", 0) or 0)
     source_count = int(counts.get("source_pending", 0) or 0)
+    unsupported_count = int(counts.get("unsupported_history", 0) or 0)
     failed_count = int(persisted.get("failed_count") or 0)
     return {
         "done": {
@@ -1561,6 +1570,16 @@ def _bulk_queue_details(persisted: dict[str, object], *, now: datetime | None = 
             ),
             "truncated": source_count > sample_limit if sample_limit else False,
             "next_action": "多半是來源尚未公布或當日無交易；冷卻完成後，全市場或背景會重新檢查。",
+        },
+        "unsupported_history": {
+            "label": "來源無歷史",
+            "count": unsupported_count,
+            "items": public_items(raw_items("unsupported_history")),
+            "truncated": unsupported_count > sample_limit if sample_limit else False,
+            "next_action": (
+                "受益證券/ETN 類商品：TWSE 個股歷史端點不提供，重試也補不回；"
+                "最新收盤會由全市場快照每天累積，K 線會隨時間變長。"
+            ),
         },
         "failed": {
             "label": "需重試",

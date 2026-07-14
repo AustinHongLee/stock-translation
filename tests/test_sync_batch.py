@@ -197,3 +197,33 @@ class SyncBatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BulkUnsupportedHistoryStatusTests(unittest.TestCase):
+    def test_bulk_status_projects_unsupported_history_bucket(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.ensure_bulk_items("full_market", "stock", ["020039", "2330"])
+                store.mark_bulk_item(
+                    "full_market",
+                    "stock",
+                    "020039",
+                    "unsupported_history",
+                    error="TWSE 個股歷史端點查無 020039 的日線",
+                )
+                store.mark_bulk_item("full_market", "stock", "2330", "done")
+
+            status = _bulk_status(db_path)
+
+            self.assertEqual(status["unsupported_history_count"], 1)
+            bucket = status["queue_details"]["unsupported_history"]  # type: ignore[index]
+            self.assertEqual(bucket["count"], 1)
+            self.assertEqual(bucket["label"], "來源無歷史")
+            self.assertEqual(bucket["items"][0]["stock_id"], "020039")
+            # 不是失敗：不進 failed 清單、不影響重試按鈕
+            self.assertEqual(status["failed_count"], 0)
+            self.assertFalse(status["can_retry_failed"])
+            self.assertEqual(status["repair_queue"]["unsupported_history"], 1)  # type: ignore[index]
+            # 全部項目都已處理 → 讀進度時視為完成而不是「進行到一半」
+            self.assertEqual(status["persisted"]["done"], 2)  # type: ignore[index]

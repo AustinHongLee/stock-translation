@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -110,16 +111,29 @@ class StockSyncService:
 
             if hasattr(self.client, "last_warnings"):
                 self.client.last_warnings = []
-            prices = self.client.fetch_daily_prices(stock_id, start_date, fetch_end_date)
+            progressive_rows = 0
+
+            def _persist_month(batch: list[DailyPrice]) -> None:
+                # 逐月漸進寫入：中斷時已抓月份保留（見 bulk_runner 同名說明）。
+                nonlocal progressive_rows
+                if batch:
+                    progressive_rows += self.store.upsert_daily_prices(batch)
+
+            fetch_kwargs = (
+                {"on_month": _persist_month} if _supports_on_month(self.client) else {}
+            )
+            prices = self.client.fetch_daily_prices(stock_id, start_date, fetch_end_date, **fetch_kwargs)
             price_warnings = list(getattr(self.client, "last_warnings", []))
             tail_end_date = same_month_tail_date(fetch_end_date, end_date)
             if tail_end_date > fetch_end_date and _latest_price_date(prices) < target_date:
-                retry_prices = self.client.fetch_daily_prices(stock_id, start_date, tail_end_date)
+                retry_prices = self.client.fetch_daily_prices(stock_id, start_date, tail_end_date, **fetch_kwargs)
                 retry_warnings = list(getattr(self.client, "last_warnings", []))
                 prices = _merge_daily_prices(prices, retry_prices)
                 price_warnings = _dedupe_texts([*price_warnings, *retry_warnings])
                 fetch_end_date = tail_end_date
-            price_rows = self.store.upsert_daily_prices(prices)
+            price_rows = (
+                progressive_rows if fetch_kwargs else self.store.upsert_daily_prices(prices)
+            )
             rows_written += price_rows
             coverage_after_raw = self.store.refresh_data_coverage(
                 stock_id,
@@ -344,6 +358,14 @@ class StockSyncService:
                 finished_at=datetime.now(),
                 message=message,
             )
+
+
+def _supports_on_month(client) -> bool:
+    """檢查 client.fetch_daily_prices 是否支援 on_month 逐月回呼（漸進寫入）。"""
+    try:
+        return "on_month" in inspect.signature(client.fetch_daily_prices).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 def _stored_listed_date(store: SQLiteStore, stock_id: str) -> date | None:

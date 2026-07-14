@@ -7474,7 +7474,9 @@ function renderBulk(st) {
     if (st.skipped) s += `　已跳過 ${st.skipped}`;
     if (sourcePendingCount) s += `　待來源 ${sourcePendingCount}`;
     if (historyPendingCount) s += `　歷史待背景 ${historyPendingCount}`;
+    if (counts.unsupportedHistory) s += `　來源無歷史 ${counts.unsupportedHistory}`;
     if (failedCount) s += `　失敗 ${failedCount}`;
+    if (active && st.throttled) s += `　⚠ 來源限流中，已自動減速 ×${st.throttle_factor}（變慢是保護，不是卡住）`;
     if (st.failed_retry?.cooling_down_count) s += `　冷卻 ${st.failed_retry.cooling_down_count}`;
     if (st.source_retry?.cooling_down_count) s += `　等來源冷卻 ${st.source_retry.cooling_down_count}`;
     if (st.message) s += `　${st.message}`;
@@ -7494,6 +7496,7 @@ function renderBulkOutcomes(st, counts, queueCategory) {
   setBulkCountText("bulkDoneCount", counts.done);
   setBulkCountText("bulkHistoryPendingCount", counts.historyPending);
   setBulkCountText("bulkSourcePendingCount", counts.sourcePending);
+  setBulkCountText("bulkUnsupportedHistoryCount", counts.unsupportedHistory);
   setBulkCountText("bulkFailedCount", counts.failed);
   document.querySelectorAll("[data-bulk-queue]").forEach((button) => {
     const key = button.dataset.bulkQueue || "";
@@ -7509,12 +7512,13 @@ function selectBulkQueueCategory(key) {
 function normalizeBulkQueueCategory(st, counts) {
   const preferred = state.bulkQueueCategory || "failed";
   if (bulkQueueCount(preferred, counts) > 0) return preferred;
-  return ["failed", "source_pending", "history_pending", "done"].find((key) => bulkQueueCount(key, counts) > 0) || preferred;
+  return ["failed", "source_pending", "history_pending", "unsupported_history", "done"].find((key) => bulkQueueCount(key, counts) > 0) || preferred;
 }
 function bulkQueueCount(key, counts) {
   if (key === "done") return counts.done;
   if (key === "history_pending") return counts.historyPending;
   if (key === "source_pending") return counts.sourcePending;
+  if (key === "unsupported_history") return counts.unsupportedHistory;
   if (key === "failed") return counts.failed;
   return 0;
 }
@@ -7573,6 +7577,7 @@ function bulkQueueReason(item, queueCategory) {
   if (reason) return reason.length > 96 ? `${reason.slice(0, 96)}...` : reason;
   if (queueCategory === "history_pending") return "最新日已到，等待背景補較早 K 線。";
   if (queueCategory === "source_pending") return "來源尚未公布或當日沒有交易。";
+  if (queueCategory === "unsupported_history") return "TWSE 個股歷史端點查無此檔；最新收盤由全市場快照逐日累積。";
   if (queueCategory === "failed") return "來源不穩或限流，等冷卻後重試。";
   return item?.status === "skipped" ? "重新檢查後已最新，直接跳過。" : "已完成。";
 }
@@ -7593,12 +7598,14 @@ function bulkQueueLabel(key) {
   if (key === "done") return "已完成/已最新";
   if (key === "history_pending") return "歷史待背景";
   if (key === "source_pending") return "等來源";
+  if (key === "unsupported_history") return "來源無歷史";
   if (key === "failed") return "需重試";
   return "隊列";
 }
 function bulkQueueNextAction(key) {
   if (key === "history_pending") return "背景慢補會低速處理；急著看某檔可開個股或補這檔。";
   if (key === "source_pending") return "稍後再跑會重新檢查，不會永久當完成。";
+  if (key === "unsupported_history") return "不用處理也不用重試；這類商品的 K 線會隨每天累積慢慢變長。";
   if (key === "failed") return "冷卻完成後可按重試失敗。";
   return "不用處理。";
 }
@@ -7609,9 +7616,10 @@ function bulkStatusCounts(st) {
   const done = Number(rawCounts.done || 0) + Number(rawCounts.skipped || 0);
   const sourcePending = Number(st?.source_pending_count ?? queue.source_pending ?? rawCounts.source_pending ?? 0);
   const historyPending = Number(st?.history_pending_count ?? queue.history_pending ?? rawCounts.history_pending ?? 0);
+  const unsupportedHistory = Number(st?.unsupported_history_count ?? queue.unsupported_history ?? rawCounts.unsupported_history ?? 0);
   const failed = Number(st?.failed_count ?? queue.failed ?? persisted.failed_count ?? rawCounts.failed ?? 0);
   const pending = Number(rawCounts.pending || 0) + Number(rawCounts.running || 0);
-  return { done, sourcePending, historyPending, failed, pending };
+  return { done, sourcePending, historyPending, unsupportedHistory, failed, pending };
 }
 function quietSyncHint(st) {
   const quiet = st?.quiet_sync || {};

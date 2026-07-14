@@ -32,6 +32,8 @@ class BulkPlan:
     on_finish: Callable[[dict[str, Any]], None] | None = None
     retry_failed_only: bool = False
     mode: str = "manual"  # manual（使用者主動）/ quiet（背景慢速）
+    # 額外即時狀態（如 TWSE 限流倍數），status() 輪詢時合併進回傳值；失敗不影響主狀態。
+    extra_status: Callable[[], dict[str, Any]] | None = None
 
 
 class BulkDownloadManager:
@@ -43,6 +45,7 @@ class BulkDownloadManager:
         self._max_consec = max(1, max_consecutive_failures)
         self._state: dict[str, Any] = {}
         self._started_monotonic: float | None = None
+        self._extra_status: Callable[[], dict[str, Any]] | None = None
         self._reset_state()
 
     def _reset_state(self) -> None:
@@ -72,6 +75,7 @@ class BulkDownloadManager:
             self._state["started_at"] = _now()
             self._state["retry_failed_only"] = plan.retry_failed_only
             self._state["mode"] = getattr(plan, "mode", "manual")
+            self._extra_status = getattr(plan, "extra_status", None)
             self._started_monotonic = time.monotonic()
             self._thread = threading.Thread(target=self._run, args=(plan,), daemon=True)
             self._thread.start()
@@ -103,7 +107,15 @@ class BulkDownloadManager:
             st["running"] = self._thread is not None and self._thread.is_alive()
             st["paused"] = self._pause.is_set()
             st.update(self._timing_status(st))
-            return st
+            extra = self._extra_status
+        if extra is not None:
+            try:
+                payload = extra()
+                if isinstance(payload, dict):
+                    st.update(payload)
+            except Exception:  # noqa: BLE001 - 附加狀態失敗不影響主狀態
+                pass
+        return st
 
     def _timing_status(self, state: dict[str, Any]) -> dict[str, Any]:
         if self._started_monotonic is None:

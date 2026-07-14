@@ -394,6 +394,26 @@ class SQLiteStoreTests(unittest.TestCase):
                 self.assertEqual(store.get_portfolio_transactions(), [])
 
 
+class NonTopupDailyPriceTests(unittest.TestCase):
+    def test_has_non_topup_daily_price_distinguishes_topup_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "stock.sqlite3"
+            with SQLiteStore(db_path) as store:
+                store.upsert_daily_prices(
+                    [
+                        DailyPrice("020039", date(2026, 7, 10), 10, 11, 9, 10, 1000, source="TWSE_STOCK_DAY_ALL"),
+                        DailyPrice("020039", date(2026, 7, 13), 10, 11, 9, 10, 1000, source="TWSE_STOCK_DAY_ALL"),
+                        DailyPrice("2330", date(2026, 7, 13), 10, 11, 9, 10, 1000, source="TWSE_STOCK_DAY"),
+                    ]
+                )
+                # 受益證券：只有 top-up 來源 → False
+                self.assertFalse(store.has_non_topup_daily_price("020039"))
+                # 一般股票：曾有個股歷史端點資料 → True
+                self.assertTrue(store.has_non_topup_daily_price("2330"))
+                # 完全沒資料 → False
+                self.assertFalse(store.has_non_topup_daily_price("9999"))
+
+
 if __name__ == "__main__":
     unittest.main()
 

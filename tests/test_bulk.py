@@ -88,3 +88,26 @@ class BulkManagerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_status_merges_extra_status_and_swallows_errors(self):
+        m = BulkDownloadManager()
+        plan = BulkPlan(
+            list_stocks=lambda: ["A"],
+            sync_one=lambda sid: None,
+            extra_status=lambda: {"throttle_factor": 8.0, "throttled": True},
+        )
+        m.start(plan)
+        self.assertTrue(_wait(lambda: m.status()["status"] == "done"))
+        st = m.status()
+        self.assertEqual(st["throttle_factor"], 8.0)
+        self.assertTrue(st["throttled"])
+
+        boom = BulkDownloadManager()
+
+        def _explode():
+            raise RuntimeError("boom")
+
+        plan2 = BulkPlan(list_stocks=lambda: ["A"], sync_one=lambda sid: None, extra_status=_explode)
+        boom.start(plan2)
+        self.assertTrue(_wait(lambda: boom.status()["status"] == "done"))
+        self.assertNotIn("throttle_factor", boom.status())
