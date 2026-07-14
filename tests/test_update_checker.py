@@ -87,6 +87,21 @@ class UpdateCheckerTests(unittest.TestCase):
 
         self.assertEqual(selected["name"], "StockTranslator-v2.1.0.zip")
 
+    def test_select_release_asset_never_picks_official_data_pack(self) -> None:
+        """每日資料包與 app 包同掛一個 Release：更新器不可把資料包當 app 安裝。"""
+        selected = select_release_asset(
+            [
+                zip_asset("StockTranslator-official-data-20260714.zip"),
+                zip_asset("StockTranslator-v2.1.0.zip"),
+            ]
+        )
+        self.assertEqual(selected["name"], "StockTranslator-v2.1.0.zip")
+
+        data_only = select_release_asset(
+            [zip_asset("StockTranslator-official-data-20260714.zip")]
+        )
+        self.assertIsNone(data_only)
+
 
 if __name__ == "__main__":
     unittest.main()

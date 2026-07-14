@@ -45,16 +45,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build the force-installable official DATA package.")
     parser.add_argument("--source", type=Path, default=_default_source_db())
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--app-min-version",
+        default="",
+        help=(
+            "覆寫 manifest 的 app_min_version（預設用 repo 目前 APP_VERSION）。"
+            "每日自動資料包用它傳承上一包的版本閘，避免 main 分支版本超前把舊 app 鎖在門外。"
+        ),
+    )
     args = parser.parse_args()
 
-    manifest = build_pack(args.source.resolve(), args.output_dir.resolve())
+    manifest = build_pack(
+        args.source.resolve(),
+        args.output_dir.resolve(),
+        app_min_version=args.app_min_version.strip() or None,
+    )
     print(f"Source DB: {Path(manifest['source_db'])}")
     print(f"Official DATA: {Path(manifest['output_dir'])}")
     print(f"sha256: {manifest['files']['data/stock_translator.sqlite3']['sha256']}")
     return 0
 
 
-def build_pack(source_db: Path, output_dir: Path) -> dict[str, Any]:
+def build_pack(
+    source_db: Path,
+    output_dir: Path,
+    *,
+    app_min_version: str | None = None,
+) -> dict[str, Any]:
     if not source_db.is_file():
         raise SystemExit(f"Source DB not found: {source_db}")
 
@@ -76,7 +93,7 @@ def build_pack(source_db: Path, output_dir: Path) -> dict[str, Any]:
     manifest: dict[str, Any] = {
         "data_snapshot_version": int(date.today().strftime("%Y%m%d")),
         "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "app_min_version": APP_VERSION,
+        "app_min_version": app_min_version or APP_VERSION,
         "source_db": str(source_db),
         "output_dir": str(output_dir),
         "files": files,

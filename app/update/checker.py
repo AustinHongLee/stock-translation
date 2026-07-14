@@ -88,12 +88,18 @@ def select_release_asset(assets: object) -> dict[str, Any] | None:
     if not isinstance(assets, list):
         return None
     zip_assets: list[dict[str, Any]] = []
+    # 官方資料樞紐 zip（每日資料包）也掛在 Release assets 上，且檔名同樣含
+    # "StockTranslator"——app 更新器必須排除它們，否則會把資料包當 app 安裝。
+    data_pack_words = ("official-data", "official_data", "data-hub", "data_hub")
     for item in assets:
         if not isinstance(item, dict):
             continue
         name = str(item.get("name") or "")
         url = str(item.get("browser_download_url") or "")
-        if name.lower().endswith(".zip") and url:
+        normalized = name.lower()
+        if any(word in normalized for word in data_pack_words):
+            continue
+        if normalized.endswith(".zip") and url:
             zip_assets.append(item)
     if not zip_assets:
         return None

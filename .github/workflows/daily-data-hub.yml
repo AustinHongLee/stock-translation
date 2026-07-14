@@ -1,0 +1,132 @@
+# 每日自動發布官方資料樞紐（Data Hub）
+#
+# 作用：把「每台使用者電腦各自打 TWSE 補最新」變成「官方每天抓一次、大家下載」。
+# 流程：交易日+連通 preflight → 下載最新 Release 上的資料包當 baseline →
+#       套當日增量（STOCK_DAY_ALL / T86 / 共用檔，約 6~9 個 API 請求）→
+#       重打包 → 傳回最新 Release 的 assets（客戶端零改動，開機自動套用）。
+#
+# 前置需求（一次性）：最新 Release 上要先手動掛一個
+#   StockTranslator-official-data-YYYYMMDD.zip 當初始 baseline（含深歷史）。
+# 注意：app 更新器已在 checker.select_release_asset 排除 official-data zip，
+#   資料包與 app 包可以同掛一個 Release。
+name: daily-data-hub
+
+on:
+  schedule:
+    # 台北 18:30 與 21:30（UTC+8）各試一班：第一班若來源未更新（日線未前進）
+    # 會自動 publish=no；第二班補發。同日已發過則第二班冪等跳過。
+    - cron: '30 10 * * 1-5'
+    - cron: '30 13 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '非交易日也強制執行（補跑用）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-data-hub
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Preflight（交易日＋TWSE 連通）
+        id: preflight
+        env:
+          FORCE_RUN: ${{ inputs.force == true && '1' || '' }}
+        run: |
+          set -euo pipefail
+          python tools/hub_preflight.py | tee -a "$GITHUB_OUTPUT"
+
+      - name: 下載最新官方資料包當 baseline
+        id: baseline
+        if: steps.preflight.outputs.proceed == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          mkdir -p baseline
+          if ! gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+               --pattern 'StockTranslator-official-data-*.zip' --dir baseline; then
+            echo "::error::最新 Release（$tag）上沒有 StockTranslator-official-data-*.zip。" \
+                 "請先手動上傳一次初始資料包（tools/build_official_data_pack.py + tools/package_data_hub.py）。"
+            exit 1
+          fi
+          newest=$(ls baseline/StockTranslator-official-data-*.zip | sort | tail -1)
+          echo "使用 baseline：$newest"
+          unzip -q "$newest" -d baseline/extracted
+          test -f baseline/extracted/manifest.json
+          test -f baseline/extracted/data/stock_translator.sqlite3
+
+      - name: 套當日增量
+        id: update
+        if: steps.preflight.outputs.proceed == 'yes'
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ steps.preflight.outputs.t86 }}" = "no" ]; then
+            extra+=(--skip-t86)
+          fi
+          python tools/daily_hub_update.py \
+            --db baseline/extracted/data/stock_translator.sqlite3 \
+            "${extra[@]}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: 重建資料包
+        if: steps.preflight.outputs.proceed == 'yes' && steps.update.outputs.publish == 'yes'
+        run: |
+          set -euo pipefail
+          # app_min_version 傳承 baseline 的版本閘：main 分支版本超前時，
+          # 不可讓每日資料包把還在用已發布版的使用者鎖在門外。
+          min_version=$(python -c "import json;print(json.load(open('baseline/extracted/manifest.json')).get('app_min_version') or '')")
+          python tools/build_official_data_pack.py \
+            --source baseline/extracted/data/stock_translator.sqlite3 \
+            --output-dir dist/official_data \
+            --app-min-version "$min_version"
+          python tools/package_data_hub.py --source-dir dist/official_data --output-dir dist
+          ls -la dist/StockTranslator-official-data-*
+
+      - name: 上傳到最新 Release 並清舊資料包
+        if: steps.preflight.outputs.proceed == 'yes' && steps.update.outputs.publish == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='${{ steps.baseline.outputs.tag }}'
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" \
+            dist/StockTranslator-official-data-*.zip \
+            dist/StockTranslator-official-data-*.zip.sha256 \
+            --clobber
+          # 只保留最新 2 版資料包（zip + .sha256 成對刪）
+          assets=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+            --json assets -q '.assets[].name' \
+            | grep -E '^StockTranslator-official-data-[0-9]{8}\.zip$' | sort -r || true)
+          echo "$assets" | tail -n +3 | while read -r name; do
+            [ -z "$name" ] && continue
+            echo "刪除舊資料包：$name"
+            gh release delete-asset "$tag" "$name" --repo "$GITHUB_REPOSITORY" -y || true
+            gh release delete-asset "$tag" "$name.sha256" --repo "$GITHUB_REPOSITORY" -y || true
+          done
+
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "### 每日資料樞紐"
+            echo "- preflight：${{ steps.preflight.outputs.reason || '未執行' }}"
+            echo "- 增量：${{ steps.update.outputs.summary || '未執行' }}"
+            echo "- 發布：${{ steps.update.outputs.publish == 'yes' && '已上傳新資料包' || '本次未發布' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
