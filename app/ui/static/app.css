@@ -2881,3 +2881,55 @@ td.down { color: var(--down); font-weight: 600; }
   .fundamental-trend-card-head strong { white-space: nowrap; }
   .fundamental-trend-card-head span { text-align: left; }
 }
+
+
+/* ===== 首頁：自選股今日異動 digest ===== */
+.dashboard-digest {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line, #d8d8d8);
+  display: grid;
+  gap: 6px;
+}
+.dashboard-digest .digest-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dashboard-digest .digest-headline {
+  margin: 0;
+  font-weight: 600;
+}
+.dashboard-digest .digest-summary {
+  margin: 0;
+  color: var(--muted-text, #666);
+  font-size: 0.92em;
+}
+.dashboard-digest .digest-movers {
+  display: grid;
+  gap: 4px;
+}
+.dashboard-digest .digest-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.dashboard-digest .digest-row:hover {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.05));
+}
+.dashboard-digest .digest-lines {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  font-size: 0.92em;
+}
+.dashboard-digest .digest-attn {
+  color: var(--muted-text, #8a6d3b);
+}

@@ -145,6 +145,7 @@
                   <span class="muted-tag">一句話</span>
                 </div>
                 <p id="dashboardBrief">資料同步後，這裡會把持倉和自選股整理成白話摘要。</p>
+                <div id="dashboardDigest" class="dashboard-digest" hidden></div>
                 <p class="disclaimer">本內容為資料解讀，非投資建議。</p>
               </section>
             </div>
@@ -945,7 +946,7 @@
                   <p id="dividendAssumptionNote" class="valuation-method-note"></p>
                   <section class="historical-yield-block">
                     <div class="surface-head compact">
-                      <h3>近 5 年平均股利法（情境參考）</h3>
+                      <h3 id="historicalYieldTitle">近 5 年平均股利法（情境參考）</h3>
                       <span id="historicalYieldStatus">需要 5 年股利與股價</span>
                     </div>
                     <div id="historicalYieldGrid" class="estimate-grid historical-yield-grid"></div>

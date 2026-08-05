@@ -99,6 +99,8 @@ const elements = {
   dashboardReturn: document.querySelector("#dashboardReturn"),
   dashboardAlerts: document.querySelector("#dashboardAlerts"),
   dashboardBrief: document.querySelector("#dashboardBrief"),
+  dashboardDigest: document.querySelector("#dashboardDigest"),
+  historicalYieldTitle: document.querySelector("#historicalYieldTitle"),
   dashboardHoldings: document.querySelector("#dashboardHoldings"),
   dashboardWatchlist: document.querySelector("#dashboardWatchlist"),
   dashboardRefreshButton: document.querySelector("#dashboardRefreshButton"),
@@ -1013,6 +1015,7 @@ async function loadWatchlist() {
   try {
     const payload = await getJson("/api/watchlist");
     state.watchlist = payload.items || [];
+    state.watchlistDigest = payload.digest || null;
     elements.localStocks.innerHTML = "";
     elements.dataStatus.textContent = `${payload.items.length} 支自選股`;
     if (payload.items.length === 0) {
@@ -2241,6 +2244,7 @@ function renderDashboard() {
   elements.dashboardReturn.className = toneClass(pnl);
 
   elements.dashboardBrief.textContent = buildDashboardBrief(summary, positions, watchlist);
+  renderDashboardDigest(state.watchlistDigest);
   elements.dashboardAlerts.innerHTML = buildDashboardAlerts(summary, positions, watchlist)
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("");
@@ -2256,6 +2260,38 @@ function renderDashboard() {
       compact: true,
       className: "dashboard-empty",
     });
+}
+
+function renderDashboardDigest(digest) {
+  const box = elements.dashboardDigest;
+  if (!box) return;
+  if (!digest) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const dateTag = digest.date ? `<span class="muted-tag">資料日 ${escapeHtml(digest.date)}</span>` : "";
+  const movers = (digest.movers || []).map((item) => {
+    const pct = item.change_percent == null ? "--" : `${item.change_percent >= 0 ? "+" : ""}${formatNumber(item.change_percent)}%`;
+    const note = item.note ? `　<small>${escapeHtml(item.note)}</small>` : "";
+    return `<button class="digest-row" type="button" data-stock-id="${escapeHtml(item.stock_id)}">
+      <strong>${escapeHtml(item.name)}</strong>
+      <span class="${toneClass(item.change_percent)}">${escapeHtml(pct)}</span>${note}
+    </button>`;
+  }).join("");
+  const chips = (digest.chips_lines || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+  const attention = (digest.attention || []).map((line) => `<li class="digest-attn">${escapeHtml(line)}</li>`).join("");
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="digest-head"><strong>自選股今日異動</strong>${dateTag}</div>
+    <p class="digest-headline">${escapeHtml(digest.headline || "")}</p>
+    <p class="digest-summary">${escapeHtml(digest.trading_summary || "")}</p>
+    ${movers ? `<div class="digest-movers">${movers}</div>` : ""}
+    ${chips || attention ? `<ul class="digest-lines">${chips}${attention}</ul>` : ""}
+  `;
+  box.querySelectorAll("[data-stock-id]").forEach((button) => {
+    button.addEventListener("click", () => openScreenerStock(button.dataset.stockId));
+  });
 }
 
 function dashboardGreetingText() {
@@ -3387,6 +3423,11 @@ function isEtfStock(stockId) {
 
 function renderEtfNote() {
   const note = elements.etfNote;
+  if (elements.historicalYieldTitle) {
+    elements.historicalYieldTitle.textContent = isEtfStock(state.activeStockId)
+      ? "近 5 年配息殖利率區間（情境參考）"
+      : "近 5 年平均股利法（情境參考）";
+  }
   if (!note) return;
   if (isEtfStock(state.activeStockId)) {
     note.hidden = false;

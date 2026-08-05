@@ -43,6 +43,7 @@ from app.analyze.structure_registry import build_structure_payload
 from app.analyze.valuation import ValuationResult, calculate_dividend_valuation
 from app.analyze.suitability import ValuationSuitability, assess_valuation_suitability
 from app.analyze.vital_signs import VitalSignsReport, build_vital_signs_report
+from app.analyze.daily_digest import build_daily_digest
 from app.analyze.watchlist_board import build_watchlist_board_item
 from app.explain.rule_based import build_rule_based_health_report
 from app.explain.validation import build_validation_brief
@@ -917,6 +918,7 @@ def build_local_stocks_payload(store: SQLiteStore) -> dict[str, object]:
 
 def build_watchlist_payload(store: SQLiteStore) -> dict[str, object]:
     items: list[dict[str, object]] = []
+    chips_map: dict[str, list[object]] = {}
     for row in store.list_watchlist():
         profile = None
         if row["name"]:
@@ -942,7 +944,15 @@ def build_watchlist_payload(store: SQLiteStore) -> dict[str, object]:
                 "board": build_watchlist_board_item(row["stock_id"], profile_json, prices),
             }
         )
-    return {"items": items}
+        try:
+            chips_map[row["stock_id"]] = store.get_institutional_trades(row["stock_id"], limit=6)
+        except Exception:  # noqa: BLE001 - 法人資料缺席不影響自選清單
+            chips_map[row["stock_id"]] = []
+    try:
+        digest = build_daily_digest(items, chips_map)
+    except Exception:  # noqa: BLE001 - 摘要是加值資訊，失敗不能連累自選清單
+        digest = None
+    return {"items": items, "digest": digest}
 
 
 def build_compare_payload(store: SQLiteStore, stock_ids: str | list[str]) -> dict[str, object]:

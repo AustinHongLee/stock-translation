@@ -818,6 +818,10 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertEqual(watchlist_payload["items"][0]["profile"]["short_name"], "台積電")  # type: ignore[index]
         self.assertIn("board", watchlist_payload["items"][0])  # type: ignore[index]
         self.assertEqual(watchlist_payload["items"][0]["board"]["assessment"]["label"], "體質中性")  # type: ignore[index]
+        digest = watchlist_payload["digest"]  # type: ignore[index]
+        self.assertIsNotNone(digest)
+        self.assertTrue(str(digest["trading_summary"]).startswith("自選 1 檔"))  # type: ignore[index]
+        self.assertIn("headline", digest)  # type: ignore[operator]
 
     def test_stock_payload_caches_structure_by_last_close_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
