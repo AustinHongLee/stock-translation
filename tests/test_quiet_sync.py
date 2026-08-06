@@ -75,10 +75,34 @@ class MultiProfileQuietClient(FakeBulkClient):
         return []
 
 
+class _NoopTpexQuietClient:
+    def __init__(self, **_kwargs) -> None:
+        self.last_warnings: list[str] = []
+
+    def fetch_otc_profiles(self) -> list:
+        return []
+
+    def fetch_latest_all_prices(self) -> list:
+        return []
+
+    def fetch_all_monthly_revenues(self) -> list:
+        return []
+
+    def fetch_all_market_valuations(self) -> list:
+        return []
+
+    def fetch_all_financial_statements(self) -> list:
+        return []
+
+    def throttle_factor(self) -> float:
+        return 1.0
+
+
 def _quiet_plan(fake_client, fake_store, **kwargs):
     with (
         patch("app.sync.bulk_runner.date", FixedDate),
         patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+        patch("app.sync.bulk_runner.TpexClient", new=_NoopTpexQuietClient),
         patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
     ):
         plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0, quiet=True, **kwargs)

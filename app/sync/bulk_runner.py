@@ -27,6 +27,8 @@ from app.analyze.data_gap import (
 from app.analyze.twse_calendar import is_twse_trading_day
 from app.models import DailyPrice
 from app.sync.bulk import BulkPlan
+from app.sync.market_router import MarketRoutedClient
+from app.sync.tpex import TpexClient
 from app.sync.twse import TwseClient
 from app.store.sqlite_store import SQLiteStore
 
@@ -70,11 +72,20 @@ def build_bulk_plan(
 
     def prelude(stop_event) -> None:
         store = SQLiteStore(db_path)
-        client = TwseClient(request_interval=request_interval)
+        twse = TwseClient(request_interval=request_interval)
+        tpex = TpexClient(request_interval=request_interval)
+        markets: dict[str, str] = {}
+        client = MarketRoutedClient(
+            twse, tpex, market_lookup=_bulk_market_lookup(ctx, markets)
+        )
         ctx["store"] = store
         ctx["client"] = client
+        ctx["twse"] = twse
+        ctx["tpex"] = tpex
+        ctx["markets"] = markets
 
-        _top_up_latest_all_prices(store, client)
+        _top_up_latest_all_prices(store, twse)
+        _top_up_tpex_latest_prices(store, tpex)
 
         if retry_failed_only:
             failed_ids = store.get_bulk_item_keys_by_status(BULK_RUN_KEY, "stock", "failed")
@@ -85,25 +96,38 @@ def build_bulk_plan(
             return
 
         # 1) 上市清單（必要；失敗就讓整批報錯）
-        profiles = client.fetch_listed_profiles()
+        profiles = twse.fetch_listed_profiles()
         store.upsert_profiles(profiles)
+        # 1b) 上櫃清單（加值：失敗只影響上櫃，不阻斷上市流程）
+        otc_profiles: list = []
+        try:
+            otc_profiles = tpex.fetch_otc_profiles()
+            if otc_profiles:
+                store.upsert_profiles(otc_profiles)
+        except Exception:  # noqa: BLE001 - TPEx 清單失敗不擋 TWSE
+            otc_profiles = []
         profile_ids = [p.stock_id for p in profiles]
-        profile_id_set = set(profile_ids)
+        otc_ids = [p.stock_id for p in otc_profiles]
+        profile_id_set = {*profile_ids, *otc_ids}
+        markets.update({sid: "TWSE" for sid in profile_ids})
+        markets.update({sid: "TPEX" for sid in otc_ids})
         price_only_market_products = sorted(
             sid
             for sid in getattr(store, "get_price_stock_ids", lambda: set())()
             if sid not in profile_id_set and _is_profileless_market_product_id(sid)
         )
-        ctx["ids"] = [*profile_ids, *price_only_market_products]
-        # 上市日期供深度評估與抓取窗口 clamp（新上市股不空抓一年）。
+        ctx["ids"] = [*profile_ids, *otc_ids, *price_only_market_products]
+        # 上市/上櫃日期供深度評估與抓取窗口 clamp（新上市股不空抓一年）。
         ctx["listed_dates"] = {
-            p.stock_id: p.listed_date for p in profiles if p.listed_date is not None
+            p.stock_id: p.listed_date
+            for p in (*profiles, *otc_profiles)
+            if p.listed_date is not None
         }
         store.ensure_bulk_items(BULK_RUN_KEY, "stock", ctx["ids"])
         if quiet:
             # 安靜模式輕 prelude：不做全量排序（list_stocks 會自己挑最缺的），
             # 只補「近幾個交易日缺的 T86」；共用檔留給使用者主動的全市場下載。
-            _fetch_missing_recent_t86(store, client, stop_event)
+            _fetch_missing_recent_t86(store, twse, stop_event)
             return
         ctx["ids"] = _prioritized_stock_ids(ctx, ctx["ids"], target_date, lookback_days)
         if stop_event.is_set():
@@ -111,9 +135,12 @@ def build_bulk_plan(
 
         # 2) 全市場共用檔，各抓一次（加值資料，失敗不阻斷）
         for fetch, save in (
-            (client.fetch_all_monthly_revenues, store.upsert_monthly_revenues),
-            (client.fetch_all_market_valuations, store.upsert_market_valuations),
-            (client.fetch_all_financial_statements, store.upsert_financial_statements),
+            (twse.fetch_all_monthly_revenues, store.upsert_monthly_revenues),
+            (twse.fetch_all_market_valuations, store.upsert_market_valuations),
+            (twse.fetch_all_financial_statements, store.upsert_financial_statements),
+            (tpex.fetch_all_monthly_revenues, store.upsert_monthly_revenues),
+            (tpex.fetch_all_market_valuations, store.upsert_market_valuations),
+            (tpex.fetch_all_financial_statements, store.upsert_financial_statements),
         ):
             if stop_event.is_set():
                 return
@@ -126,8 +153,8 @@ def build_bulk_plan(
         if not stop_event.is_set():
             try:
                 dividend_start = dividend_history_start_date(today)
-                records = client.fetch_all_dividend_records()
-                records.extend(client.fetch_all_historical_dividend_records(dividend_start, today))
+                records = twse.fetch_all_dividend_records()
+                records.extend(twse.fetch_all_historical_dividend_records(dividend_start, today))
                 by_stock: dict[str, list] = {}
                 for record in _dedupe_dividend_records(records):
                     by_stock.setdefault(record.stock_id, []).append(record)
@@ -146,7 +173,7 @@ def build_bulk_plan(
                 forced += 1
                 day_key = day.isoformat()
                 try:
-                    trades = client.fetch_institutional_trades_for_date(day)
+                    trades = twse.fetch_institutional_trades_for_date(day)
                 except Exception:  # noqa: BLE001
                     trades = []
                 if trades:
@@ -166,7 +193,7 @@ def build_bulk_plan(
             day_key = day.isoformat()
             if is_twse_trading_day(day) and day_key not in have and day_key not in done_t86:
                 try:
-                    trades = client.fetch_institutional_trades_for_date(day)
+                    trades = twse.fetch_institutional_trades_for_date(day)
                 except Exception:  # noqa: BLE001
                     trades = []
                     store.mark_bulk_item(BULK_RUN_KEY, "t86_date", day_key, "failed")
@@ -432,7 +459,6 @@ def build_bulk_plan(
 
     def on_finish(_status) -> None:
         store = ctx.get("store")
-        client = ctx.get("client")
         if quiet:
             # 安靜模式收尾輕量：不重抓、不重算雷達；快取失效後直接預熱，
             # 使用者進『本地資料』頁面時命中快取，不用當場冷算 1000+ 檔。
@@ -440,18 +466,22 @@ def build_bulk_plan(
                 store.delete_json_cache("local_data_v3")
                 _prewarm_local_data_cache(store)
             return
+        twse = ctx.get("twse")
+        tpex = ctx.get("tpex")
         # 1) 收尾再跑一次全市場最新日線 top-up：長時間下載期間來源可能更新。
         #    全市場下載採「最新日優先」；個別歷史不足留給看個股 / 補這檔時再補。
-        if client is not None and store is not None and not retry_failed_only:
-            _top_up_latest_all_prices(store, client)
+        if twse is not None and store is not None and not retry_failed_only:
+            _top_up_latest_all_prices(store, twse)
+        if tpex is not None and store is not None and not retry_failed_only:
+            _top_up_tpex_latest_prices(store, tpex)
         # 2) 同步刷新雷達快照：讓『全市場下載』也更新 value_screener。
         #    否則快照停在上次『更新雷達』的日期 → 本地資料每列都掛『快照待更新』。
         #    這一步把兩個原本各走各的更新動作（全市場下載 / 更新雷達）綁在一起。
-        if client is not None and not retry_failed_only:
+        if twse is not None and not retry_failed_only:
             try:
                 from app.screener.value import refresh_value_screener
 
-                refresh_value_screener(client)
+                refresh_value_screener(twse)
             except Exception:  # noqa: BLE001
                 pass
         if store is not None:
@@ -727,6 +757,42 @@ def _merge_daily_prices(*groups: list[DailyPrice]) -> list[DailyPrice]:
         for price in group:
             by_key[(price.stock_id, price.date)] = price
     return sorted(by_key.values(), key=lambda item: (item.stock_id, item.date))
+
+
+def _top_up_tpex_latest_prices(store, tpex) -> None:
+    """上櫃全市場最新收盤 top-up（tpex_mainboard_quotes）；失敗不影響主流程。"""
+    try:
+        latest_all = tpex.fetch_latest_all_prices()
+        if latest_all:
+            store.upsert_daily_prices(latest_all)
+            if hasattr(store, "delete_json_cache"):
+                store.delete_json_cache("local_data_v3")
+    except Exception:  # noqa: BLE001 - 上櫃 top-up 是加值行為
+        pass
+
+
+def _bulk_market_lookup(ctx: dict, markets: dict[str, str]):
+    """bulk 專用 market 查找：先看 prelude 建的記憶體 map，再退回 store profile。
+
+    retry_failed_only 模式不跑清單（map 空）→ 由 store 查（profiles 已入庫）。
+    """
+
+    def lookup(stock_id: str) -> str | None:
+        market = markets.get(stock_id)
+        if market:
+            return market
+        store = ctx.get("store")
+        getter = getattr(store, "get_profile", None)
+        if getter is None:
+            return None
+        try:
+            profile = getter(stock_id)
+        except Exception:  # noqa: BLE001
+            return None
+        value = getattr(profile, "market", None) if profile is not None else None
+        return str(value).upper() if value else None
+
+    return lookup
 
 
 def _top_up_latest_all_prices(store, client) -> None:

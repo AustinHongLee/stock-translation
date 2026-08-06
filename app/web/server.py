@@ -49,6 +49,8 @@ from app.sync.bulk_runner import (
     QUIET_REQUEST_INTERVAL,
     build_bulk_plan,
 )
+from app.sync.market_router import MarketRoutedClient, store_market_lookup
+from app.sync.tpex import TpexClient
 from app.sync.twse import TwseClient
 from app.glossary.service import glossary_payload
 from app.quote.providers import TwseMisQuoteProvider
@@ -329,7 +331,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         self._send_json(payload)
                         return
                     service = StockSyncService(
-                        client=TwseClient(request_interval=0.2),
+                        client=_market_routed_client(store),
                         store=store,
                     )
                     result = service.sync_stock_history(
@@ -371,7 +373,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 results: list[dict[str, object]] = []
                 with SQLiteStore(self.server.db_path) as store:
                     service = StockSyncService(
-                        client=TwseClient(request_interval=0.2),
+                        client=_market_routed_client(store),
                         store=store,
                     )
                     for stock_id in stock_ids:
@@ -459,7 +461,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                         freshness.get("target_latest_date") or freshness.get("reference_latest_date")
                     )
                     service = StockSyncService(
-                        client=TwseClient(request_interval=0.2),
+                        client=_market_routed_client(store),
                         store=store,
                     )
                     result = service.sync_institutional(
@@ -1332,6 +1334,15 @@ def _date_or_none(value: object) -> date | None:
     if isinstance(value, date):
         return value
     return date.fromisoformat(str(value))
+
+
+def _market_routed_client(store) -> MarketRoutedClient:
+    """單檔同步用的市場路由 client：上市走 TWSE、上櫃走 TPEx、未知先 TWSE 再探測。"""
+    return MarketRoutedClient(
+        TwseClient(request_interval=0.2),
+        TpexClient(request_interval=0.2),
+        market_lookup=store_market_lookup(store),
+    )
 
 
 def _bulk_status(db_path: Path) -> dict[str, object]:

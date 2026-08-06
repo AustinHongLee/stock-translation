@@ -5,7 +5,7 @@
 
 ## 一句話定義
 
-資訊抓取不是單一按鈕，而是一組契約：外部市場來源只由 `app/sync` 接觸；官方 GitHub Data Hub 只作為只讀資料樞紐；資料先進 `SQLiteStore`，所有入口都必須用同一套 freshness x depth 判斷，再由 `app/web/api.py` 投影成使用者看得懂的狀態。
+資訊抓取不是單一按鈕，而是一組契約：外部市場來源（TWSE 上市＋TPEx 上櫃）只由 `app/sync` 接觸，市場判斷收在 `market_router`；官方 GitHub Data Hub 只作為只讀資料樞紐；資料先進 `SQLiteStore`，所有入口都必須用同一套 freshness x depth 判斷，再由 `app/web/api.py` 投影成使用者看得懂的狀態。
 
 ## 先記住四條不可拆規則
 
@@ -244,6 +244,8 @@ flowchart TB
 |---|---|---|
 | `app/analyze/data_gap.py` | `plan_data_gap()`、`assess_daily_depth()`、post-check status | `tests/test_data_gap.py`、`tests/test_bulk_runner.py`、`tests/test_sync_service.py`、`tests/test_web_api.py` |
 | `app/sync/twse.py` | TWSE 來源 adapter、retry、throttle、shared cache | `tests/test_twse_adapter.py`、`tests/test_quiet_sync.py` |
+| `app/sync/tpex.py` | TPEx（上櫃）來源 adapter；日線「仟股/仟元 ×1000」、OpenAPI alias 欄位 | `tests/test_tpex_client.py`、`docs/tpex-評估.md` |
+| `app/sync/market_router.py` | 市場路由：market=TPEX → TpexClient，其他走 TWSE；未知股先 TWSE 再 TPEX 探測 | `tests/test_market_routing.py` |
 | `app/sync/service.py` | 單檔同步與單檔法人同步 | `app/web/server.py` 的 `/api/sync`、`tests/test_sync_service.py` |
 | `app/sync/bulk_runner.py` | 全市場下載、quiet sync、T86、top-up、bulk item status | `app/web/sync_batch.py`、`tests/test_bulk_runner.py`、`tests/test_quiet_sync.py` |
 | `app/web/api.py` | local-data、stock payload、freshness payload | `app/ui/static/app.js`、`tests/test_web_api.py` |

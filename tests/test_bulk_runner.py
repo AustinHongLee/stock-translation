@@ -38,6 +38,31 @@ class July1Date(date):
 EXPECTED_TARGET = date(2026, 2, 11)
 
 
+class _NoopTpexClient:
+    """測試用：讓 bulk prelude 的 TPEX 段零網路、零資料。"""
+
+    def __init__(self, **_kwargs) -> None:
+        self.last_warnings: list[str] = []
+
+    def fetch_otc_profiles(self) -> list:
+        return []
+
+    def fetch_latest_all_prices(self) -> list:
+        return []
+
+    def fetch_all_monthly_revenues(self) -> list:
+        return []
+
+    def fetch_all_market_valuations(self) -> list:
+        return []
+
+    def fetch_all_financial_statements(self) -> list:
+        return []
+
+    def throttle_factor(self) -> float:
+        return 1.0
+
+
 class FakeBulkClient:
     def __init__(self, *, request_interval: float = 0.0) -> None:
         self.request_interval = request_interval
@@ -370,6 +395,7 @@ def _history_rows(stock_id: str, latest: date, count: int = 180) -> list[DailyPr
     ]
 
 
+@patch("app.sync.bulk_runner.TpexClient", new=_NoopTpexClient)
 class BulkRunnerTests(unittest.TestCase):
     def test_prelude_backfills_dividend_history_and_skips_twse_holidays(self) -> None:
         fake_client = FakeBulkClient(request_interval=0)
@@ -869,6 +895,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@patch("app.sync.bulk_runner.TpexClient", new=_NoopTpexClient)
 class UnsupportedHistoryTests(unittest.TestCase):
     """受益證券/ETN：來源查無歷史 → 標 unsupported_history、不進 failed、長冷卻。"""
 
@@ -975,6 +1002,7 @@ class UnsupportedHistoryTests(unittest.TestCase):
         self.assertNotIn(BULK_STATUS_UNSUPPORTED_HISTORY, statuses)
 
 
+@patch("app.sync.bulk_runner.TpexClient", new=_NoopTpexClient)
 class ProgressiveWriteTests(unittest.TestCase):
     """逐月漸進寫入：支援 on_month 的 client 逐月落庫；中斷時已抓月份保留。"""
 
@@ -1022,6 +1050,7 @@ class ProgressiveWriteTests(unittest.TestCase):
         self.assertEqual(_statuses_for(fake_store, "2330")[-1], "failed")
 
 
+@patch("app.sync.bulk_runner.TpexClient", new=_NoopTpexClient)
 class ExtraStatusTests(unittest.TestCase):
     """限流可見化：plan.extra_status 回報 TWSE 自適應限流倍數。"""
 
@@ -1042,3 +1071,65 @@ class ExtraStatusTests(unittest.TestCase):
 
         self.assertEqual(payload["throttle_factor"], 4.0)
         self.assertTrue(payload["throttled"])
+
+
+class _OtcTpexClient(_NoopTpexClient):
+    """回一檔上櫃股的 TPEX stub。"""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.fail_profiles = bool(kwargs.pop("fail_profiles", False)) if kwargs else False
+
+    def fetch_otc_profiles(self) -> list:
+        return [
+            StockProfile(
+                stock_id="5347",
+                name="世界先進積體電路",
+                short_name="世界",
+                market="TPEX",
+                listed_date=date(1998, 3, 26),
+            )
+        ]
+
+
+class _ExplodingTpexClient(_NoopTpexClient):
+    def fetch_otc_profiles(self) -> list:
+        raise RuntimeError("TPEx down")
+
+
+class BulkTpexPreludeTests(unittest.TestCase):
+    def test_prelude_merges_otc_ids_markets_and_listed_dates(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.TpexClient", new=_OtcTpexClient),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            ids = plan.list_stocks()
+
+        self.assertIn("2330", ids)
+        self.assertIn("5347", ids)
+
+    def test_tpex_failure_does_not_block_twse(self) -> None:
+        fake_client = FakeBulkClient(request_interval=0)
+        fake_client.latest_all_prices = []
+        fake_store = FakeBulkStore(Path("fake.sqlite3"))
+
+        with (
+            patch("app.sync.bulk_runner.date", FixedDate),
+            patch("app.sync.bulk_runner.TwseClient", return_value=fake_client),
+            patch("app.sync.bulk_runner.TpexClient", new=_ExplodingTpexClient),
+            patch("app.sync.bulk_runner.SQLiteStore", return_value=fake_store),
+        ):
+            plan = build_bulk_plan(Path("fake.sqlite3"), request_interval=0)
+            plan.prelude(threading.Event())  # type: ignore[union-attr]
+            ids = plan.list_stocks()
+
+        self.assertIn("2330", ids)
+        self.assertNotIn("5347", ids)

@@ -55,10 +55,34 @@ class FakeHubClient:
         return []
 
 
+class _NoopTpexHubClient:
+    def __init__(self, **_kwargs) -> None:
+        self.last_warnings: list[str] = []
+
+    def fetch_otc_profiles(self) -> list:
+        return []
+
+    def fetch_latest_all_prices(self) -> list:
+        return []
+
+    def fetch_all_monthly_revenues(self) -> list:
+        return []
+
+    def fetch_all_market_valuations(self) -> list:
+        return []
+
+    def fetch_all_financial_statements(self) -> list:
+        return []
+
+
 def _run_main(db_path: Path, *extra_args: str) -> str:
     argv = ["daily_hub_update.py", "--db", str(db_path), "--request-interval", "0", *extra_args]
     buffer = io.StringIO()
-    with patch("sys.argv", argv), redirect_stdout(buffer):
+    with (
+        patch("sys.argv", argv),
+        patch.object(daily_hub_update, "TpexClient", _NoopTpexHubClient),
+        redirect_stdout(buffer),
+    ):
         code = daily_hub_update.main()
     output = buffer.getvalue()
     assert code == 0, f"unexpected exit code {code}: {output}"

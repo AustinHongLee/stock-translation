@@ -1,7 +1,7 @@
 """把「當日增量」套進官方資料包 baseline DB（GitHub Actions 每日發布用）。
 
 設計原則（見 docs/00-AGENT必讀 與 docs/18）：
-- 只做便宜的全市場整批請求（每天約 6~9 個 API 呼叫），絕不逐檔抓 STOCK_DAY 歷史。
+- 只做便宜的全市場整批請求（含上櫃，每天約 10~14 個 API 呼叫），絕不逐檔抓個股歷史。
   歷史 baseline 來自初始資料包；受益證券/ETN 等個股歷史端點不提供的商品，
   就是靠這裡的 STOCK_DAY_ALL top-up 天天累積，代替每台使用者電腦各自爬。
 - 冪等：同一天重跑（第二班次）時日線沒有前進 → publish=no，workflow 跳過發布。
@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 from app.analyze.dividends import dedupe_dividend_records
 from app.analyze.twse_calendar import is_twse_trading_day
 from app.store.sqlite_store import SQLiteStore
+from app.sync.tpex import TpexClient
 from app.sync.twse import TwseClient
 
 T86_LOOKBACK_TRADING_DAYS = 10  # 補近 N 個交易日缺的法人資料（涵蓋週末＋短假期）
@@ -54,6 +55,7 @@ def main() -> int:
 
     with SQLiteStore(db_path) as store:
         client = TwseClient(request_interval=args.request_interval)
+        tpex = TpexClient(request_interval=args.request_interval)
 
         before_latest = _max_daily_date(store)
 
@@ -75,6 +77,16 @@ def main() -> int:
             print("publish=no")
             print(f"summary=STOCK_DAY_ALL 抓取失敗（{str(exc)[:120]}），今天不發布。")
             return 2
+
+        # 2b) 上櫃：清單＋全市場最新收盤（best-effort；失敗只記警告，不擋上市資料包）
+        for label, action in (
+            ("上櫃清單", lambda: store.upsert_profiles(tpex.fetch_otc_profiles())),
+            ("上櫃最新收盤", lambda: store.upsert_daily_prices(tpex.fetch_latest_all_prices())),
+        ):
+            try:
+                action()
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"{label} 失敗：{str(exc)[:80]}")
 
         after_latest = _max_daily_date(store)
         if after_latest is None or (before_latest is not None and after_latest <= before_latest):
@@ -112,6 +124,9 @@ def main() -> int:
             ("月營收", client.fetch_all_monthly_revenues, store.upsert_monthly_revenues),
             ("估值", client.fetch_all_market_valuations, store.upsert_market_valuations),
             ("財報", client.fetch_all_financial_statements, store.upsert_financial_statements),
+            ("上櫃月營收", tpex.fetch_all_monthly_revenues, store.upsert_monthly_revenues),
+            ("上櫃估值", tpex.fetch_all_market_valuations, store.upsert_market_valuations),
+            ("上櫃財報", tpex.fetch_all_financial_statements, store.upsert_financial_statements),
         ):
             try:
                 shared_rows[label] = int(save(fetch()) or 0)
