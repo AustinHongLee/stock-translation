@@ -801,6 +801,7 @@ class WebApiPayloadTests(unittest.TestCase):
         self.assertNotIn("合理價", json.dumps(payload["valuation"], ensure_ascii=False))  # type: ignore[index]
         self.assertNotIn("昂貴價", json.dumps(payload["valuation"], ensure_ascii=False))  # type: ignore[index]
         self.assertEqual(len(payload["valuation"]["vital_signs"]["facts"]), 4)  # type: ignore[index]
+        self.assertIn("recovery", payload["valuation"])  # type: ignore[operator]
         self.assertGreaterEqual(len(payload["valuation"]["relative"]["methods"]), 1)  # type: ignore[index]
         self.assertTrue(payload["is_watchlisted"])
         self.assertIn("features", payload)

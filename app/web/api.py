@@ -44,6 +44,7 @@ from app.analyze.valuation import ValuationResult, calculate_dividend_valuation
 from app.analyze.suitability import ValuationSuitability, assess_valuation_suitability
 from app.analyze.vital_signs import VitalSignsReport, build_vital_signs_report
 from app.analyze.daily_digest import build_daily_digest
+from app.analyze.ex_dividend_recovery import build_ex_dividend_recovery
 from app.analyze.watchlist_board import build_watchlist_board_item
 from app.explain.rule_based import build_rule_based_health_report
 from app.explain.validation import build_validation_brief
@@ -1259,6 +1260,15 @@ def build_stock_payload(
         )
     except Exception:  # noqa: BLE001 - 河流圖是加值資訊，壞掉就不顯示
         valuation_payload["bands"] = None
+    # 歷年填權息（除息後是否回到除息前價位；用長價格＋TWT49U 除息記錄推導）。
+    try:
+        valuation_payload["recovery"] = build_ex_dividend_recovery(
+            valuation_prices or prices,
+            dividend_records,
+            today=end_date,
+        )
+    except Exception:  # noqa: BLE001 - 填息統計是加值資訊，壞掉就不顯示
+        valuation_payload["recovery"] = None
 
     chips_trades = _chips_trades_for(store, stock_id)
     chips_summary = build_institutional_summary(chips_trades)

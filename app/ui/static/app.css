@@ -2933,3 +2933,20 @@ td.down { color: var(--down); font-weight: 600; }
 .dashboard-digest .digest-attn {
   color: var(--muted-text, #8a6d3b);
 }
+
+
+/* ===== 個股頁：歷年填息紀錄 ===== */
+.recovery-block {
+  margin-top: 14px;
+}
+.recovery-block .recovery-note {
+  margin: 6px 0 8px;
+}
+.recovery-block .recovery-table td,
+.recovery-block .recovery-table th {
+  padding: 4px 8px;
+  text-align: left;
+}
+.recovery-block .tone-caution {
+  color: var(--caution-text, #8a6d3b);
+}

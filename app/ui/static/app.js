@@ -301,6 +301,7 @@ const elements = {
   valuationEstimates: document.querySelector("#valuationEstimates"),
   dividendAssumptionNote: document.querySelector("#dividendAssumptionNote"),
   historicalYieldStatus: document.querySelector("#historicalYieldStatus"),
+  exDividendRecovery: document.querySelector("#exDividendRecovery"),
   historicalYieldGrid: document.querySelector("#historicalYieldGrid"),
   valuationWarning: document.querySelector("#valuationWarning"),
   dividendRows: document.querySelector("#dividendRows"),
@@ -3389,6 +3390,7 @@ function renderValuation(valuation, dividends, stockSummary = {}, quote = {}) {
   renderEtfNote();
   renderValuationSuitability(valuation?.suitability);
   renderValuationBands(valuation?.bands);
+  renderExDividendRecovery(valuation?.recovery);
   renderRelativeValuation(valuation?.relative, valuation?.vital_signs);
   elements.valuationEstimates.hidden = true;
   elements.valuationEstimates.innerHTML = "";
@@ -3436,6 +3438,52 @@ function renderEtfNote() {
     note.hidden = true;
     note.innerHTML = "";
   }
+}
+
+function renderExDividendRecovery(recovery) {
+  const box = elements.exDividendRecovery;
+  if (!box) return;
+  if (!recovery || !recovery.available) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const events = (recovery.events || []).slice(-5).reverse();
+  const rows = events.map((event) => {
+    let outcome;
+    if (event.filled === true) {
+      outcome = `<span class="tone-neutral">第 ${escapeHtml(String(event.fill_trading_days))} 個交易日回到基準</span>`;
+    } else if (event.filled === false) {
+      outcome = `<span class="tone-caution">${event.window_truncated_by_next_ex ? "下次除息前未回到" : "一年內未回到"}</span>`;
+    } else {
+      const gap = event.current_gap_percent;
+      outcome = gap == null || gap <= 0
+        ? `<span>觀察中</span>`
+        : `<span>觀察中（差 ${formatNumber(gap)}%）</span>`;
+    }
+    return `
+      <tr>
+        <td>${escapeHtml(event.ex_date)}</td>
+        <td>${formatNumber(event.cash_dividend)}</td>
+        <td>${formatNumber(event.base_close)}</td>
+        <td>${outcome}</td>
+      </tr>
+    `;
+  }).join("");
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="surface-head compact">
+      <h3>歷年填息紀錄</h3>
+      <span class="muted-tag">近 ${escapeHtml(String(recovery.years || 5))} 年 · 只看事實</span>
+    </div>
+    <p class="recovery-note">${escapeHtml(recovery.note || "")}</p>
+    ${rows ? `
+      <table class="data-table recovery-table">
+        <thead><tr><th>除息日</th><th>息值</th><th>除息前收盤</th><th>結果</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : ""}
+    <p class="disclaimer">${escapeHtml(recovery.disclaimer || "")}</p>
+  `;
 }
 
 function renderValuationBands(bands) {
