@@ -49,6 +49,7 @@ from app.sync.bulk_runner import (
     QUIET_REQUEST_INTERVAL,
     build_bulk_plan,
 )
+from app.analyze.price_alerts import normalize_direction
 from app.sync.market_router import MarketRoutedClient, store_market_lookup
 from app.sync.tpex import TpexClient
 from app.sync.twse import TwseClient
@@ -651,6 +652,41 @@ class RequestHandler(BaseHTTPRequestHandler):
                 with SQLiteStore(self.server.db_path) as store:
                     store.add_to_watchlist(stock_id)
                     self._send_json(build_watchlist_payload(store))
+            elif parsed.path == "/api/alerts":
+                body = self._read_json_body()
+                stock_id = str(body.get("stock_id", "")).strip()
+                direction = normalize_direction(body.get("direction"))
+                try:
+                    price = float(body.get("price"))
+                except (TypeError, ValueError):
+                    price = 0.0
+                if not stock_id or direction is None or price <= 0:
+                    self._send_error(
+                        HTTPStatus.BAD_REQUEST,
+                        "需要 stock_id、direction（above/below）與大於 0 的 price。",
+                    )
+                    return
+                with SQLiteStore(self.server.db_path) as store:
+                    store.add_price_alert(
+                        stock_id,
+                        direction=direction,
+                        price=price,
+                        note=str(body.get("note", "")).strip(),
+                    )
+                    self._send_json({"alerts": store.list_price_alerts(stock_id)})
+            elif parsed.path == "/api/alerts/delete":
+                body = self._read_json_body()
+                try:
+                    alert_id = int(body.get("id"))
+                except (TypeError, ValueError):
+                    self._send_error(HTTPStatus.BAD_REQUEST, "id is required")
+                    return
+                stock_id = str(body.get("stock_id", "")).strip()
+                with SQLiteStore(self.server.db_path) as store:
+                    store.delete_price_alert(alert_id)
+                    self._send_json(
+                        {"alerts": store.list_price_alerts(stock_id or None)}
+                    )
             elif parsed.path == "/api/portfolio/transactions":
                 body = self._read_json_body()
                 transaction = self._portfolio_transaction_from_body(body)

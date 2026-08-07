@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS watchlist (
     note TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    price REAL NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    triggered_at TEXT,
+    triggered_close REAL,
+    triggered_date TEXT
+);
+
 CREATE TABLE IF NOT EXISTS dividend_records (
     stock_id TEXT NOT NULL,
     year INTEGER NOT NULL,
@@ -1054,6 +1066,83 @@ class SQLiteStore:
         if total_missing <= 0:
             return None, None, 0
         return first_missing, last_missing, total_missing
+
+    def add_price_alert(
+        self,
+        stock_id: str,
+        *,
+        direction: str,
+        price: float,
+        note: str = "",
+    ) -> int:
+        cursor = self.conn.execute(
+            """
+            INSERT INTO price_alerts (stock_id, direction, price, note, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                stock_id.strip(),
+                direction,
+                float(price),
+                note.strip(),
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid or 0)
+
+    def list_price_alerts(self, stock_id: str | None = None) -> list[dict[str, object]]:
+        sql = """
+            SELECT id, stock_id, direction, price, note, created_at,
+                   triggered_at, triggered_close, triggered_date
+            FROM price_alerts
+        """
+        params: list[object] = []
+        if stock_id is not None:
+            sql += " WHERE stock_id = ?"
+            params.append(stock_id.strip())
+        sql += " ORDER BY (triggered_at IS NOT NULL), id DESC"
+        rows = self.conn.execute(sql, params).fetchall()
+        return [
+            {
+                "id": int(row["id"]),
+                "stock_id": row["stock_id"],
+                "direction": row["direction"],
+                "price": row["price"],
+                "note": row["note"] or "",
+                "created_at": row["created_at"],
+                "triggered_at": row["triggered_at"],
+                "triggered_close": row["triggered_close"],
+                "triggered_date": row["triggered_date"],
+            }
+            for row in rows
+        ]
+
+    def delete_price_alert(self, alert_id: int) -> None:
+        self.conn.execute("DELETE FROM price_alerts WHERE id = ?", (int(alert_id),))
+        self.conn.commit()
+
+    def mark_price_alert_triggered(
+        self,
+        alert_id: int,
+        *,
+        close: float,
+        trade_date: str,
+    ) -> None:
+        self.conn.execute(
+            """
+            UPDATE price_alerts
+            SET triggered_at = ?, triggered_close = ?, triggered_date = ?
+            WHERE id = ? AND triggered_at IS NULL
+            """,
+            (
+                datetime.now().isoformat(timespec="seconds"),
+                float(close),
+                str(trade_date),
+                int(alert_id),
+            ),
+        )
+        self.conn.commit()
 
     def add_to_watchlist(self, stock_id: str, *, note: str = "") -> None:
         self.conn.execute(

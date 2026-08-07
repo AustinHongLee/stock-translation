@@ -2950,3 +2950,49 @@ td.down { color: var(--down); font-weight: 600; }
 .recovery-block .tone-caution {
   color: var(--caution-text, #8a6d3b);
 }
+
+
+/* ===== 到價提醒 ===== */
+.alert-panel {
+  margin: 10px 0;
+}
+.alert-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.alert-form input[type="number"] {
+  width: 110px;
+}
+.alert-form input[type="text"] {
+  flex: 1;
+  min-width: 160px;
+}
+.alert-list-block {
+  display: grid;
+  gap: 6px;
+}
+.alert-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line, #e2e2e2);
+  border-radius: 8px;
+}
+.alert-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.alert-triggered {
+  color: var(--caution-text, #8a6d3b);
+  font-weight: 600;
+}
+.digest-alert {
+  margin: 0;
+  font-weight: 600;
+  color: var(--caution-text, #8a6d3b);
+}

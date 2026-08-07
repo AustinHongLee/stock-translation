@@ -22,6 +22,7 @@ DEFAULT_OUTPUT_DIR = ROOT / "dist" / "official_data"
 DATA_FILES = ("stock_catalog.json", "value_screener.json")
 PRIVATE_TABLES = (
     "watchlist",
+    "price_alerts",
     "portfolio_transactions",
     "chart_annotations",
     "indicator_prefs",

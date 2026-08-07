@@ -45,6 +45,11 @@ from app.analyze.suitability import ValuationSuitability, assess_valuation_suita
 from app.analyze.vital_signs import VitalSignsReport, build_vital_signs_report
 from app.analyze.daily_digest import build_daily_digest
 from app.analyze.ex_dividend_recovery import build_ex_dividend_recovery
+from app.analyze.price_alerts import (
+    RECENT_TRIGGER_KEEP_DAYS,
+    alert_hits,
+    alert_line,
+)
 from app.analyze.watchlist_board import build_watchlist_board_item
 from app.explain.rule_based import build_rule_based_health_report
 from app.explain.validation import build_validation_brief
@@ -917,6 +922,46 @@ def build_local_stocks_payload(store: SQLiteStore) -> dict[str, object]:
     return {"items": items}
 
 
+def _price_alerts_payload(store: SQLiteStore, stock_id: str) -> list[dict[str, object]]:
+    try:
+        return store.list_price_alerts(stock_id)
+    except Exception:  # noqa: BLE001 - 提醒是加值資訊
+        return []
+
+
+def check_price_alerts(store: SQLiteStore) -> list[str]:
+    """用最新收盤檢查未觸發的提醒（到價就標記），回傳近幾天觸發的白話行。"""
+    try:
+        alerts = store.list_price_alerts()
+    except Exception:  # noqa: BLE001
+        return []
+    lines: list[str] = []
+    today = date.today()
+    for alert in alerts:
+        item = dict(alert)
+        if item.get("triggered_at") is None:
+            latest = store.get_daily_prices(str(item["stock_id"]), limit=1)
+            if latest:
+                close = float(latest[-1].close)
+                day = latest[-1].date.isoformat()
+                if alert_hits(str(item["direction"]), float(item["price"]), close):
+                    store.mark_price_alert_triggered(
+                        int(item["id"]), close=close, trade_date=day
+                    )
+                    item.update(
+                        triggered_at="now", triggered_close=close, triggered_date=day
+                    )
+        triggered_date = _date_or_none(item.get("triggered_date"))
+        if item.get("triggered_at") is None or triggered_date is None:
+            continue
+        if (today - triggered_date).days > RECENT_TRIGGER_KEEP_DAYS:
+            continue
+        profile = store.get_profile(str(item["stock_id"]))
+        name = getattr(profile, "short_name", None) or str(item["stock_id"])
+        lines.append(alert_line(item, name=name))
+    return lines
+
+
 def build_watchlist_payload(store: SQLiteStore) -> dict[str, object]:
     items: list[dict[str, object]] = []
     chips_map: dict[str, list[object]] = {}
@@ -950,7 +995,11 @@ def build_watchlist_payload(store: SQLiteStore) -> dict[str, object]:
         except Exception:  # noqa: BLE001 - 法人資料缺席不影響自選清單
             chips_map[row["stock_id"]] = []
     try:
-        digest = build_daily_digest(items, chips_map)
+        alert_lines = check_price_alerts(store)
+    except Exception:  # noqa: BLE001 - 提醒檢查失敗不影響自選清單
+        alert_lines = []
+    try:
+        digest = build_daily_digest(items, chips_map, alert_lines=alert_lines)
     except Exception:  # noqa: BLE001 - 摘要是加值資訊，失敗不能連累自選清單
         digest = None
     return {"items": items, "digest": digest}
@@ -1322,6 +1371,7 @@ def build_stock_payload(
         "chips_series": [institutional_to_json(t) for t in chips_trades],
         "assessment": assessment_payload,
         "is_watchlisted": store.is_watchlisted(stock_id),
+        "price_alerts": _price_alerts_payload(store, stock_id),
         "indicator_prefs": build_indicator_prefs_payload(store),
         "annotations": store.get_chart_annotations(stock_id),
     }

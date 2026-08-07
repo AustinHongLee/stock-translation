@@ -301,6 +301,13 @@ const elements = {
   valuationEstimates: document.querySelector("#valuationEstimates"),
   dividendAssumptionNote: document.querySelector("#dividendAssumptionNote"),
   historicalYieldStatus: document.querySelector("#historicalYieldStatus"),
+  alertButton: document.querySelector("#alertButton"),
+  alertPanel: document.querySelector("#alertPanel"),
+  alertForm: document.querySelector("#alertForm"),
+  alertDirection: document.querySelector("#alertDirection"),
+  alertPrice: document.querySelector("#alertPrice"),
+  alertNote: document.querySelector("#alertNote"),
+  alertList: document.querySelector("#alertList"),
   exDividendRecovery: document.querySelector("#exDividendRecovery"),
   historicalYieldGrid: document.querySelector("#historicalYieldGrid"),
   valuationWarning: document.querySelector("#valuationWarning"),
@@ -386,6 +393,19 @@ elements.portfolioTransactionRows.addEventListener("click", handlePortfolioTable
 elements.portfolioExportButton.addEventListener("click", exportPortfolioExcel);
 elements.syncButton.addEventListener("click", () => {
   if (state.activeStockId) syncStock(state.activeStockId);
+});
+elements.alertButton?.addEventListener("click", () => {
+  if (!elements.alertPanel) return;
+  elements.alertPanel.hidden = !elements.alertPanel.hidden;
+});
+elements.alertForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await submitPriceAlert();
+});
+elements.alertList?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-alert-delete]");
+  if (!button) return;
+  await deletePriceAlert(Number(button.dataset.alertDelete));
 });
 elements.watchlistButton.addEventListener("click", () => {
   if (state.activeStockId) toggleWatchlist(state.activeStockId);
@@ -2280,11 +2300,15 @@ function renderDashboardDigest(digest) {
       <span class="${toneClass(item.change_percent)}">${escapeHtml(pct)}</span>${note}
     </button>`;
   }).join("");
+  const alertsHtml = (digest.alert_lines || [])
+    .map((line) => `<p class="digest-alert">${escapeHtml(line)}</p>`)
+    .join("");
   const chips = (digest.chips_lines || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
   const attention = (digest.attention || []).map((line) => `<li class="digest-attn">${escapeHtml(line)}</li>`).join("");
   box.hidden = false;
   box.innerHTML = `
     <div class="digest-head"><strong>自選股今日異動</strong>${dateTag}</div>
+    ${alertsHtml}
     <p class="digest-headline">${escapeHtml(digest.headline || "")}</p>
     <p class="digest-summary">${escapeHtml(digest.trading_summary || "")}</p>
     ${movers ? `<div class="digest-movers">${movers}</div>` : ""}
@@ -2504,6 +2528,9 @@ function renderStock(payload, fallbackStockId) {
   elements.stockDataNote.textContent = summary.end_date
     ? `資料日 ${summary.end_date}｜日線收盤資料，非即時報價`
     : "日線收盤資料，非即時報價";
+
+  renderPriceAlerts(payload.price_alerts || []);
+  if (elements.alertPanel) elements.alertPanel.hidden = true;
 
   // 公司類型 + 股利法適用性徽章
   const suitability = payload.valuation?.suitability;
@@ -3188,6 +3215,66 @@ function renderWatchlistButton(isWatchlisted) {
   elements.watchlistButton.dataset.watchlisted = isWatchlisted ? "true" : "false";
   elements.watchlistButton.innerHTML = `${starIconMarkup()} ${isWatchlisted ? "移除自選" : "加入自選"}`;
   elements.watchlistButton.classList.toggle("danger-button", isWatchlisted);
+}
+
+function renderPriceAlerts(alerts) {
+  const list = elements.alertList;
+  if (!list) return;
+  const items = Array.isArray(alerts) ? alerts : [];
+  if (!items.length) {
+    list.innerHTML = `<p class="alert-empty">還沒有提醒。設定後，收盤價到達時會在首頁與這裡顯示。</p>`;
+    return;
+  }
+  list.innerHTML = items.map((item) => {
+    const side = item.direction === "above" ? "以上" : "以下";
+    const status = item.triggered_at
+      ? `<span class="alert-triggered">⚑ ${escapeHtml(item.triggered_date || "")} 收盤 ${formatNumber(item.triggered_close)} 已到價</span>`
+      : `<span class="alert-waiting">等待中</span>`;
+    const note = item.note ? `<small>${escapeHtml(item.note)}</small>` : "";
+    return `
+      <div class="alert-row">
+        <div>
+          <strong>${formatNumber(item.price)} ${side}</strong>
+          ${note}
+        </div>
+        <div class="alert-row-meta">
+          ${status}
+          <button class="table-action" type="button" data-alert-delete="${escapeHtml(String(item.id))}">刪除</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function submitPriceAlert() {
+  const stockId = state.activeStockId;
+  if (!stockId || !elements.alertPrice) return;
+  const price = Number(elements.alertPrice.value);
+  if (!Number.isFinite(price) || price <= 0) return;
+  try {
+    const payload = await postJson("/api/alerts", {
+      stock_id: stockId,
+      direction: elements.alertDirection?.value || "above",
+      price,
+      note: elements.alertNote?.value || "",
+    });
+    elements.alertPrice.value = "";
+    if (elements.alertNote) elements.alertNote.value = "";
+    renderPriceAlerts(payload.alerts || []);
+  } catch (error) {
+    console.error("新增提醒失敗", error);
+  }
+}
+
+async function deletePriceAlert(alertId) {
+  const stockId = state.activeStockId;
+  if (!Number.isFinite(alertId)) return;
+  try {
+    const payload = await postJson("/api/alerts/delete", { id: alertId, stock_id: stockId });
+    renderPriceAlerts(payload.alerts || []);
+  } catch (error) {
+    console.error("刪除提醒失敗", error);
+  }
 }
 
 async function toggleWatchlist(stockId) {

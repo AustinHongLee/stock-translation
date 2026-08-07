@@ -23,10 +23,27 @@ def build_daily_digest(
     chips_map: dict[str, list[Any]] | None = None,
     *,
     today: date | None = None,
+    alert_lines: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    """由自選股 items（含 board）與法人資料組出首頁摘要；無自選股回 None。"""
+    """由自選股 items（含 board）、法人資料與到價提醒組出首頁摘要。
+
+    無自選股且無提醒 → None；只有提醒（提醒的股票不一定在自選）也要能顯示。
+    """
+    alert_lines = list(alert_lines or [])
     if not items:
-        return None
+        if not alert_lines:
+            return None
+        return {
+            "date": None,
+            "trading_summary": "",
+            "movers": [],
+            "chips_lines": [],
+            "attention": [],
+            "quiet": False,
+            "alert_lines": alert_lines,
+            "headline": alert_lines[0],
+            "disclaimer": DISCLAIMER,
+        }
     chips_map = chips_map or {}
 
     rows = [_digest_row(item) for item in items]
@@ -71,6 +88,7 @@ def build_daily_digest(
         "chips_lines": chips_lines,
         "attention": attention,
         "quiet": quiet,
+        "alert_lines": alert_lines,
         "headline": _headline(movers, chips_lines, quiet, known),
         "disclaimer": DISCLAIMER,
     }
