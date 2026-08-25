@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from datetime import date
 from pathlib import Path
 from typing import Any
 
+from app.analyze.data_gap import DATA_NODE_DAILY_PRICE, DATA_NODE_INSTITUTIONAL
 from app.store.legacy_import import merge_sqlite
 from app.store.sqlite_store import SQLiteStore
 from app.update.checker import parse_version
@@ -106,12 +108,14 @@ def maybe_merge_seed(
 
         backup_path = _backup_current_db(Path(current_db), Path(backups_dir), seed_version)
         summary = merge_sqlite(seed_db, current_db, SEED_MERGE_TABLES)
+        coverage_rows = _refresh_public_coverage(store)
         set_applied_seed_version(store, seed_version)
         store.delete_json_cache(LOCAL_DATA_CACHE_KEY)
         return {
             "applied": True,
             "version": seed_version,
             "backup": str(backup_path) if backup_path else "",
+            "coverage_rows": coverage_rows,
             **summary,
         }
     except Exception as exc:  # noqa: BLE001 - seed merge is best-effort and non-destructive
@@ -131,6 +135,39 @@ def seed_manifest_version(seed_directory: Path | str) -> int:
     if manifest is None:
         return 0
     return _int_or_zero(manifest.get("data_snapshot_version"))
+
+
+def _refresh_public_coverage(store: SQLiteStore) -> int:
+    """資料包合併後以本機實際資料重算，不沿用包內可能過期的 coverage。"""
+    stock_rows = store.conn.execute("SELECT stock_id FROM stock_profiles").fetchall()
+    stock_ids = [str(row[0]) for row in stock_rows]
+    refreshed = 0
+    for node, table in (
+        (DATA_NODE_DAILY_PRICE, "daily_prices"),
+        (DATA_NODE_INSTITUTIONAL, "institutional_trades"),
+    ):
+        latest_row = store.conn.execute(f"SELECT MAX(date) FROM {table}").fetchone()
+        latest_text = str(latest_row[0] or "") if latest_row else ""
+        if not latest_text:
+            continue
+        target_date = date.fromisoformat(latest_text)
+        if node == DATA_NODE_INSTITUTIONAL:
+            covered_rows = store.conn.execute(
+                "SELECT DISTINCT stock_id FROM institutional_trades"
+            ).fetchall()
+            node_stock_ids = [str(row[0]) for row in covered_rows]
+        else:
+            node_stock_ids = stock_ids
+        for stock_id in node_stock_ids:
+            store.refresh_data_coverage(
+                stock_id,
+                node,
+                target_date=target_date,
+                commit=False,
+            )
+            refreshed += 1
+    store.conn.commit()
+    return refreshed
 
 
 def _app_version_allows(current: str, minimum: str) -> bool:

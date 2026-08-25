@@ -23,6 +23,10 @@ on:
         description: '非交易日也強制執行（補跑用）'
         type: boolean
         default: false
+      history_batch_days:
+        description: '本輪最多補幾個上櫃歷史交易日（平日預設 40，首次建基線可填 260）'
+        type: number
+        default: 40
 
 permissions:
   contents: write
@@ -85,8 +89,19 @@ jobs:
             --db baseline/extracted/data/stock_translator.sqlite3 \
             "${extra[@]}" | tee -a "$GITHUB_OUTPUT"
 
+      - name: 漸進補齊上櫃近一年歷史
+        id: history
+        if: steps.preflight.outputs.proceed == 'yes'
+        run: |
+          set -euo pipefail
+          batch_days='${{ inputs.history_batch_days || 40 }}'
+          python tools/backfill_tpex_history.py \
+            --db baseline/extracted/data/stock_translator.sqlite3 \
+            --history-days 370 \
+            --max-days "$batch_days" | tee -a "$GITHUB_OUTPUT"
+
       - name: 重建資料包
-        if: steps.preflight.outputs.proceed == 'yes' && steps.update.outputs.publish == 'yes'
+        if: steps.preflight.outputs.proceed == 'yes' && (steps.update.outputs.publish == 'yes' || steps.history.outputs.publish == 'yes')
         run: |
           set -euo pipefail
           # app_min_version 傳承 baseline 的版本閘：main 分支版本超前時，
@@ -100,7 +115,7 @@ jobs:
           ls -la dist/StockTranslator-official-data-*
 
       - name: 上傳到最新 Release 並清舊資料包
-        if: steps.preflight.outputs.proceed == 'yes' && steps.update.outputs.publish == 'yes'
+        if: steps.preflight.outputs.proceed == 'yes' && (steps.update.outputs.publish == 'yes' || steps.history.outputs.publish == 'yes')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -128,5 +143,6 @@ jobs:
             echo "### 每日資料樞紐"
             echo "- preflight：${{ steps.preflight.outputs.reason || '未執行' }}"
             echo "- 增量：${{ steps.update.outputs.summary || '未執行' }}"
-            echo "- 發布：${{ steps.update.outputs.publish == 'yes' && '已上傳新資料包' || '本次未發布' }}"
+            echo "- 上櫃歷史：${{ steps.history.outputs.summary || '未執行' }}"
+            echo "- 發布：${{ (steps.update.outputs.publish == 'yes' || steps.history.outputs.publish == 'yes') && '已上傳新資料包' || '本次未發布' }}"
           } >> "$GITHUB_STEP_SUMMARY"

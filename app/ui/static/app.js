@@ -350,7 +350,7 @@ elements.searchInput.addEventListener("focus", handleSearchInput);
 elements.searchSuggestions.addEventListener("click", handleSearchSuggestionClick);
 elements.themeToggle?.addEventListener("click", toggleTheme);
 elements.autoUpdateCheckToggle?.addEventListener("change", handleAutoUpdateToggle);
-elements.dataPackBadge?.addEventListener("click", applyBundledDataPack);
+elements.dataPackBadge?.addEventListener("click", applyOfficialDataPack);
 elements.updateBanner?.addEventListener("click", handleUpdateBannerClick);
 elements.refreshLocalButton.addEventListener("click", loadWatchlist);
 elements.dashboardRefreshButton.addEventListener("click", loadWatchlist);
@@ -622,17 +622,17 @@ function renderDataPackBadge(payload = state.appInfo) {
   elements.dataPackBadge.classList.remove("hidden");
   elements.dataPackBadge.textContent = pending ? "資料包待套用" : `資料包 ${bundled}`;
   elements.dataPackBadge.title = pending
-    ? `隨包資料包 ${bundled} 尚未套用完；按一下可立即補進本機資料庫，不覆蓋自選股、持倉或設定。`
-    : `已套用官方資料包 ${applied}；按一下可重新補缺的公開市場資料，不碰自選股、持倉或設定。`;
+    ? `隨包資料包 ${bundled} 尚未套用完；按一下會取得 GitHub 最新官方資料，再安全補進本機。`
+    : `已套用官方資料包 ${applied}；按一下可從 GitHub 重新取得最新公開市場資料，不覆蓋自選股、持倉或設定。`;
 }
 
-async function applyBundledDataPack(button = elements.dataPackBadge) {
+async function applyOfficialDataPack(button = elements.dataPackBadge) {
   if (!button || button.disabled) return;
   const oldText = button.textContent || "資料包";
   button.disabled = true;
   button.textContent = "套用中...";
   try {
-    const payload = await postJson("/api/data/seed/apply", {});
+    const payload = await postJson("/api/data/hub/apply", { force: true });
     if (payload.app_info) {
       state.appInfo = payload.app_info;
       state.appVersion = payload.app_info.version || state.appVersion;

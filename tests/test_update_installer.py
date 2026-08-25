@@ -50,6 +50,7 @@ class UpdateInstallerTests(unittest.TestCase):
             text = updater.read_text(encoding="utf-8")
 
         self.assertIn("/XD data", text)
+        self.assertIn(r"%PAYLOAD%\official_data", text)
         self.assertIn("rollback", text)
         self.assertIn("_internal", text)
         self.assertIn("Data folder was not touched", text)

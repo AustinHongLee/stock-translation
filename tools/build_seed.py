@@ -30,6 +30,7 @@ SEED_TABLES = (
 )
 PRIVATE_TABLES = (
     "watchlist",
+    "price_alerts",
     "portfolio_transactions",
     "chart_annotations",
     "indicator_prefs",

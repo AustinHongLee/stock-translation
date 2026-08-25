@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from app.models import StockProfile
 from app.store.seed_merge import (
     SEED_APPLIED_CACHE_KEY,
     applied_seed_version,
@@ -48,9 +49,12 @@ class SeedMergeTests(unittest.TestCase):
             watchlist = store.conn.execute("SELECT stock_id FROM watchlist ORDER BY stock_id").fetchall()
             self.assertIsNone(store.get_json_cache("local_data_v3"))
             self.assertEqual(applied_seed_version(store), 20260701)
+            coverage = store.get_data_coverage("2317", "daily_price")
 
         self.assertEqual([(row["stock_id"], row["close"]) for row in rows], [("2317", 50.0), ("2330", 100.0)])
         self.assertEqual([row["stock_id"] for row in watchlist], ["2330"])
+        self.assertEqual(coverage["row_count"], 1)
+        self.assertGreaterEqual(result["coverage_rows"], 2)
         self.assertTrue(any(self.backups.glob("stock_translator.20260701.sqlite3")))
 
     def test_same_seed_version_is_only_applied_once(self) -> None:
@@ -206,6 +210,12 @@ class SeedMergeTests(unittest.TestCase):
         if self.seed_db.exists():
             self.seed_db.unlink()
         with SQLiteStore(self.seed_db) as store:
+            store.upsert_profiles(
+                [
+                    StockProfile("2330", "台積電", "台積電"),
+                    StockProfile("2317", "鴻海", "鴻海"),
+                ]
+            )
             _insert_daily(store.conn, "2330", "2026-06-30", 999.0)
             _insert_daily(store.conn, "2317", "2026-06-30", 50.0)
             store.conn.execute("INSERT INTO watchlist (stock_id, added_at) VALUES (?, ?)", ("9999", "2026-07-01"))

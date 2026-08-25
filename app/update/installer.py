@@ -189,10 +189,15 @@ if errorlevel 1 goto fail
 
 if exist "%INSTALL%\\%EXE_NAME%" move /Y "%INSTALL%\\%EXE_NAME%" "%BACKUP%\\%EXE_NAME%" >> "%LOG%" 2>&1
 if exist "%INSTALL%\\_internal" move /Y "%INSTALL%\\_internal" "%BACKUP%\\_internal" >> "%LOG%" 2>&1
+if exist "%PAYLOAD%\\official_data" if exist "%INSTALL%\\official_data" move /Y "%INSTALL%\\official_data" "%BACKUP%\\official_data" >> "%LOG%" 2>&1
 
 robocopy "%PAYLOAD%" "%INSTALL%" /E /XD data /XF updater.bat update-error.txt updater.log >> "%LOG%" 2>&1
 set "ROBOCOPY_RC=%ERRORLEVEL%"
 if %ROBOCOPY_RC% GEQ 8 goto rollback
+if exist "%PAYLOAD%\\official_data" (
+  robocopy "%PAYLOAD%\\official_data" "%INSTALL%\\official_data" /E /R:2 /W:1 >> "%LOG%" 2>&1
+  if errorlevel 8 goto rollback
+)
 
 if exist "%BACKUP%" rmdir /S /Q "%BACKUP%" >> "%LOG%" 2>&1
 echo [%date% %time%] Update succeeded. Data folder was not touched. >> "%LOG%"
@@ -203,8 +208,10 @@ exit /b 0
 echo [%date% %time%] Update failed, rolling back. Robocopy=%ROBOCOPY_RC% >> "%LOG%"
 if exist "%INSTALL%\\%EXE_NAME%" del /F /Q "%INSTALL%\\%EXE_NAME%" >> "%LOG%" 2>&1
 if exist "%INSTALL%\\_internal" rmdir /S /Q "%INSTALL%\\_internal" >> "%LOG%" 2>&1
+if exist "%INSTALL%\\official_data" rmdir /S /Q "%INSTALL%\\official_data" >> "%LOG%" 2>&1
 if exist "%BACKUP%\\%EXE_NAME%" move /Y "%BACKUP%\\%EXE_NAME%" "%INSTALL%\\%EXE_NAME%" >> "%LOG%" 2>&1
 if exist "%BACKUP%\\_internal" move /Y "%BACKUP%\\_internal" "%INSTALL%\\_internal" >> "%LOG%" 2>&1
+if exist "%BACKUP%\\official_data" move /Y "%BACKUP%\\official_data" "%INSTALL%\\official_data" >> "%LOG%" 2>&1
 echo 更新失敗，已嘗試還原舊版。詳見 "%LOG%" > "%ERROR_FILE%"
 start "" "%INSTALL%\\%EXE_NAME%"
 exit /b 1

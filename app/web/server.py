@@ -21,6 +21,7 @@ from app.exporters.excel import (
 from app.exporters.html_report import assert_report_has_no_forbidden, build_stock_report_html
 from app.news import fetch_company_news
 from app.runtime_paths import (
+    bootstrap_official_data,
     data_dir,
     data_path,
     ensure_seeded_data_file,
@@ -30,7 +31,12 @@ from app.runtime_paths import (
     static_dir,
 )
 from app.store.legacy_import import copy_legacy_snapshot, import_legacy_data, legacy_import_status
-from app.store.seed_merge import applied_seed_version, maybe_merge_seed, seed_manifest_version
+from app.store.seed_merge import (
+    applied_seed_version,
+    maybe_merge_seed,
+    seed_manifest_version,
+    set_applied_seed_version,
+)
 from app.update.checker import check_for_update
 from app.update.data_hub import check_for_data_hub, prepare_data_hub
 from app.update.installer import prepare_update, start_prepared_update
@@ -941,6 +947,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Apply bundled public seed data to the local database and exit.",
     )
     parser.add_argument(
+        "--apply-data-hub",
+        action="store_true",
+        help="Download and safely merge the latest official GitHub data pack, then exit.",
+    )
+    parser.add_argument(
         "--no-auto-sync",
         action="store_false",
         dest="auto_sync",
@@ -949,17 +960,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    bootstrapped_official = False
     if args.db == DEFAULT_DB:
         migrate_legacy_data("stock_translator.sqlite3")
+        bootstrapped_official = bootstrap_official_data("stock_translator.sqlite3")
         args.db = ensure_seeded_data_file("stock_translator.sqlite3")
     args.db.parent.mkdir(parents=True, exist_ok=True)
-    with SQLiteStore(args.db):
-        pass
+    with SQLiteStore(args.db) as store:
+        if bootstrapped_official:
+            version = seed_manifest_version(external_root() / "official_data")
+            if version > 0:
+                set_applied_seed_version(store, version)
     if args.apply_seed:
         result = _apply_seed_now(args.db, force=True)
         print(_seed_merge_message(result, manual=True))
         return 0
-    _start_seed_merge_if_needed(args.db)
+    if args.apply_data_hub:
+        result = _apply_data_hub_now(args.db, force=True)
+        print(_data_hub_merge_message(result, manual=True))
+        return 0 if result.get("applied") else 1
     if args.auto_sync:
         _start_quiet_sync_loop(args.db)
 
@@ -1062,23 +1081,6 @@ def _start_quiet_sync_loop(db_path: Path) -> None:
     threading.Thread(target=_worker, name="quiet-sync", daemon=True).start()
 
 
-def _start_seed_merge_if_needed(db_path: Path) -> None:
-    if not getattr(sys, "frozen", False):
-        return
-
-    def _worker() -> None:
-        result = _apply_seed_now(db_path, force=False)
-        message = _seed_merge_message(result, manual=False)
-        if message:
-            print(message)
-        hub_result = _apply_data_hub_now(db_path, force=False)
-        hub_message = _data_hub_merge_message(hub_result, manual=False)
-        if hub_message:
-            print(hub_message)
-
-    threading.Thread(target=_worker, name="seed-merge", daemon=True).start()
-
-
 def _apply_seed_now(db_path: Path, *, force: bool) -> dict[str, object]:
     with SQLiteStore(db_path) as store:
         return maybe_merge_seed(
@@ -1095,24 +1097,52 @@ def _apply_data_hub_now(db_path: Path, *, force: bool) -> dict[str, object]:
     try:
         with SQLiteStore(db_path) as store:
             current_version = applied_seed_version(store)
+        bundled_dir = external_root() / "official_data"
+        bundled_version = seed_manifest_version(bundled_dir)
         hub_info = _latest_data_hub_info(
             current_version,
             force=force,
             include_current=force,
         )
-        if not hub_info.get("available"):
+        remote_version = int(hub_info.get("version") or 0)
+        use_bundled = bool(
+            bundled_version > 0
+            and (
+                (not force and bundled_version > current_version and bundled_version >= remote_version)
+                or (force and not hub_info.get("available"))
+            )
+        )
+        if use_bundled:
+            hub_info = {
+                "available": True,
+                "current_version": current_version,
+                "version": bundled_version,
+                "asset_name": "隨版完整官方資料",
+                "message": "使用發行包內已驗證的完整官方資料。",
+            }
+            hub_dir = bundled_dir
+            downloaded_zip = ""
+        elif hub_info.get("available"):
+            prepared = prepare_data_hub(hub_info)
+            hub_dir = prepared.hub_dir
+            downloaded_zip = str(prepared.zip_path)
+        else:
             with SQLiteStore(db_path) as store:
-                store.set_json_cache(DATA_HUB_STATE_KEY, _data_hub_state_payload({"applied": False, "reason": "not_available", "hub": hub_info}))
+                store.set_json_cache(
+                    DATA_HUB_STATE_KEY,
+                    _data_hub_state_payload(
+                        {"applied": False, "reason": "not_available", "hub": hub_info}
+                    ),
+                )
             return {
                 "applied": False,
                 "reason": "not_available",
                 "hub": hub_info,
             }
-        prepared = prepare_data_hub(hub_info)
         with SQLiteStore(db_path) as store:
             result = maybe_merge_seed(
                 store,
-                seed_dir=prepared.hub_dir,
+                seed_dir=hub_dir,
                 current_db=db_path,
                 app_version=APP_VERSION,
                 backups_dir=data_dir() / "backups",
@@ -1125,8 +1155,8 @@ def _apply_data_hub_now(db_path: Path, *, force: bool) -> dict[str, object]:
         return {
             **result,
             "hub": hub_info,
-            "hub_dir": str(prepared.hub_dir),
-            "downloaded_zip": str(prepared.zip_path),
+            "hub_dir": str(hub_dir),
+            "downloaded_zip": downloaded_zip,
         }
     except Exception as exc:  # noqa: BLE001 - hub is best-effort and must never block local use
         result = {"applied": False, "reason": "hub_error", "error": str(exc)}
@@ -1217,12 +1247,16 @@ def _app_info_payload(db_path: Path = DEFAULT_DB) -> dict[str, object]:
         cached_hub = store.get_json_cache(DATA_HUB_STATE_KEY)
         if cached_hub is not None:
             hub_state = cached_hub[0]
+    bundled_version = max(
+        seed_manifest_version(seed_dir()),
+        seed_manifest_version(external_root() / "official_data"),
+    )
     return {
         "version": APP_VERSION,
         "update_source": "GitHub Releases",
         "update_privacy": "只連 GitHub 取得版本號、下載連結與官方資料樞紐，不上傳任何本地資料。",
         "data_snapshot_version": seed_version,
-        "bundled_data_snapshot_version": seed_manifest_version(seed_dir()),
+        "bundled_data_snapshot_version": bundled_version,
         "data_hub": hub_state if isinstance(hub_state, dict) else None,
         "frozen": bool(getattr(sys, "frozen", False)),
     }

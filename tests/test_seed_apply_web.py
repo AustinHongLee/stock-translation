@@ -124,6 +124,49 @@ class SeedApplyWebTests(unittest.TestCase):
         self.assertTrue(applied["ok"])
         self.assertIn("官方資料樞紐已套用", str(applied["message"]))
 
+    def test_data_hub_apply_falls_back_to_release_bundled_official_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "local" / "stock_translator.sqlite3"
+            bundled = root / "official_data"
+            bundled_db = bundled / "data" / "stock_translator.sqlite3"
+            bundled_db.parent.mkdir(parents=True)
+            with SQLiteStore(db_path):
+                pass
+            with SQLiteStore(bundled_db) as store:
+                _insert_daily(store.conn, "3105", "2026-08-24", 355.0)
+                store.conn.commit()
+            (bundled / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "data_snapshot_version": 20260825,
+                        "app_min_version": "3.4.0",
+                        "files": {
+                            "data/stock_translator.sqlite3": {
+                                "sha256": file_sha256(bundled_db)
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch("app.web.server.external_root", return_value=root),
+                patch(
+                    "app.web.server._latest_data_hub_info",
+                    return_value={"available": False, "version": 0},
+                ),
+                patch.object(web_server, "APP_VERSION", "3.4.0"),
+            ):
+                result = web_server._apply_data_hub_now(db_path, force=True)
+
+            with SQLiteStore(db_path) as store:
+                self.assertEqual(store.count_daily_prices("3105"), 1)
+        self.assertTrue(result["applied"])
+        self.assertEqual(result["version"], 20260825)
+        self.assertEqual(result["downloaded_zip"], "")
+
 
 def _request_json(url: str, *, method: str = "GET") -> dict[str, object]:
     data = b"{}" if method != "GET" else None

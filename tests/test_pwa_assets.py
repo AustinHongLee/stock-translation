@@ -62,7 +62,7 @@ class PWAAssetsTests(unittest.TestCase):
         self.assertIn("只連 GitHub", html)
         self.assertIn("資料包待套用", js)
         self.assertIn("不覆蓋自選股", js)
-        self.assertIn("/api/data/seed/apply", js)
+        self.assertIn("/api/data/hub/apply", js)
         self.assertIn("data-update-download", js)
         self.assertIn("data-update-direct", js)
         self.assertIn("不會被碰", js)

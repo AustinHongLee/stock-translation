@@ -61,6 +61,45 @@ def ensure_seeded_data_file(filename: str) -> Path:
     return target
 
 
+def bootstrap_official_data(filename: str = "stock_translator.sqlite3") -> bool:
+    """首次啟動時，用發行包旁的完整官方資料直接建立本機資料庫。
+
+    只在 frozen build 且本機 DB 尚不存在時執行；DB 先複製到暫存檔再原子換入，
+    中途失敗不會留下半份 SQLite。既有使用者資料永遠不覆寫。
+    """
+    if not getattr(sys, "frozen", False):
+        return False
+
+    target_dir = data_dir()
+    target_db = target_dir / filename
+    if target_db.exists():
+        return False
+    source_dir = external_root() / "official_data" / "data"
+    source_db = source_dir / filename
+    if not source_db.is_file():
+        return False
+
+    temp_db = target_dir / f".{filename}.bootstrap.tmp"
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_db, temp_db)
+        temp_db.replace(target_db)
+        for source in source_dir.iterdir():
+            if not source.is_file() or source.name == filename:
+                continue
+            target = target_dir / source.name
+            if not target.exists():
+                shutil.copy2(source, target)
+        return True
+    except Exception as exc:  # noqa: BLE001 - bootstrap must never block startup
+        LOGGER.warning("Failed to bootstrap official data from %s: %s", source_dir, exc)
+        try:
+            temp_db.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+
 def migrate_legacy_data(filename: str = "stock_translator.sqlite3") -> bool:
     """Copy exe-adjacent data into the external data directory once.
 

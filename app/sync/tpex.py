@@ -13,6 +13,7 @@ TPEx 的 mopsfin_* 端點欄位與 TWSE t187ap* 相同（中文 key），視為�
 """
 from __future__ import annotations
 
+import gzip
 import json
 import ssl
 import threading
@@ -44,6 +45,7 @@ FetchJson = Callable[[str], Any]
 
 SOURCE_TRADING_STOCK = "TPEX_TRADING_STOCK"
 SOURCE_MAINBOARD_QUOTES = "TPEX_MAINBOARD_QUOTES"
+SOURCE_DAILY_QUOTES = "TPEX_DAILY_QUOTES"
 
 
 class TpexError(RuntimeError):
@@ -53,6 +55,7 @@ class TpexError(RuntimeError):
 class TpexClient:
     OPENAPI_BASE = "https://www.tpex.org.tw/openapi/v1"
     TRADING_STOCK_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock"
+    DAILY_QUOTES_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes"
     THROTTLE_FACTOR_MAX = 32.0
     _SHARED_CACHE_TTL_SECONDS = 15 * 60
     _shared_payload_cache: dict[str, tuple[float, Any]] = {}
@@ -225,6 +228,86 @@ class TpexClient:
             for price in sorted(prices, key=lambda item: item.date)
             if start_date <= price.date <= end_date
         ]
+
+    def fetch_all_daily_prices_for_date(
+        self,
+        day: date,
+        *,
+        stock_ids: set[str] | None = None,
+    ) -> list[DailyPrice]:
+        """抓指定交易日的上櫃全市場日線。
+
+        這個端點一次回整個市場，供官方 Data Hub 建立歷史 baseline；不應拿來讓
+        每台客戶端逐日補資料。欄位本身已是「股／元」，與 tradingStock 的
+        「仟股／仟元」不同，這裡不可再乘 1000。
+        """
+        query = urllib.parse.urlencode(
+            {"date": day.strftime("%Y/%m/%d"), "id": "", "response": "json"}
+        )
+        payload = self._fetch_json(f"{self.DAILY_QUOTES_URL}?{query}")
+        if not isinstance(payload, dict):
+            raise TpexError("Unexpected TPEx daily-quotes payload.")
+
+        stat = str(payload.get("stat", ""))
+        if stat and stat.lower() != "ok":
+            return []
+        response_day = _parse_daily_quotes_day(payload.get("date"))
+        if response_day is None:
+            raise TpexError("TPEx daily-quotes response is missing its date.")
+        if response_day != day:
+            raise TpexError(
+                f"TPEx daily-quotes returned {response_day.isoformat()} for {day.isoformat()}."
+            )
+
+        table = _daily_quotes_table(payload)
+        if table is None:
+            return []
+        fields, rows = table
+        indexes = _daily_quotes_field_indexes(fields)
+        required = ("stock_id", "open", "high", "low", "close", "volume")
+        if any(name not in indexes for name in required):
+            raise TpexError("TPEx daily-quotes fields changed; required columns are missing.")
+
+        prices: list[DailyPrice] = []
+        relevant_rows = 0
+        unparsable = 0
+        for row in rows:
+            if not isinstance(row, list):
+                continue
+            try:
+                stock_id = str(row[indexes["stock_id"]]).strip()
+            except (IndexError, TypeError):
+                continue
+            if not stock_id or (stock_ids is not None and stock_id not in stock_ids):
+                continue
+            relevant_rows += 1
+            try:
+                prices.append(
+                    DailyPrice(
+                        stock_id=stock_id,
+                        date=day,
+                        open=_parse_float(row[indexes["open"]]),
+                        high=_parse_float(row[indexes["high"]]),
+                        low=_parse_float(row[indexes["low"]]),
+                        close=_parse_float(row[indexes["close"]]),
+                        # dailyQuotes 明確標示成交股數與成交金額（元），不做千倍換算。
+                        volume=_parse_int(row[indexes["volume"]]),
+                        trade_value=_daily_quote_optional_int(row, indexes, "trade_value"),
+                        transaction_count=_daily_quote_optional_int(
+                            row, indexes, "transaction_count"
+                        ),
+                        change=_daily_quote_optional_float(row, indexes, "change"),
+                        source=SOURCE_DAILY_QUOTES,
+                    )
+                )
+            except (IndexError, TypeError, ValueError, InvalidOperation):
+                unparsable += 1
+        if relevant_rows and not prices and unparsable:
+            raise TpexError(
+                f"All {relevant_rows} relevant TPEx daily-quotes rows were unparsable "
+                f"for {day.isoformat()}."
+            )
+        return prices
 
     # ---- 全市場最新收盤（top-up 用） --------------------------------------
     def fetch_latest_all_prices(self) -> list[DailyPrice]:
@@ -400,6 +483,7 @@ class TpexClient:
             url,
             headers={
                 "Accept": "application/json",
+                "Accept-Encoding": "gzip",
                 "User-Agent": "stock-translator/0.1 (+local-first MVP)",
             },
         )
@@ -413,6 +497,9 @@ class TpexClient:
                     context=self._ssl_context,
                 ) as response:
                     raw = response.read()
+                    content_encoding = str(response.headers.get("Content-Encoding") or "").lower()
+                if "gzip" in content_encoding:
+                    raw = gzip.decompress(raw)
                 try:
                     payload = json.loads(raw.decode("utf-8-sig"))
                     self._register_success()
@@ -503,3 +590,64 @@ def _trading_stock_rows(payload: dict[str, Any]) -> list[Any]:
             return first["data"]
     data = payload.get("data")
     return data if isinstance(data, list) else []
+
+
+def _parse_daily_quotes_day(value: Any) -> date | None:
+    text = "".join(ch for ch in str(value or "") if ch.isdigit())
+    if len(text) != 8:
+        return None
+    try:
+        return _parse_gregorian_date(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _daily_quotes_table(payload: dict[str, Any]) -> tuple[list[str], list[Any]] | None:
+    tables = payload.get("tables")
+    if not isinstance(tables, list):
+        return None
+    for table in tables:
+        if not isinstance(table, dict):
+            continue
+        fields = table.get("fields")
+        rows = table.get("data")
+        if not isinstance(fields, list) or not isinstance(rows, list):
+            continue
+        names = {str(item).strip() for item in fields}
+        if "代號" in names and ("收盤" in names or "收盤價" in names):
+            return [str(item).strip() for item in fields], rows
+    return None
+
+
+def _daily_quotes_field_indexes(fields: list[str]) -> dict[str, int]:
+    aliases = {
+        "stock_id": ("代號", "股票代號"),
+        "open": ("開盤", "開盤價"),
+        "high": ("最高", "最高價"),
+        "low": ("最低", "最低價"),
+        "close": ("收盤", "收盤價"),
+        "change": ("漲跌", "漲跌價差"),
+        "volume": ("成交股數",),
+        "trade_value": ("成交金額(元)", "成交金額（元）", "成交金額"),
+        "transaction_count": ("成交筆數",),
+    }
+    positions = {name: index for index, name in enumerate(fields)}
+    indexes: dict[str, int] = {}
+    for canonical, candidates in aliases.items():
+        for candidate in candidates:
+            if candidate in positions:
+                indexes[canonical] = positions[candidate]
+                break
+    return indexes
+
+
+def _daily_quote_optional_int(row: list[Any], indexes: dict[str, int], name: str) -> int | None:
+    index = indexes.get(name)
+    return _parse_optional_int(row[index]) if index is not None and index < len(row) else None
+
+
+def _daily_quote_optional_float(
+    row: list[Any], indexes: dict[str, int], name: str
+) -> float | None:
+    index = indexes.get(name)
+    return _parse_optional_float(row[index]) if index is not None and index < len(row) else None

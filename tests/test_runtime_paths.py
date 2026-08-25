@@ -74,6 +74,50 @@ class RuntimePathsTests(unittest.TestCase):
 
             self.assertEqual((new_data / "stock_translator.sqlite3").read_bytes(), b"existing-db")
 
+    def test_bootstrap_official_data_copies_full_database_on_first_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local_app_data = root / "LocalAppData"
+            exe_path = root / "install" / "股票翻譯機.exe"
+            official_data = exe_path.parent / "official_data" / "data"
+            official_data.mkdir(parents=True)
+            (official_data / "stock_translator.sqlite3").write_bytes(b"official-db")
+            (official_data / "stock_catalog.json").write_text("{}", encoding="utf-8")
+
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "executable", str(exe_path)),
+                patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}),
+            ):
+                self.assertTrue(runtime_paths.bootstrap_official_data())
+                new_data = local_app_data / "StockTranslator" / "data"
+
+            self.assertEqual(
+                (new_data / "stock_translator.sqlite3").read_bytes(), b"official-db"
+            )
+            self.assertEqual((new_data / "stock_catalog.json").read_text(encoding="utf-8"), "{}")
+
+    def test_bootstrap_official_data_never_overwrites_existing_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local_app_data = root / "LocalAppData"
+            exe_path = root / "install" / "股票翻譯機.exe"
+            official_data = exe_path.parent / "official_data" / "data"
+            official_data.mkdir(parents=True)
+            (official_data / "stock_translator.sqlite3").write_bytes(b"official-db")
+            target = local_app_data / "StockTranslator" / "data" / "stock_translator.sqlite3"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"user-db")
+
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "executable", str(exe_path)),
+                patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}),
+            ):
+                self.assertFalse(runtime_paths.bootstrap_official_data())
+
+            self.assertEqual(target.read_bytes(), b"user-db")
+
     def test_development_mode_data_dir_stays_repo_root_data(self) -> None:
         with patch.object(sys, "frozen", False, create=True):
             self.assertEqual(runtime_paths.external_data_root(), runtime_paths.resource_root())

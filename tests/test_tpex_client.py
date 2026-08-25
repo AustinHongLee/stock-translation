@@ -87,6 +87,68 @@ class TpexTradingStockTests(unittest.TestCase):
         self.assertEqual([p.date for p in prices], [date(2026, 7, 1), date(2026, 8, 1)])
 
 
+class TpexDailyQuotesTests(unittest.TestCase):
+    @staticmethod
+    def _payload(rows: list[list[str]], *, response_date: str = "20260804") -> dict:
+        return {
+            "stat": "ok",
+            "date": response_date,
+            "tables": [
+                {
+                    "title": "上櫃股票行情",
+                    "fields": [
+                        "代號",
+                        "名稱",
+                        "收盤",
+                        "漲跌",
+                        "開盤",
+                        "最高",
+                        "最低",
+                        "均價",
+                        "成交股數",
+                        "成交金額(元)",
+                        "成交筆數",
+                    ],
+                    "data": rows,
+                }
+            ],
+        }
+
+    def test_all_market_day_filters_stocks_and_keeps_share_units(self) -> None:
+        payload = self._payload(
+            [
+                ["3105", "穩懋", "37.00", "+0.85", "36.00", "37.10", "35.50", "36.9", "1,234,000", "45,678,000", "890"],
+                ["01001T", "不在股票清單", "10", "0", "10", "10", "10", "10", "3,000", "30,000", "2"],
+            ]
+        )
+        client = TpexClient(fetch_json=lambda url: payload, request_interval=0)
+
+        prices = client.fetch_all_daily_prices_for_date(
+            date(2026, 8, 4), stock_ids={"3105"}
+        )
+
+        self.assertEqual(len(prices), 1)
+        self.assertEqual(prices[0].stock_id, "3105")
+        self.assertEqual(prices[0].volume, 1_234_000)
+        self.assertEqual(prices[0].trade_value, 45_678_000)
+        self.assertEqual(prices[0].source, "TPEX_DAILY_QUOTES")
+
+    def test_response_date_mismatch_raises(self) -> None:
+        client = TpexClient(
+            fetch_json=lambda url: self._payload([], response_date="20260803"),
+            request_interval=0,
+        )
+        with self.assertRaises(TpexError):
+            client.fetch_all_daily_prices_for_date(date(2026, 8, 4))
+
+    def test_empty_holiday_returns_empty(self) -> None:
+        client = TpexClient(
+            fetch_json=lambda url: self._payload([], response_date="20260804"),
+            request_interval=0,
+        )
+        self.assertEqual(client.fetch_all_daily_prices_for_date(date(2026, 8, 4)), [])
+
+
 class TpexOpenApiTests(unittest.TestCase):
     def test_otc_profiles_map_market_and_listed_date(self) -> None:
         payload = [

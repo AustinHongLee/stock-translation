@@ -9,16 +9,13 @@ echo.
 for /f "usebackq delims=" %%V in (`python -c "from app.version import APP_VERSION; print(APP_VERSION)"`) do set "APP_VERSION=%%V"
 if "%APP_VERSION%"=="" goto fail
 set "APP_DIR=dist\股票翻譯機"
-set "ZIP_PATH=dist\StockTranslator-v%APP_VERSION%.zip"
+set "ZIP_PATH=dist\StockTranslator-app-v%APP_VERSION%.zip"
 set "SHA_PATH=%ZIP_PATH%.sha256"
 
 python tools\make_app_icon.py
 if errorlevel 1 goto fail
 
-python tools\build_seed.py
-if errorlevel 1 goto fail
-
-python tools\build_official_data_pack.py
+python tools\prepare_release_data.py
 if errorlevel 1 goto fail
 
 python tools\package_data_hub.py
