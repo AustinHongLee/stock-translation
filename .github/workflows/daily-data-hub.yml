@@ -38,7 +38,8 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 平日增量通常數分鐘；手動首次回填 260 個交易日需保留較寬裕的時間。
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
